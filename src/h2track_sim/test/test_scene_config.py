@@ -56,6 +56,29 @@ def _scene_loader_module():
     return module
 
 
+
+
+def test_scene_profiles_declare_scene_specific_gas_field_parameters():
+    for scene_name in ('baseline', 'warehouse'):
+        scene_path = Path(__file__).resolve().parents[1] / 'scenes' / scene_name / 'scene.yaml'
+        scene_text = scene_path.read_text(encoding='utf-8')
+        assert 'gas_field:' in scene_text
+        assert 'source_strength:' in scene_text
+        assert 'decay_rate:' in scene_text
+        assert 'plume_stddev:' in scene_text
+        assert 'wind_x:' in scene_text
+        assert 'wind_y:' in scene_text
+
+
+def test_warehouse_scene_gas_field_differs_from_baseline_defaults():
+    pkg_share = str(Path(__file__).resolve().parents[1])
+    loader = _scene_loader_module()
+
+    baseline = loader.load_scene_profile(pkg_share, 'baseline')
+    warehouse = loader.load_scene_profile(pkg_share, 'warehouse')
+
+    assert baseline['gas_field'] != warehouse['gas_field']
+
 def test_scene_loader_reads_requested_scene_profile():
     pkg_share = str(Path(__file__).resolve().parents[1])
     loader = _scene_loader_module()

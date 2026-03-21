@@ -58,6 +58,17 @@ def test_bringup_launch_exposes_sensor_gate_stable_ready_count_argument():
     assert '"stable_ready_count": gaden_sensor_gate_stable_ready_count' in text
 
 
+
+
+def test_bringup_launch_routes_scene_specific_gas_field_parameters():
+    text = _launch_text("bringup.launch.py")
+    assert 'scene_profile.get("gas_field"' in text or "scene_profile.get('gas_field'" in text
+    assert 'SetLaunchConfiguration("gas_source_strength"' in text or "SetLaunchConfiguration('gas_source_strength'" in text
+    assert 'SetLaunchConfiguration("gas_decay_rate"' in text or "SetLaunchConfiguration('gas_decay_rate'" in text
+    assert 'SetLaunchConfiguration("gas_plume_stddev"' in text or "SetLaunchConfiguration('gas_plume_stddev'" in text
+    assert 'SetLaunchConfiguration("gas_wind_x"' in text or "SetLaunchConfiguration('gas_wind_x'" in text
+    assert 'SetLaunchConfiguration("gas_wind_y"' in text or "SetLaunchConfiguration('gas_wind_y'" in text
+
 def test_bringup_launch_forwards_initial_pose_to_sim_spawn():
     text = _launch_text("bringup.launch.py")
     assert '"spawn_x": initial_pose_x' in text

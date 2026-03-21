@@ -10,10 +10,14 @@ mission_manager:
     y: 2.6
     yaw: 3.14159
   patrol_points:
-    - [2.6, 2.6]
-    - [0.8, 2.4]
-    - [-1.8, 2.45]
-    - [-3.45, 2.45]
+  - - 2.6
+    - 2.6
+  - - 0.8
+    - 2.4
+  - - -1.8
+    - 2.45
+  - - -3.45
+    - 2.45
   enter_threshold: 1.5
   exit_threshold: 0.6
   source_threshold: 4.5
@@ -25,3 +29,11 @@ mission_manager:
 gas_source:
   x: -4.0
   y: 1.95
+gas_field:
+  source_strength: 120.0
+  decay_rate: 0.55
+  plume_stddev: 1.2
+  wind_x: 0.4
+  wind_y: 0.0
+  noise_stddev: 0.05
+  publish_rate_hz: 5.0

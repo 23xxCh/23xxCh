@@ -26,6 +26,7 @@ def _load_scene_loader():
 
 
 SCENE_LOADER = _load_scene_loader()
+load_scene_profile = SCENE_LOADER.load_scene_profile
 resolve_scene_model_path = SCENE_LOADER.resolve_scene_model_path
 resolve_scene_world = SCENE_LOADER.resolve_scene_world
 
@@ -64,6 +65,13 @@ def generate_launch_description():
     sweep_angle_deg = LaunchConfiguration("sweep_angle_deg")
     source_x = LaunchConfiguration("source_x")
     source_y = LaunchConfiguration("source_y")
+    gas_source_strength = LaunchConfiguration("gas_source_strength")
+    gas_decay_rate = LaunchConfiguration("gas_decay_rate")
+    gas_plume_stddev = LaunchConfiguration("gas_plume_stddev")
+    gas_wind_x = LaunchConfiguration("gas_wind_x")
+    gas_wind_y = LaunchConfiguration("gas_wind_y")
+    gas_noise_stddev = LaunchConfiguration("gas_noise_stddev")
+    gas_publish_rate_hz = LaunchConfiguration("gas_publish_rate_hz")
     gaden_project_path = LaunchConfiguration("gaden_project_path")
     gaden_playback_id = LaunchConfiguration("gaden_playback_id")
     gaden_sensor_topic = LaunchConfiguration("gaden_sensor_topic")
@@ -106,6 +114,13 @@ def generate_launch_description():
     declare_sweep_angle_deg = DeclareLaunchArgument("sweep_angle_deg", default_value="30.0")
     declare_source_x = DeclareLaunchArgument("source_x", default_value="-3.2")
     declare_source_y = DeclareLaunchArgument("source_y", default_value="-3.0")
+    declare_gas_source_strength = DeclareLaunchArgument("gas_source_strength", default_value="")
+    declare_gas_decay_rate = DeclareLaunchArgument("gas_decay_rate", default_value="")
+    declare_gas_plume_stddev = DeclareLaunchArgument("gas_plume_stddev", default_value="")
+    declare_gas_wind_x = DeclareLaunchArgument("gas_wind_x", default_value="")
+    declare_gas_wind_y = DeclareLaunchArgument("gas_wind_y", default_value="")
+    declare_gas_noise_stddev = DeclareLaunchArgument("gas_noise_stddev", default_value="")
+    declare_gas_publish_rate_hz = DeclareLaunchArgument("gas_publish_rate_hz", default_value="")
     declare_gaden_project_path = DeclareLaunchArgument("gaden_project_path", default_value="")
     declare_gaden_playback_id = DeclareLaunchArgument("gaden_playback_id", default_value="scene1")
     declare_gaden_sensor_topic = DeclareLaunchArgument("gaden_sensor_topic", default_value="/gaden/sensor_reading")
@@ -120,10 +135,19 @@ def generate_launch_description():
 
     def _scene_defaults(context):
         scene_name = scene.perform(context)
+        scene_profile = load_scene_profile(pkg_share, scene_name)
+        gas_field = scene_profile.get("gas_field", {})
         use_gaden_value = use_gaden.perform(context).strip().lower()
         resolved_world = world.perform(context).strip() or resolve_scene_world(pkg_share, scene_name)
         resolved_model_path = gazebo_model_path.perform(context).strip() or resolve_scene_model_path(pkg_share, scene_name)
         resolved_gaden_project_path = gaden_project_path.perform(context).strip()
+        resolved_gas_source_strength = gas_source_strength.perform(context).strip() or str(gas_field.get("source_strength", 120.0))
+        resolved_gas_decay_rate = gas_decay_rate.perform(context).strip() or str(gas_field.get("decay_rate", 0.55))
+        resolved_gas_plume_stddev = gas_plume_stddev.perform(context).strip() or str(gas_field.get("plume_stddev", 1.2))
+        resolved_gas_wind_x = gas_wind_x.perform(context).strip() or str(gas_field.get("wind_x", 0.4))
+        resolved_gas_wind_y = gas_wind_y.perform(context).strip() or str(gas_field.get("wind_y", 0.0))
+        resolved_gas_noise_stddev = gas_noise_stddev.perform(context).strip() or str(gas_field.get("noise_stddev", 0.05))
+        resolved_gas_publish_rate_hz = gas_publish_rate_hz.perform(context).strip() or str(gas_field.get("publish_rate_hz", 5.0))
         if use_gaden_value in ("1", "true", "yes", "on") and not resolved_gaden_project_path:
             resolved_gaden_project_path = os.path.join(
                 get_package_share_directory("test_env"),
@@ -135,6 +159,13 @@ def generate_launch_description():
         return [
             SetLaunchConfiguration("world", resolved_world),
             SetLaunchConfiguration("gazebo_model_path", resolved_model_path),
+            SetLaunchConfiguration("gas_source_strength", resolved_gas_source_strength),
+            SetLaunchConfiguration("gas_decay_rate", resolved_gas_decay_rate),
+            SetLaunchConfiguration("gas_plume_stddev", resolved_gas_plume_stddev),
+            SetLaunchConfiguration("gas_wind_x", resolved_gas_wind_x),
+            SetLaunchConfiguration("gas_wind_y", resolved_gas_wind_y),
+            SetLaunchConfiguration("gas_noise_stddev", resolved_gas_noise_stddev),
+            SetLaunchConfiguration("gas_publish_rate_hz", resolved_gas_publish_rate_hz),
             SetLaunchConfiguration("gaden_project_path", resolved_gaden_project_path),
         ]
 
@@ -190,12 +221,13 @@ def generate_launch_description():
             {
                 "source_x": source_x,
                 "source_y": source_y,
-                "source_strength": 120.0,
-                "decay_rate": 0.55,
-                "plume_stddev": 1.2,
-                "wind_x": 0.4,
-                "wind_y": 0.0,
-                "noise_stddev": 0.05,
+                "source_strength": gas_source_strength,
+                "decay_rate": gas_decay_rate,
+                "plume_stddev": gas_plume_stddev,
+                "wind_x": gas_wind_x,
+                "wind_y": gas_wind_y,
+                "noise_stddev": gas_noise_stddev,
+                "publish_rate_hz": gas_publish_rate_hz,
             },
         ],
     )
@@ -379,6 +411,13 @@ def generate_launch_description():
             declare_sweep_angle_deg,
             declare_source_x,
             declare_source_y,
+            declare_gas_source_strength,
+            declare_gas_decay_rate,
+            declare_gas_plume_stddev,
+            declare_gas_wind_x,
+            declare_gas_wind_y,
+            declare_gas_noise_stddev,
+            declare_gas_publish_rate_hz,
             declare_gaden_project_path,
             declare_gaden_playback_id,
             declare_gaden_sensor_topic,
