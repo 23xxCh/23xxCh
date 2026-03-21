@@ -122,25 +122,37 @@ def generate_launch_description():
     declare_gas_noise_stddev = DeclareLaunchArgument("gas_noise_stddev", default_value="")
     declare_gas_publish_rate_hz = DeclareLaunchArgument("gas_publish_rate_hz", default_value="")
     declare_gaden_project_path = DeclareLaunchArgument("gaden_project_path", default_value="")
-    declare_gaden_playback_id = DeclareLaunchArgument("gaden_playback_id", default_value="scene1")
-    declare_gaden_sensor_topic = DeclareLaunchArgument("gaden_sensor_topic", default_value="/gaden/sensor_reading")
-    declare_gaden_sensor_frame = DeclareLaunchArgument("gaden_sensor_frame", default_value="base_link")
-    declare_gaden_fixed_frame = DeclareLaunchArgument("gaden_fixed_frame", default_value="gaden_map")
-    declare_gaden_map_offset_x = DeclareLaunchArgument("gaden_map_offset_x", default_value="5.0")
-    declare_gaden_map_offset_y = DeclareLaunchArgument("gaden_map_offset_y", default_value="3.0")
-    declare_gaden_map_offset_z = DeclareLaunchArgument("gaden_map_offset_z", default_value="0.0")
-    declare_gaden_map_roll = DeclareLaunchArgument("gaden_map_roll", default_value="0.0")
-    declare_gaden_map_pitch = DeclareLaunchArgument("gaden_map_pitch", default_value="0.0")
-    declare_gaden_map_yaw = DeclareLaunchArgument("gaden_map_yaw", default_value="0.0")
+    declare_gaden_playback_id = DeclareLaunchArgument("gaden_playback_id", default_value="")
+    declare_gaden_sensor_topic = DeclareLaunchArgument("gaden_sensor_topic", default_value="")
+    declare_gaden_sensor_frame = DeclareLaunchArgument("gaden_sensor_frame", default_value="")
+    declare_gaden_fixed_frame = DeclareLaunchArgument("gaden_fixed_frame", default_value="")
+    declare_gaden_map_offset_x = DeclareLaunchArgument("gaden_map_offset_x", default_value="")
+    declare_gaden_map_offset_y = DeclareLaunchArgument("gaden_map_offset_y", default_value="")
+    declare_gaden_map_offset_z = DeclareLaunchArgument("gaden_map_offset_z", default_value="")
+    declare_gaden_map_roll = DeclareLaunchArgument("gaden_map_roll", default_value="")
+    declare_gaden_map_pitch = DeclareLaunchArgument("gaden_map_pitch", default_value="")
+    declare_gaden_map_yaw = DeclareLaunchArgument("gaden_map_yaw", default_value="")
 
     def _scene_defaults(context):
         scene_name = scene.perform(context)
         scene_profile = load_scene_profile(pkg_share, scene_name)
         gas_field = scene_profile.get("gas_field", {})
+        gaden = scene_profile.get("gaden")
         use_gaden_value = use_gaden.perform(context).strip().lower()
+        use_gaden_enabled = use_gaden_value in ("1", "true", "yes", "on")
         resolved_world = world.perform(context).strip() or resolve_scene_world(pkg_share, scene_name)
         resolved_model_path = gazebo_model_path.perform(context).strip() or resolve_scene_model_path(pkg_share, scene_name)
         resolved_gaden_project_path = gaden_project_path.perform(context).strip()
+        resolved_gaden_playback_id = gaden_playback_id.perform(context).strip()
+        resolved_gaden_sensor_topic = gaden_sensor_topic.perform(context).strip()
+        resolved_gaden_sensor_frame = gaden_sensor_frame.perform(context).strip()
+        resolved_gaden_fixed_frame = gaden_fixed_frame.perform(context).strip()
+        resolved_gaden_map_offset_x = gaden_map_offset_x.perform(context).strip()
+        resolved_gaden_map_offset_y = gaden_map_offset_y.perform(context).strip()
+        resolved_gaden_map_offset_z = gaden_map_offset_z.perform(context).strip()
+        resolved_gaden_map_roll = gaden_map_roll.perform(context).strip()
+        resolved_gaden_map_pitch = gaden_map_pitch.perform(context).strip()
+        resolved_gaden_map_yaw = gaden_map_yaw.perform(context).strip()
         resolved_gas_source_strength = gas_source_strength.perform(context).strip() or str(gas_field.get("source_strength", 120.0))
         resolved_gas_decay_rate = gas_decay_rate.perform(context).strip() or str(gas_field.get("decay_rate", 0.55))
         resolved_gas_plume_stddev = gas_plume_stddev.perform(context).strip() or str(gas_field.get("plume_stddev", 1.2))
@@ -148,14 +160,27 @@ def generate_launch_description():
         resolved_gas_wind_y = gas_wind_y.perform(context).strip() or str(gas_field.get("wind_y", 0.0))
         resolved_gas_noise_stddev = gas_noise_stddev.perform(context).strip() or str(gas_field.get("noise_stddev", 0.05))
         resolved_gas_publish_rate_hz = gas_publish_rate_hz.perform(context).strip() or str(gas_field.get("publish_rate_hz", 5.0))
-        if use_gaden_value in ("1", "true", "yes", "on") and not resolved_gaden_project_path:
-            resolved_gaden_project_path = os.path.join(
-                get_package_share_directory("test_env"),
-                "scenarios",
-                "10x6_empty_room",
-                "environment_configurations",
-                "config1",
-            )
+        if use_gaden_enabled:
+            if not gaden:
+                raise RuntimeError(f"Scene '{scene_name}' is missing a gaden configuration block")
+            scene_gaden_project_path = str(gaden.get("project_path", "")).strip()
+            if not scene_gaden_project_path:
+                raise RuntimeError(f"Scene '{scene_name}' GADEN config is missing project_path")
+            resolved_gaden_project_path = resolved_gaden_project_path or scene_gaden_project_path
+            if not Path(resolved_gaden_project_path).exists():
+                raise RuntimeError(
+                    f"Scene '{scene_name}' GADEN project_path does not exist: {resolved_gaden_project_path}"
+                )
+            resolved_gaden_playback_id = resolved_gaden_playback_id or str(gaden.get("playback_id", "scene1"))
+            resolved_gaden_sensor_topic = resolved_gaden_sensor_topic or str(gaden.get("sensor_topic", "/gaden/sensor_reading"))
+            resolved_gaden_sensor_frame = resolved_gaden_sensor_frame or str(gaden.get("sensor_frame", "base_link"))
+            resolved_gaden_fixed_frame = resolved_gaden_fixed_frame or str(gaden.get("fixed_frame", "gaden_map"))
+            resolved_gaden_map_offset_x = resolved_gaden_map_offset_x or str(gaden.get("map_offset_x", 0.0))
+            resolved_gaden_map_offset_y = resolved_gaden_map_offset_y or str(gaden.get("map_offset_y", 0.0))
+            resolved_gaden_map_offset_z = resolved_gaden_map_offset_z or str(gaden.get("map_offset_z", 0.0))
+            resolved_gaden_map_roll = resolved_gaden_map_roll or str(gaden.get("map_roll", 0.0))
+            resolved_gaden_map_pitch = resolved_gaden_map_pitch or str(gaden.get("map_pitch", 0.0))
+            resolved_gaden_map_yaw = resolved_gaden_map_yaw or str(gaden.get("map_yaw", 0.0))
         return [
             SetLaunchConfiguration("world", resolved_world),
             SetLaunchConfiguration("gazebo_model_path", resolved_model_path),
@@ -167,6 +192,16 @@ def generate_launch_description():
             SetLaunchConfiguration("gas_noise_stddev", resolved_gas_noise_stddev),
             SetLaunchConfiguration("gas_publish_rate_hz", resolved_gas_publish_rate_hz),
             SetLaunchConfiguration("gaden_project_path", resolved_gaden_project_path),
+            SetLaunchConfiguration("gaden_playback_id", resolved_gaden_playback_id),
+            SetLaunchConfiguration("gaden_sensor_topic", resolved_gaden_sensor_topic),
+            SetLaunchConfiguration("gaden_sensor_frame", resolved_gaden_sensor_frame),
+            SetLaunchConfiguration("gaden_fixed_frame", resolved_gaden_fixed_frame),
+            SetLaunchConfiguration("gaden_map_offset_x", resolved_gaden_map_offset_x),
+            SetLaunchConfiguration("gaden_map_offset_y", resolved_gaden_map_offset_y),
+            SetLaunchConfiguration("gaden_map_offset_z", resolved_gaden_map_offset_z),
+            SetLaunchConfiguration("gaden_map_roll", resolved_gaden_map_roll),
+            SetLaunchConfiguration("gaden_map_pitch", resolved_gaden_map_pitch),
+            SetLaunchConfiguration("gaden_map_yaw", resolved_gaden_map_yaw),
         ]
 
     scene_defaults = OpaqueFunction(function=_scene_defaults)

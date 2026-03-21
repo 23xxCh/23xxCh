@@ -41,9 +41,21 @@ def test_warehouse_scene_uses_portable_world_path_and_assets_exist():
     assert (warehouse_root / 'UPSTREAM_LICENSE_MIT-0.txt').exists()
 
 
-def test_warehouse_scene_disables_gaden_by_default_until_scene_alignment_exists():
-    scene_text = _warehouse_scene_path().read_text(encoding='utf-8')
-    assert 'use_gaden: false' in scene_text
+def test_warehouse_scene_declares_dedicated_gaden_block():
+    warehouse = _warehouse_scene_path().read_text(encoding='utf-8')
+    assert 'gaden:' in warehouse
+    assert 'project_path:' in warehouse
+    assert 'playback_id:' in warehouse
+    assert 'sensor_topic:' in warehouse
+    assert 'fixed_frame:' in warehouse
+
+
+def test_warehouse_scene_defaults_to_gaden_enabled():
+    pkg_share = str(Path(__file__).resolve().parents[1])
+    loader = _scene_loader_module()
+    warehouse = loader.load_scene_profile(pkg_share, 'warehouse')
+    assert warehouse['use_gaden'] is True
+    assert '10x6_empty_room' not in warehouse['gaden']['project_path']
 
 
 def _scene_loader_module():
@@ -89,6 +101,15 @@ def test_scene_loader_reads_requested_scene_profile():
     assert warehouse['scene_name'] == 'warehouse'
     assert baseline['scene_name'] == 'baseline'
     assert warehouse['mission_manager']['initial_pose']['x'] != baseline['mission_manager']['initial_pose']['x']
+
+
+def test_scene_loader_reads_warehouse_gaden_settings():
+    pkg_share = str(Path(__file__).resolve().parents[1])
+    loader = _scene_loader_module()
+    warehouse = loader.load_scene_profile(pkg_share, 'warehouse')
+
+    assert warehouse['gaden']['project_path'].endswith('h2track_warehouse/environment_configurations/config1')
+    assert warehouse['gaden']['playback_id'] == 'scene1'
 
 
 def test_scene_loader_resolves_world_and_model_paths_from_selected_scene():

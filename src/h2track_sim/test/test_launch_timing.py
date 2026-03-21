@@ -51,6 +51,19 @@ def test_bringup_launch_defers_test_env_lookup_until_gaden_is_enabled():
     assert 'DeclareLaunchArgument("gaden_project_path", default_value="")' in text or "DeclareLaunchArgument('gaden_project_path', default_value='')" in text
     assert 'use_gaden.perform(context)' in text or 'LaunchConfiguration("use_gaden").perform(context)' in text
 
+def test_bringup_launch_reads_scene_specific_gaden_block():
+    text = _launch_text("bringup.launch.py")
+    assert 'scene_profile.get("gaden"' in text or "scene_profile.get('gaden'" in text
+    assert 'gaden_project_path' in text
+    assert 'gaden_playback_id' in text
+    assert 'gaden_sensor_topic' in text
+
+
+def test_bringup_launch_fails_fast_if_scene_gaden_config_is_missing():
+    text = _launch_text("bringup.launch.py")
+    assert 'raise RuntimeError' in text
+    assert 'project_path' in text
+
 
 def test_bringup_launch_exposes_sensor_gate_stable_ready_count_argument():
     text = _launch_text("bringup.launch.py")

@@ -219,6 +219,11 @@ def test_demo_launch_resolves_scene_specific_use_gaden_default():
     assert "use_gaden.perform(context)" in text or 'LaunchConfiguration("use_gaden").perform(context)' in text
     assert "SetLaunchConfiguration('use_gaden'" in text or 'SetLaunchConfiguration("use_gaden"' in text
 
+def test_demo_launch_prefers_scene_gaden_defaults_for_warehouse():
+    text = _launch_text("demo.launch.py")
+    assert "scene_profile.get('use_gaden'" in text or 'scene_profile.get("use_gaden"' in text
+
+
 
 
 def test_demo_launch_uses_demo_nav2_params():
