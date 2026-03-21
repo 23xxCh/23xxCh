@@ -1,0 +1,33 @@
+from pathlib import Path
+
+
+GAS_SENSOR_SOURCE = Path("/home/user/gaden_ws/src/gaden/simulated_gas_sensor/src/fake_gas_sensor.cpp")
+
+
+def test_simulated_gas_sensor_spins_callbacks_before_tf_lookup():
+    text = GAS_SENSOR_SOURCE.read_text(encoding="utf-8")
+
+    lookup_pos = text.index("lookupTransform(input_fixed_frame, input_sensor_frame, rclcpp::Time(0))")
+    spin_pos = text.index("rclcpp::spin_some(shared_this);")
+
+    assert spin_pos < lookup_pos
+
+
+def test_simulated_gas_sensor_waits_for_tf_before_lookup():
+    text = GAS_SENSOR_SOURCE.read_text(encoding="utf-8")
+
+    can_transform_pos = text.index("canTransform(")
+    lookup_pos = text.index("lookupTransform(input_fixed_frame, input_sensor_frame, rclcpp::Time(0))")
+
+    assert can_transform_pos < lookup_pos
+
+def test_simulated_gas_sensor_waits_for_frame_registration_before_tf_query():
+    text = GAS_SENSOR_SOURCE.read_text(encoding="utf-8")
+
+    fixed_frame_exists_pos = text.index('_frameExists(input_fixed_frame)')
+    sensor_frame_exists_pos = text.index('_frameExists(input_sensor_frame)')
+    can_transform_pos = text.index("canTransform(")
+
+    assert fixed_frame_exists_pos < can_transform_pos
+    assert sensor_frame_exists_pos < can_transform_pos
+
