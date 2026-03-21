@@ -41,6 +41,11 @@ def test_warehouse_scene_uses_portable_world_path_and_assets_exist():
     assert (warehouse_root / 'UPSTREAM_LICENSE_MIT-0.txt').exists()
 
 
+def test_warehouse_scene_disables_gaden_by_default_until_scene_alignment_exists():
+    scene_text = _warehouse_scene_path().read_text(encoding='utf-8')
+    assert 'use_gaden: false' in scene_text
+
+
 def _scene_loader_module():
     loader_path = Path(__file__).resolve().parents[1] / 'launch' / 'scene_loader.py'
     spec = spec_from_file_location('scene_loader', loader_path)

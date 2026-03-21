@@ -1,6 +1,7 @@
 scene_name: warehouse
 world: scenes/warehouse/warehouse.world
 map: scenes/warehouse/maps/warehouse_map.yaml
+use_gaden: false
 model_path: scenes/warehouse/models
 upstream:
   name: aws-robomaker-small-warehouse-world

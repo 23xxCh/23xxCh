@@ -40,15 +40,19 @@ def _flatten_patrol_points(points: list[list[float]]) -> list[float]:
     return flattened
 
 
-def _scene_actions(context, *, pkg_share: str, bringup_path: str):
+def _scene_actions(context, *, pkg_share: str, bringup_path: str, default_use_gaden: str):
     scene = LaunchConfiguration('scene')
+    use_gaden = LaunchConfiguration('use_gaden')
     scene_name = scene.perform(context)
+    requested_use_gaden = use_gaden.perform(context).strip()
     scene_profile = load_scene_profile(pkg_share, scene_name)
+    resolved_use_gaden = requested_use_gaden if requested_use_gaden else str(scene_profile.get('use_gaden', default_use_gaden)).lower()
     mission = scene_profile['mission_manager']
     source = scene_profile['gas_source']
     initial_pose = mission['initial_pose']
 
     return [
+        SetLaunchConfiguration('use_gaden', resolved_use_gaden),
         SetLaunchConfiguration('initial_pose_x', str(initial_pose['x'])),
         SetLaunchConfiguration('initial_pose_y', str(initial_pose['y'])),
         SetLaunchConfiguration('initial_pose_yaw', str(initial_pose['yaw'])),
@@ -90,7 +94,8 @@ def generate_launch_description():
     declare_scene = DeclareLaunchArgument('scene', default_value=demo.get('scene', 'baseline'))
     declare_use_rviz = DeclareLaunchArgument('use_rviz', default_value=str(demo.get('use_rviz', True)).lower())
     declare_headless = DeclareLaunchArgument('headless', default_value=str(demo.get('headless', False)).lower())
-    declare_use_gaden = DeclareLaunchArgument('use_gaden', default_value=str(demo.get('use_gaden', True)).lower())
+    default_use_gaden = str(demo.get('use_gaden', True)).lower()
+    declare_use_gaden = DeclareLaunchArgument('use_gaden', default_value='')
     declare_nav2_params_file = DeclareLaunchArgument('nav2_params_file', default_value=demo_nav2_params_path)
 
     set_demo_values = [
@@ -101,7 +106,7 @@ def generate_launch_description():
 
     configure_scene = OpaqueFunction(
         function=_scene_actions,
-        kwargs={'pkg_share': pkg_share, 'bringup_path': bringup_path},
+        kwargs={'pkg_share': pkg_share, 'bringup_path': bringup_path, 'default_use_gaden': default_use_gaden},
     )
 
     return LaunchDescription([

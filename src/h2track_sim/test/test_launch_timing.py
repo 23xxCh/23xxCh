@@ -46,6 +46,12 @@ def test_bringup_launch_exposes_sensor_gate_timeout_argument():
     assert 'DeclareLaunchArgument("gaden_sensor_gate_timeout"' in text
 
 
+def test_bringup_launch_defers_test_env_lookup_until_gaden_is_enabled():
+    text = _launch_text("bringup.launch.py")
+    assert 'DeclareLaunchArgument("gaden_project_path", default_value="")' in text or "DeclareLaunchArgument('gaden_project_path', default_value='')" in text
+    assert 'use_gaden.perform(context)' in text or 'LaunchConfiguration("use_gaden").perform(context)' in text
+
+
 def test_bringup_launch_exposes_sensor_gate_stable_ready_count_argument():
     text = _launch_text("bringup.launch.py")
     assert 'DeclareLaunchArgument("gaden_sensor_gate_stable_ready_count"' in text

@@ -106,18 +106,7 @@ def generate_launch_description():
     declare_sweep_angle_deg = DeclareLaunchArgument("sweep_angle_deg", default_value="30.0")
     declare_source_x = DeclareLaunchArgument("source_x", default_value="-3.2")
     declare_source_y = DeclareLaunchArgument("source_y", default_value="-3.0")
-    declare_gaden_project_path = DeclareLaunchArgument(
-        "gaden_project_path",
-        default_value=PathJoinSubstitution(
-            [
-                FindPackageShare("test_env"),
-                "scenarios",
-                "10x6_empty_room",
-                "environment_configurations",
-                "config1",
-            ]
-        ),
-    )
+    declare_gaden_project_path = DeclareLaunchArgument("gaden_project_path", default_value="")
     declare_gaden_playback_id = DeclareLaunchArgument("gaden_playback_id", default_value="scene1")
     declare_gaden_sensor_topic = DeclareLaunchArgument("gaden_sensor_topic", default_value="/gaden/sensor_reading")
     declare_gaden_sensor_frame = DeclareLaunchArgument("gaden_sensor_frame", default_value="base_link")
@@ -131,11 +120,22 @@ def generate_launch_description():
 
     def _scene_defaults(context):
         scene_name = scene.perform(context)
+        use_gaden_value = use_gaden.perform(context).strip().lower()
         resolved_world = world.perform(context).strip() or resolve_scene_world(pkg_share, scene_name)
         resolved_model_path = gazebo_model_path.perform(context).strip() or resolve_scene_model_path(pkg_share, scene_name)
+        resolved_gaden_project_path = gaden_project_path.perform(context).strip()
+        if use_gaden_value in ("1", "true", "yes", "on") and not resolved_gaden_project_path:
+            resolved_gaden_project_path = os.path.join(
+                get_package_share_directory("test_env"),
+                "scenarios",
+                "10x6_empty_room",
+                "environment_configurations",
+                "config1",
+            )
         return [
             SetLaunchConfiguration("world", resolved_world),
             SetLaunchConfiguration("gazebo_model_path", resolved_model_path),
+            SetLaunchConfiguration("gaden_project_path", resolved_gaden_project_path),
         ]
 
     scene_defaults = OpaqueFunction(function=_scene_defaults)
