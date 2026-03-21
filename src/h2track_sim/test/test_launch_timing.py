@@ -1,3 +1,4 @@
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 import re
 
@@ -5,6 +6,16 @@ import re
 def _launch_text(name: str) -> str:
     launch_path = Path(__file__).resolve().parents[1] / "launch" / name
     return launch_path.read_text(encoding="utf-8")
+
+
+def _load_launch_module(name: str):
+    launch_path = Path(__file__).resolve().parents[1] / "launch" / name
+    spec = spec_from_file_location(name.replace('.', '_'), launch_path)
+    module = module_from_spec(spec)
+    assert spec is not None
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
 
 
 def _default_value(text: str, argument_name: str) -> str:
@@ -20,9 +31,25 @@ def test_bringup_launch_exposes_mission_manager_delay_argument():
     assert 'period=mission_manager_delay' in text
 
 
+def test_bringup_declares_scene_launch_argument():
+    text = _launch_text("bringup.launch.py")
+    assert "scene" in text
+
+
+def test_bringup_launch_module_imports_without_launch_pythonpath_side_effects():
+    module = _load_launch_module("bringup.launch.py")
+    assert hasattr(module, 'generate_launch_description')
+
+
 def test_bringup_launch_exposes_sensor_gate_timeout_argument():
     text = _launch_text("bringup.launch.py")
     assert 'DeclareLaunchArgument("gaden_sensor_gate_timeout"' in text
+
+
+def test_bringup_launch_defers_test_env_lookup_until_gaden_is_enabled():
+    text = _launch_text("bringup.launch.py")
+    assert 'DeclareLaunchArgument("gaden_project_path", default_value="")' in text or "DeclareLaunchArgument('gaden_project_path', default_value='')" in text
+    assert 'use_gaden.perform(context)' in text or 'LaunchConfiguration("use_gaden").perform(context)' in text
 
 
 def test_bringup_launch_exposes_sensor_gate_stable_ready_count_argument():
@@ -30,6 +57,17 @@ def test_bringup_launch_exposes_sensor_gate_stable_ready_count_argument():
     assert 'DeclareLaunchArgument("gaden_sensor_gate_stable_ready_count"' in text
     assert '"stable_ready_count": gaden_sensor_gate_stable_ready_count' in text
 
+
+
+
+def test_bringup_launch_routes_scene_specific_gas_field_parameters():
+    text = _launch_text("bringup.launch.py")
+    assert 'scene_profile.get("gas_field"' in text or "scene_profile.get('gas_field'" in text
+    assert 'SetLaunchConfiguration("gas_source_strength"' in text or "SetLaunchConfiguration('gas_source_strength'" in text
+    assert 'SetLaunchConfiguration("gas_decay_rate"' in text or "SetLaunchConfiguration('gas_decay_rate'" in text
+    assert 'SetLaunchConfiguration("gas_plume_stddev"' in text or "SetLaunchConfiguration('gas_plume_stddev'" in text
+    assert 'SetLaunchConfiguration("gas_wind_x"' in text or "SetLaunchConfiguration('gas_wind_x'" in text
+    assert 'SetLaunchConfiguration("gas_wind_y"' in text or "SetLaunchConfiguration('gas_wind_y'" in text
 
 def test_bringup_launch_forwards_initial_pose_to_sim_spawn():
     text = _launch_text("bringup.launch.py")
@@ -55,6 +93,22 @@ def test_bringup_launch_exposes_nav2_params_file_argument():
     text = _launch_text("bringup.launch.py")
     assert 'DeclareLaunchArgument("nav2_params_file"' in text
     assert '"params_file": nav2_params_file' in text
+
+
+def test_bringup_launch_forwards_scene_to_sim_launch():
+    text = _launch_text("bringup.launch.py")
+    assert '"scene": scene' in text
+
+
+def test_bringup_launch_forwards_world_and_model_path_to_sim_launch():
+    text = _launch_text("bringup.launch.py")
+    assert '"world": world' in text
+    assert '"gazebo_model_path": gazebo_model_path' in text
+
+
+def test_bringup_launch_forwards_scene_to_nav2_launch():
+    text = _launch_text("bringup.launch.py")
+    assert '"scene": scene' in text
 
 
 def test_bringup_launch_forces_patrol_points_parameter_to_string():
@@ -90,6 +144,34 @@ def test_sim_launch_exposes_spawn_pose_arguments():
     assert 'DeclareLaunchArgument("spawn_y"' in text
     assert 'DeclareLaunchArgument("spawn_z"' in text
     assert 'DeclareLaunchArgument("spawn_yaw"' in text
+
+
+def test_sim_launch_uses_world_launch_argument():
+    text = _launch_text("sim.launch.py")
+    assert 'DeclareLaunchArgument("world"' in text
+    assert 'LaunchConfiguration("world")' in text
+
+
+def test_nav2_launch_resolves_runtime_map_from_selected_scene():
+    text = _launch_text("nav2.launch.py")
+    assert 'DeclareLaunchArgument("scene"' in text or "DeclareLaunchArgument('scene'" in text
+    assert 'resolve_scene_map' in text
+    assert 'scene.perform(context)' in text or 'LaunchConfiguration("scene").perform(context)' in text or "LaunchConfiguration('scene').perform(context)" in text
+
+
+def test_nav2_launch_rewrites_runtime_params_for_selected_scene_initial_pose():
+    text = _launch_text("nav2.launch.py")
+    assert 'initial_pose.x' in text
+    assert 'initial_pose.y' in text
+    assert 'initial_pose.yaw' in text
+    assert 'runtime_params_path' in text
+
+
+def test_sim_launch_sets_gazebo_model_path_for_scene_assets():
+    text = _launch_text("sim.launch.py")
+    assert 'DeclareLaunchArgument("gazebo_model_path"' in text
+    assert 'SetEnvironmentVariable(' in text
+    assert '"GAZEBO_MODEL_PATH"' in text
 
 
 def test_sim_launch_uses_launch_configurations_for_spawn_pose():

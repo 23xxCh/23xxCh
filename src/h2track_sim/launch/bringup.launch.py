@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 
 import os
+from importlib.util import module_from_spec, spec_from_file_location
+from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, RegisterEventHandler, Shutdown, TimerAction
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, RegisterEventHandler, SetLaunchConfiguration, Shutdown, TimerAction
 from launch.conditions import IfCondition, UnlessCondition
 from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -13,14 +15,32 @@ from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
+def _load_scene_loader():
+    loader_path = Path(__file__).with_name('scene_loader.py')
+    spec = spec_from_file_location('h2track_scene_loader', loader_path)
+    module = module_from_spec(spec)
+    assert spec is not None
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+SCENE_LOADER = _load_scene_loader()
+load_scene_profile = SCENE_LOADER.load_scene_profile
+resolve_scene_model_path = SCENE_LOADER.resolve_scene_model_path
+resolve_scene_world = SCENE_LOADER.resolve_scene_world
+
 
 def generate_launch_description():
     pkg_share = get_package_share_directory("h2track_sim")
     default_nav2_params = os.path.join(pkg_share, "config", "nav2_params.yaml")
 
+    scene = LaunchConfiguration("scene")
     use_rviz = LaunchConfiguration("use_rviz")
     use_sim_time = LaunchConfiguration("use_sim_time")
     headless = LaunchConfiguration("headless")
+    world = LaunchConfiguration("world")
+    gazebo_model_path = LaunchConfiguration("gazebo_model_path")
     use_gaden = LaunchConfiguration("use_gaden")
     nav2_params_file = LaunchConfiguration("nav2_params_file")
     nav2_autostart = LaunchConfiguration("nav2_autostart")
@@ -45,6 +65,13 @@ def generate_launch_description():
     sweep_angle_deg = LaunchConfiguration("sweep_angle_deg")
     source_x = LaunchConfiguration("source_x")
     source_y = LaunchConfiguration("source_y")
+    gas_source_strength = LaunchConfiguration("gas_source_strength")
+    gas_decay_rate = LaunchConfiguration("gas_decay_rate")
+    gas_plume_stddev = LaunchConfiguration("gas_plume_stddev")
+    gas_wind_x = LaunchConfiguration("gas_wind_x")
+    gas_wind_y = LaunchConfiguration("gas_wind_y")
+    gas_noise_stddev = LaunchConfiguration("gas_noise_stddev")
+    gas_publish_rate_hz = LaunchConfiguration("gas_publish_rate_hz")
     gaden_project_path = LaunchConfiguration("gaden_project_path")
     gaden_playback_id = LaunchConfiguration("gaden_playback_id")
     gaden_sensor_topic = LaunchConfiguration("gaden_sensor_topic")
@@ -57,9 +84,12 @@ def generate_launch_description():
     gaden_map_pitch = LaunchConfiguration("gaden_map_pitch")
     gaden_map_yaw = LaunchConfiguration("gaden_map_yaw")
 
+    declare_scene = DeclareLaunchArgument("scene", default_value="baseline")
     declare_use_sim_time = DeclareLaunchArgument("use_sim_time", default_value="true")
     declare_use_rviz = DeclareLaunchArgument("use_rviz", default_value="true")
     declare_headless = DeclareLaunchArgument("headless", default_value="false")
+    declare_world = DeclareLaunchArgument("world", default_value="")
+    declare_gazebo_model_path = DeclareLaunchArgument("gazebo_model_path", default_value="")
     declare_use_gaden = DeclareLaunchArgument("use_gaden", default_value="false")
     declare_nav2_params_file = DeclareLaunchArgument("nav2_params_file", default_value=default_nav2_params)
     declare_nav2_autostart = DeclareLaunchArgument("nav2_autostart", default_value="true")
@@ -84,18 +114,14 @@ def generate_launch_description():
     declare_sweep_angle_deg = DeclareLaunchArgument("sweep_angle_deg", default_value="30.0")
     declare_source_x = DeclareLaunchArgument("source_x", default_value="-3.2")
     declare_source_y = DeclareLaunchArgument("source_y", default_value="-3.0")
-    declare_gaden_project_path = DeclareLaunchArgument(
-        "gaden_project_path",
-        default_value=PathJoinSubstitution(
-            [
-                FindPackageShare("test_env"),
-                "scenarios",
-                "10x6_empty_room",
-                "environment_configurations",
-                "config1",
-            ]
-        ),
-    )
+    declare_gas_source_strength = DeclareLaunchArgument("gas_source_strength", default_value="")
+    declare_gas_decay_rate = DeclareLaunchArgument("gas_decay_rate", default_value="")
+    declare_gas_plume_stddev = DeclareLaunchArgument("gas_plume_stddev", default_value="")
+    declare_gas_wind_x = DeclareLaunchArgument("gas_wind_x", default_value="")
+    declare_gas_wind_y = DeclareLaunchArgument("gas_wind_y", default_value="")
+    declare_gas_noise_stddev = DeclareLaunchArgument("gas_noise_stddev", default_value="")
+    declare_gas_publish_rate_hz = DeclareLaunchArgument("gas_publish_rate_hz", default_value="")
+    declare_gaden_project_path = DeclareLaunchArgument("gaden_project_path", default_value="")
     declare_gaden_playback_id = DeclareLaunchArgument("gaden_playback_id", default_value="scene1")
     declare_gaden_sensor_topic = DeclareLaunchArgument("gaden_sensor_topic", default_value="/gaden/sensor_reading")
     declare_gaden_sensor_frame = DeclareLaunchArgument("gaden_sensor_frame", default_value="base_link")
@@ -107,14 +133,61 @@ def generate_launch_description():
     declare_gaden_map_pitch = DeclareLaunchArgument("gaden_map_pitch", default_value="0.0")
     declare_gaden_map_yaw = DeclareLaunchArgument("gaden_map_yaw", default_value="0.0")
 
+    def _scene_defaults(context):
+        scene_name = scene.perform(context)
+        scene_profile = load_scene_profile(pkg_share, scene_name)
+        gas_field = scene_profile.get("gas_field", {})
+        use_gaden_value = use_gaden.perform(context).strip().lower()
+        resolved_world = world.perform(context).strip() or resolve_scene_world(pkg_share, scene_name)
+        resolved_model_path = gazebo_model_path.perform(context).strip() or resolve_scene_model_path(pkg_share, scene_name)
+        resolved_gaden_project_path = gaden_project_path.perform(context).strip()
+        resolved_gas_source_strength = gas_source_strength.perform(context).strip() or str(gas_field.get("source_strength", 120.0))
+        resolved_gas_decay_rate = gas_decay_rate.perform(context).strip() or str(gas_field.get("decay_rate", 0.55))
+        resolved_gas_plume_stddev = gas_plume_stddev.perform(context).strip() or str(gas_field.get("plume_stddev", 1.2))
+        resolved_gas_wind_x = gas_wind_x.perform(context).strip() or str(gas_field.get("wind_x", 0.4))
+        resolved_gas_wind_y = gas_wind_y.perform(context).strip() or str(gas_field.get("wind_y", 0.0))
+        resolved_gas_noise_stddev = gas_noise_stddev.perform(context).strip() or str(gas_field.get("noise_stddev", 0.05))
+        resolved_gas_publish_rate_hz = gas_publish_rate_hz.perform(context).strip() or str(gas_field.get("publish_rate_hz", 5.0))
+        if use_gaden_value in ("1", "true", "yes", "on") and not resolved_gaden_project_path:
+            resolved_gaden_project_path = os.path.join(
+                get_package_share_directory("test_env"),
+                "scenarios",
+                "10x6_empty_room",
+                "environment_configurations",
+                "config1",
+            )
+        return [
+            SetLaunchConfiguration("world", resolved_world),
+            SetLaunchConfiguration("gazebo_model_path", resolved_model_path),
+            SetLaunchConfiguration("gas_source_strength", resolved_gas_source_strength),
+            SetLaunchConfiguration("gas_decay_rate", resolved_gas_decay_rate),
+            SetLaunchConfiguration("gas_plume_stddev", resolved_gas_plume_stddev),
+            SetLaunchConfiguration("gas_wind_x", resolved_gas_wind_x),
+            SetLaunchConfiguration("gas_wind_y", resolved_gas_wind_y),
+            SetLaunchConfiguration("gas_noise_stddev", resolved_gas_noise_stddev),
+            SetLaunchConfiguration("gas_publish_rate_hz", resolved_gas_publish_rate_hz),
+            SetLaunchConfiguration("gaden_project_path", resolved_gaden_project_path),
+        ]
+
+    scene_defaults = OpaqueFunction(function=_scene_defaults)
+
     sim = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(pkg_share, "launch", "sim.launch.py")),
-        launch_arguments={"use_sim_time": use_sim_time, "headless": headless, "spawn_x": initial_pose_x, "spawn_y": initial_pose_y, "spawn_yaw": initial_pose_yaw}.items(),
+        launch_arguments={
+            "scene": scene,
+            "world": world,
+            "gazebo_model_path": gazebo_model_path,
+            "use_sim_time": use_sim_time,
+            "headless": headless,
+            "spawn_x": initial_pose_x,
+            "spawn_y": initial_pose_y,
+            "spawn_yaw": initial_pose_yaw,
+        }.items(),
     )
 
     nav2 = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(pkg_share, "launch", "nav2.launch.py")),
-        launch_arguments={"use_sim_time": use_sim_time, "params_file": nav2_params_file, "autostart": nav2_autostart}.items(),
+        launch_arguments={"scene": scene, "use_sim_time": use_sim_time, "params_file": nav2_params_file, "autostart": nav2_autostart}.items(),
     )
 
     nav2_startup_gate = Node(
@@ -148,12 +221,13 @@ def generate_launch_description():
             {
                 "source_x": source_x,
                 "source_y": source_y,
-                "source_strength": 120.0,
-                "decay_rate": 0.55,
-                "plume_stddev": 1.2,
-                "wind_x": 0.4,
-                "wind_y": 0.0,
-                "noise_stddev": 0.05,
+                "source_strength": gas_source_strength,
+                "decay_rate": gas_decay_rate,
+                "plume_stddev": gas_plume_stddev,
+                "wind_x": gas_wind_x,
+                "wind_y": gas_wind_y,
+                "noise_stddev": gas_noise_stddev,
+                "publish_rate_hz": gas_publish_rate_hz,
             },
         ],
     )
@@ -307,9 +381,12 @@ def generate_launch_description():
 
     return LaunchDescription(
         [
+            declare_scene,
             declare_use_sim_time,
             declare_use_rviz,
             declare_headless,
+            declare_world,
+            declare_gazebo_model_path,
             declare_use_gaden,
             declare_nav2_params_file,
             declare_nav2_autostart,
@@ -334,6 +411,13 @@ def generate_launch_description():
             declare_sweep_angle_deg,
             declare_source_x,
             declare_source_y,
+            declare_gas_source_strength,
+            declare_gas_decay_rate,
+            declare_gas_plume_stddev,
+            declare_gas_wind_x,
+            declare_gas_wind_y,
+            declare_gas_noise_stddev,
+            declare_gas_publish_rate_hz,
             declare_gaden_project_path,
             declare_gaden_playback_id,
             declare_gaden_sensor_topic,
@@ -345,6 +429,7 @@ def generate_launch_description():
             declare_gaden_map_roll,
             declare_gaden_map_pitch,
             declare_gaden_map_yaw,
+            scene_defaults,
             sim,
             nav2,
             nav2_startup_gate,

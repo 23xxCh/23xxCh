@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from h2track_tracking.demo_prep import (
     MatchedProcess,
     check_required_packages,
@@ -56,6 +58,55 @@ def test_package_check_marks_missing_packages():
     assert status["simulated_gas_sensor"] is True
     assert status["gaden_player"] is False
 
+
+
+
+SCENE_PS_OUTPUT = """
+user       11001    1282  0 00:00 ?        00:00:01 gzserver --verbose -s libgazebo_ros_init.so -s libgazebo_ros_factory.so /tmp/h2track/scenes/baseline/h2track_lab.world
+user       11002    1282  0 00:00 ?        00:00:01 gzserver --verbose -s libgazebo_ros_init.so -s libgazebo_ros_factory.so /tmp/h2track/scenes/warehouse/warehouse.world
+user       11003    1282  0 00:00 ?        00:00:00 /opt/ros/humble/lib/nav2_lifecycle_manager/lifecycle_manager --ros-args -r __node:=lifecycle_manager_navigation
+"""
+
+
+def test_matches_only_selected_scene_world_processes():
+    processes = find_stale_processes(
+        SCENE_PS_OUTPUT,
+        Path('/tmp/h2track/scenes/warehouse/warehouse.world'),
+    )
+
+    assert processes == [
+        MatchedProcess(
+            pid=11002,
+            kind='gazebo',
+            command='gzserver --verbose -s libgazebo_ros_init.so -s libgazebo_ros_factory.so /tmp/h2track/scenes/warehouse/warehouse.world',
+        ),
+        MatchedProcess(
+            pid=11003,
+            kind='nav2_lifecycle_manager',
+            command='/opt/ros/humble/lib/nav2_lifecycle_manager/lifecycle_manager --ros-args -r __node:=lifecycle_manager_navigation',
+        ),
+    ]
+
+
+def test_cli_warehouse_auto_mode_skips_gaden_package_requirement(capsys):
+    exit_code = main(
+        ['--scene', 'warehouse'],
+        ps_output='',
+        package_resolver=lambda name: None if name in ('simulated_gas_sensor', 'gaden_player') else f'/prefix/{name}',
+        scene_profile_loader=lambda scene_name: {
+            'world': 'scenes/warehouse/warehouse.world',
+            'use_gaden': False,
+        },
+        package_share_resolver=lambda package_name: '/tmp/h2track',
+    )
+
+    captured = capsys.readouterr().out
+    assert exit_code == 0
+    assert 'package ok: h2track_sim' in captured
+    assert 'package ok: h2track_tracking' in captured
+    assert 'DEMO PREP OK' in captured
+    assert 'missing package: simulated_gas_sensor' not in captured
+    assert 'missing package: gaden_player' not in captured
 
 def test_cli_dry_run_does_not_kill_processes(capsys):
     killed = []
