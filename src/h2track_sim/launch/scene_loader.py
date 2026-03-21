@@ -1,0 +1,28 @@
+#!/usr/bin/env python3
+
+from pathlib import Path
+
+import yaml
+
+
+def scene_config_path(pkg_share: str, scene_name: str) -> Path:
+    return Path(pkg_share) / 'scenes' / scene_name / 'scene.yaml'
+
+
+def load_scene_profile(pkg_share: str, scene_name: str) -> dict:
+    path = scene_config_path(pkg_share, scene_name)
+    with path.open('r', encoding='utf-8') as handle:
+        return yaml.safe_load(handle)
+
+
+def resolve_scene_world(pkg_share: str, scene_name: str) -> str:
+    profile = load_scene_profile(pkg_share, scene_name)
+    return str(Path(pkg_share) / profile['world'])
+
+
+def resolve_scene_model_path(pkg_share: str, scene_name: str) -> str:
+    profile = load_scene_profile(pkg_share, scene_name)
+    model_path = profile.get('model_path')
+    if not model_path:
+        return ''
+    return str(Path(pkg_share) / model_path)

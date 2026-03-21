@@ -1,3 +1,4 @@
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
 
@@ -38,3 +39,38 @@ def test_warehouse_scene_uses_portable_world_path_and_assets_exist():
     assert (warehouse_root / 'warehouse.world').exists()
     assert (warehouse_root / 'models' / 'aws_robomaker_warehouse_ShelfF_01' / 'model.sdf').exists()
     assert (warehouse_root / 'UPSTREAM_LICENSE_MIT-0.txt').exists()
+
+
+def _scene_loader_module():
+    loader_path = Path(__file__).resolve().parents[1] / 'launch' / 'scene_loader.py'
+    spec = spec_from_file_location('scene_loader', loader_path)
+    module = module_from_spec(spec)
+    assert spec is not None
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_scene_loader_reads_requested_scene_profile():
+    pkg_share = str(Path(__file__).resolve().parents[1])
+    loader = _scene_loader_module()
+
+    warehouse = loader.load_scene_profile(pkg_share, 'warehouse')
+    baseline = loader.load_scene_profile(pkg_share, 'baseline')
+
+    assert warehouse['scene_name'] == 'warehouse'
+    assert baseline['scene_name'] == 'baseline'
+    assert warehouse['mission_manager']['initial_pose']['x'] != baseline['mission_manager']['initial_pose']['x']
+
+
+def test_scene_loader_resolves_world_and_model_paths_from_selected_scene():
+    pkg_share = str(Path(__file__).resolve().parents[1])
+    loader = _scene_loader_module()
+
+    warehouse_world = loader.resolve_scene_world(pkg_share, 'warehouse')
+    warehouse_model_path = loader.resolve_scene_model_path(pkg_share, 'warehouse')
+    baseline_world = loader.resolve_scene_world(pkg_share, 'baseline')
+
+    assert warehouse_world.endswith('scenes/warehouse/warehouse.world')
+    assert warehouse_model_path.endswith('scenes/warehouse/models')
+    assert baseline_world.endswith('scenes/baseline/h2track_lab.world')

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 
 import os
+from importlib.util import module_from_spec, spec_from_file_location
+from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, RegisterEventHandler, Shutdown, TimerAction
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, RegisterEventHandler, SetLaunchConfiguration, Shutdown, TimerAction
 from launch.conditions import IfCondition, UnlessCondition
 from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -13,14 +15,31 @@ from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
+def _load_scene_loader():
+    loader_path = Path(__file__).with_name('scene_loader.py')
+    spec = spec_from_file_location('h2track_scene_loader', loader_path)
+    module = module_from_spec(spec)
+    assert spec is not None
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+SCENE_LOADER = _load_scene_loader()
+resolve_scene_model_path = SCENE_LOADER.resolve_scene_model_path
+resolve_scene_world = SCENE_LOADER.resolve_scene_world
+
 
 def generate_launch_description():
     pkg_share = get_package_share_directory("h2track_sim")
     default_nav2_params = os.path.join(pkg_share, "config", "nav2_params.yaml")
 
+    scene = LaunchConfiguration("scene")
     use_rviz = LaunchConfiguration("use_rviz")
     use_sim_time = LaunchConfiguration("use_sim_time")
     headless = LaunchConfiguration("headless")
+    world = LaunchConfiguration("world")
+    gazebo_model_path = LaunchConfiguration("gazebo_model_path")
     use_gaden = LaunchConfiguration("use_gaden")
     nav2_params_file = LaunchConfiguration("nav2_params_file")
     nav2_autostart = LaunchConfiguration("nav2_autostart")
@@ -57,9 +76,12 @@ def generate_launch_description():
     gaden_map_pitch = LaunchConfiguration("gaden_map_pitch")
     gaden_map_yaw = LaunchConfiguration("gaden_map_yaw")
 
+    declare_scene = DeclareLaunchArgument("scene", default_value="baseline")
     declare_use_sim_time = DeclareLaunchArgument("use_sim_time", default_value="true")
     declare_use_rviz = DeclareLaunchArgument("use_rviz", default_value="true")
     declare_headless = DeclareLaunchArgument("headless", default_value="false")
+    declare_world = DeclareLaunchArgument("world", default_value="")
+    declare_gazebo_model_path = DeclareLaunchArgument("gazebo_model_path", default_value="")
     declare_use_gaden = DeclareLaunchArgument("use_gaden", default_value="false")
     declare_nav2_params_file = DeclareLaunchArgument("nav2_params_file", default_value=default_nav2_params)
     declare_nav2_autostart = DeclareLaunchArgument("nav2_autostart", default_value="true")
@@ -107,9 +129,29 @@ def generate_launch_description():
     declare_gaden_map_pitch = DeclareLaunchArgument("gaden_map_pitch", default_value="0.0")
     declare_gaden_map_yaw = DeclareLaunchArgument("gaden_map_yaw", default_value="0.0")
 
+    def _scene_defaults(context):
+        scene_name = scene.perform(context)
+        resolved_world = world.perform(context).strip() or resolve_scene_world(pkg_share, scene_name)
+        resolved_model_path = gazebo_model_path.perform(context).strip() or resolve_scene_model_path(pkg_share, scene_name)
+        return [
+            SetLaunchConfiguration("world", resolved_world),
+            SetLaunchConfiguration("gazebo_model_path", resolved_model_path),
+        ]
+
+    scene_defaults = OpaqueFunction(function=_scene_defaults)
+
     sim = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(pkg_share, "launch", "sim.launch.py")),
-        launch_arguments={"use_sim_time": use_sim_time, "headless": headless, "spawn_x": initial_pose_x, "spawn_y": initial_pose_y, "spawn_yaw": initial_pose_yaw}.items(),
+        launch_arguments={
+            "scene": scene,
+            "world": world,
+            "gazebo_model_path": gazebo_model_path,
+            "use_sim_time": use_sim_time,
+            "headless": headless,
+            "spawn_x": initial_pose_x,
+            "spawn_y": initial_pose_y,
+            "spawn_yaw": initial_pose_yaw,
+        }.items(),
     )
 
     nav2 = IncludeLaunchDescription(
@@ -307,9 +349,12 @@ def generate_launch_description():
 
     return LaunchDescription(
         [
+            declare_scene,
             declare_use_sim_time,
             declare_use_rviz,
             declare_headless,
+            declare_world,
+            declare_gazebo_model_path,
             declare_use_gaden,
             declare_nav2_params_file,
             declare_nav2_autostart,
@@ -345,6 +390,7 @@ def generate_launch_description():
             declare_gaden_map_roll,
             declare_gaden_map_pitch,
             declare_gaden_map_yaw,
+            scene_defaults,
             sim,
             nav2,
             nav2_startup_gate,

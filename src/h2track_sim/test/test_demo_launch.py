@@ -1,3 +1,4 @@
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 import math
 import xml.etree.ElementTree as ET
@@ -8,6 +9,16 @@ import yaml
 def _launch_text(name: str) -> str:
     launch_path = Path(__file__).resolve().parents[1] / "launch" / name
     return launch_path.read_text(encoding="utf-8")
+
+
+def _load_launch_module(name: str):
+    launch_path = Path(__file__).resolve().parents[1] / "launch" / name
+    spec = spec_from_file_location(name.replace('.', '_'), launch_path)
+    module = module_from_spec(spec)
+    assert spec is not None
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
 
 
 def _demo_profile() -> dict:
@@ -182,6 +193,24 @@ def test_demo_launch_includes_bringup_with_demo_defaults():
     assert "IncludeLaunchDescription" in text
     assert "use_gaden" in text
     assert "demo.yaml" in text
+
+
+def test_demo_launch_module_imports_without_launch_pythonpath_side_effects():
+    module = _load_launch_module("demo.launch.py")
+    assert hasattr(module, 'generate_launch_description')
+
+
+def test_demo_launch_passes_scene_to_bringup():
+    text = _launch_text("demo.launch.py")
+    assert "scene" in text
+    assert "baseline" in text
+
+
+def test_demo_launch_resolves_selected_scene_profile_instead_of_fixed_demo_scene():
+    text = _launch_text("demo.launch.py")
+    assert 'load_scene_profile' in text
+    assert 'scene.perform(context)' in text or "LaunchConfiguration('scene').perform(context)" in text
+    assert "demo['scene_config']" not in text
 
 
 

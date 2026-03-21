@@ -1,3 +1,4 @@
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 import re
 
@@ -5,6 +6,16 @@ import re
 def _launch_text(name: str) -> str:
     launch_path = Path(__file__).resolve().parents[1] / "launch" / name
     return launch_path.read_text(encoding="utf-8")
+
+
+def _load_launch_module(name: str):
+    launch_path = Path(__file__).resolve().parents[1] / "launch" / name
+    spec = spec_from_file_location(name.replace('.', '_'), launch_path)
+    module = module_from_spec(spec)
+    assert spec is not None
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
 
 
 def _default_value(text: str, argument_name: str) -> str:
@@ -18,6 +29,16 @@ def test_bringup_launch_exposes_mission_manager_delay_argument():
     text = _launch_text("bringup.launch.py")
     assert 'DeclareLaunchArgument("mission_manager_delay"' in text
     assert 'period=mission_manager_delay' in text
+
+
+def test_bringup_declares_scene_launch_argument():
+    text = _launch_text("bringup.launch.py")
+    assert "scene" in text
+
+
+def test_bringup_launch_module_imports_without_launch_pythonpath_side_effects():
+    module = _load_launch_module("bringup.launch.py")
+    assert hasattr(module, 'generate_launch_description')
 
 
 def test_bringup_launch_exposes_sensor_gate_timeout_argument():
@@ -57,6 +78,17 @@ def test_bringup_launch_exposes_nav2_params_file_argument():
     assert '"params_file": nav2_params_file' in text
 
 
+def test_bringup_launch_forwards_scene_to_sim_launch():
+    text = _launch_text("bringup.launch.py")
+    assert '"scene": scene' in text
+
+
+def test_bringup_launch_forwards_world_and_model_path_to_sim_launch():
+    text = _launch_text("bringup.launch.py")
+    assert '"world": world' in text
+    assert '"gazebo_model_path": gazebo_model_path' in text
+
+
 def test_bringup_launch_forces_patrol_points_parameter_to_string():
     text = _launch_text("bringup.launch.py")
     assert 'ParameterValue(patrol_points, value_type=str)' in text
@@ -90,6 +122,19 @@ def test_sim_launch_exposes_spawn_pose_arguments():
     assert 'DeclareLaunchArgument("spawn_y"' in text
     assert 'DeclareLaunchArgument("spawn_z"' in text
     assert 'DeclareLaunchArgument("spawn_yaw"' in text
+
+
+def test_sim_launch_uses_world_launch_argument():
+    text = _launch_text("sim.launch.py")
+    assert 'DeclareLaunchArgument("world"' in text
+    assert 'LaunchConfiguration("world")' in text
+
+
+def test_sim_launch_sets_gazebo_model_path_for_scene_assets():
+    text = _launch_text("sim.launch.py")
+    assert 'DeclareLaunchArgument("gazebo_model_path"' in text
+    assert 'SetEnvironmentVariable(' in text
+    assert '"GAZEBO_MODEL_PATH"' in text
 
 
 def test_sim_launch_uses_launch_configurations_for_spawn_pose():
