@@ -98,6 +98,11 @@ source install/setup.bash
 ros2 run h2track_tracking demo_selfcheck --timeout 5.0
 ```
 
+## Scene Assets
+
+- `src/h2track_sim/scenes/warehouse/` vendors the AWS RoboMaker Small Warehouse World runtime assets from `aws-robotics/aws-robomaker-small-warehouse-world` under the upstream `MIT-0` license.
+- The vendored warehouse scene keeps only the runtime world/models needed by Gazebo; upstream docs/images/launch helpers are not copied into the project.
+
 ## Notes
 
 - `use_gaden:=false` uses `gas_field_node` to publish `/gas_concentration`.
