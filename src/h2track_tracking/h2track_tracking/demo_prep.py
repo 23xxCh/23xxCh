@@ -10,18 +10,26 @@ import signal
 import subprocess
 from typing import Callable
 
-from ament_index_python.packages import PackageNotFoundError, get_package_prefix
+from ament_index_python.packages import (
+    PackageNotFoundError,
+    get_package_prefix,
+    get_package_share_directory,
+)
+import yaml
 
 
-DEMO_WORLD_PATH = Path(
+BASELINE_WORLD_PATH = Path(
     "/home/user/h2track-xian/install/h2track_sim/share/h2track_sim/worlds/h2track_lab.world"
 )
-REQUIRED_PACKAGES = (
+CORE_REQUIRED_PACKAGES = (
     "h2track_sim",
     "h2track_tracking",
+)
+GADEN_REQUIRED_PACKAGES = (
     "simulated_gas_sensor",
     "gaden_player",
 )
+REQUIRED_PACKAGES = CORE_REQUIRED_PACKAGES + GADEN_REQUIRED_PACKAGES
 
 
 @dataclass(frozen=True)
@@ -37,7 +45,7 @@ class PrepReport:
     errors: list[str] = field(default_factory=list)
 
 
-def find_stale_processes(ps_output: str) -> list[MatchedProcess]:
+def find_stale_processes(ps_output: str, demo_world_path: Path = BASELINE_WORLD_PATH) -> list[MatchedProcess]:
     matches: list[MatchedProcess] = []
     for line in ps_output.splitlines():
         line = line.strip()
@@ -51,7 +59,7 @@ def find_stale_processes(ps_output: str) -> list[MatchedProcess]:
         except ValueError:
             continue
         command = parts[7]
-        if _is_h2track_gazebo_process(command):
+        if _is_h2track_gazebo_process(command, demo_world_path):
             matches.append(MatchedProcess(pid=pid, kind="gazebo", command=command))
             continue
         if _is_h2track_nav2_lifecycle_process(command):
@@ -59,8 +67,11 @@ def find_stale_processes(ps_output: str) -> list[MatchedProcess]:
     return matches
 
 
-def check_required_packages(resolve_package: Callable[[str], str | None]) -> dict[str, bool]:
-    return {name: bool(resolve_package(name)) for name in REQUIRED_PACKAGES}
+def check_required_packages(
+    resolve_package: Callable[[str], str | None],
+    required_packages: tuple[str, ...] = REQUIRED_PACKAGES,
+) -> dict[str, bool]:
+    return {name: bool(resolve_package(name)) for name in required_packages}
 
 
 def evaluate_prep_result(
@@ -85,20 +96,95 @@ def evaluate_prep_result(
     return PrepReport(ok=not errors, errors=errors)
 
 
+def resolve_use_gaden(mode: str, scene_profile: dict) -> bool:
+    if mode == "true":
+        return True
+    if mode == "false":
+        return False
+    return bool(scene_profile.get("use_gaden", False))
+
+
+def required_packages_for_scene(*, use_gaden: bool) -> tuple[str, ...]:
+    if use_gaden:
+        return REQUIRED_PACKAGES
+    return CORE_REQUIRED_PACKAGES
+
+
+def resolve_scene_world_path(scene_profile: dict, package_share: str | Path) -> Path:
+    world_path = Path(scene_profile["world"])
+    if world_path.is_absolute():
+        return world_path
+    return Path(package_share) / world_path
+
+
+def default_scene_profile(scene_name: str) -> dict:
+    if scene_name == "baseline":
+        return {
+            "scene_name": "baseline",
+            "world": str(BASELINE_WORLD_PATH),
+            "use_gaden": True,
+        }
+    raise PackageNotFoundError(f"scene '{scene_name}' requires an installed h2track_sim package")
+
+
+def load_scene_profile(scene_name: str, package_share_resolver: Callable[[str], str] | None = None) -> dict:
+    resolver = package_share_resolver or get_package_share_directory
+    package_share = Path(resolver("h2track_sim"))
+    scene_path = package_share / "scenes" / scene_name / "scene.yaml"
+    return yaml.safe_load(scene_path.read_text(encoding="utf-8"))
+
+
 def main(
     argv: list[str] | None = None,
     *,
     ps_output: str | None = None,
     kill_process: Callable[[int], None] | None = None,
     package_resolver: Callable[[str], str | None] | None = None,
+    scene_profile_loader: Callable[[str], dict] | None = None,
+    package_share_resolver: Callable[[str], str] | None = None,
 ) -> int:
     parser = argparse.ArgumentParser(description="Prepare the H2track demo environment.")
     parser.add_argument("--dry-run", action="store_true", help="Report what would be cleaned without killing processes.")
+    parser.add_argument("--scene", default="baseline", help="Scene name to validate and clean for.")
+    parser.add_argument(
+        "--use-gaden",
+        choices=("auto", "true", "false"),
+        default="auto",
+        help="Whether to require GADEN packages. auto follows the selected scene config.",
+    )
     args = parser.parse_args(argv)
 
-    processes = find_stale_processes(ps_output if ps_output is not None else _read_process_table())
+    share_resolver = package_share_resolver or get_package_share_directory
+    try:
+        package_share = Path(share_resolver("h2track_sim"))
+    except PackageNotFoundError:
+        package_share = Path("/")
+
+    scene_loader = scene_profile_loader or (
+        lambda scene_name: load_scene_profile(scene_name, package_share_resolver=share_resolver)
+    )
+    try:
+        scene_profile = scene_loader(args.scene)
+    except PackageNotFoundError:
+        scene_profile = default_scene_profile(args.scene)
+
+    scene_loader = scene_profile_loader or (
+        lambda scene_name: load_scene_profile(scene_name, package_share_resolver=share_resolver)
+    )
+    try:
+        scene_profile = scene_loader(args.scene)
+    except PackageNotFoundError:
+        scene_profile = default_scene_profile(args.scene)
+    use_gaden = resolve_use_gaden(args.use_gaden, scene_profile)
+    demo_world_path = resolve_scene_world_path(scene_profile, package_share)
+    required_packages = required_packages_for_scene(use_gaden=use_gaden)
+
+    processes = find_stale_processes(
+        ps_output if ps_output is not None else _read_process_table(),
+        demo_world_path=demo_world_path,
+    )
     resolver = package_resolver or _resolve_package
-    package_status = check_required_packages(resolver)
+    package_status = check_required_packages(resolver, required_packages)
     kill = kill_process or _kill_process
     kill_failures: list[str] = []
 
@@ -135,10 +221,10 @@ def main(
     return 1
 
 
-def _is_h2track_gazebo_process(command: str) -> bool:
+def _is_h2track_gazebo_process(command: str, demo_world_path: Path) -> bool:
     return (
         (command.startswith("gzserver ") or command.startswith("gazebo "))
-        and str(DEMO_WORLD_PATH) in command
+        and str(demo_world_path) in command
     )
 
 
