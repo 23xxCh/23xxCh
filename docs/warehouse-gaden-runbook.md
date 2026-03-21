@@ -19,12 +19,29 @@ The warehouse scene now defaults to the external GADEN project at:
 /home/user/gaden_ws/src/gaden/test_env/scenarios/h2track_warehouse/environment_configurations/config1
 ```
 
-Key runtime assets under that path:
+Key runtime assets under that path are now local generated files and directories, not placeholder symlinks. The rebuilt warehouse STL geometry is expressed directly in warehouse world coordinates, so the scene runs with zero `gaden_map -> map` offset:
 - `OccupancyGrid3D.csv`
+- `occupancy.yaml`
+- `occupancy.pgm`
+- `BasicSimScene.yaml`
 - `wind/`
 - `simulations/sim1/result/`
 - `scenes/scene1.yaml`
 - `simulations/sim1/sim.yaml`
+
+## Regenerating Local Assets
+
+If the warehouse scenario geometry changes, regenerate the local runtime assets in `/home/user/gaden_ws`:
+
+```bash
+cd /home/user/gaden_ws
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 run gaden_preprocessing preprocessing --ros-args   -p projectPath:=/home/user/gaden_ws/src/gaden/test_env/scenarios/h2track_warehouse/environment_configurations/config1
+ros2 run gaden_filament_simulator filament_simulator --ros-args   -p projectPath:=/home/user/gaden_ws/src/gaden/test_env/scenarios/h2track_warehouse/environment_configurations/config1   -p simulationID:=sim1   -p sim_time:=60.0
+```
+
+The current config uses an `empty_point` above the floor mesh so preprocessing does not start from occupied geometry. The generated occupancy now covers the full `warehouse_map` extents rather than only a smaller subregion.
 
 ## Default Warehouse Launch
 
@@ -43,6 +60,7 @@ Expected non-GADEN behavior:
 - `gas_field_node` should not start in the default warehouse launch
 - `gaden_environment` and `gaden_player` should both report `projectPath` under `h2track_warehouse`
 - `gaden_player` should use `playbackID = scene1`
+- `gaden_map -> map` should stay at zero offset because the external STL geometry is map-aligned
 
 Useful checks while the launch is running:
 
@@ -51,6 +69,7 @@ ros2 node list
 ros2 param get /gaden_environment projectPath
 ros2 param get /gaden_player projectPath
 ros2 param get /gaden_player playbackID
+ros2 topic echo /gas_concentration --once
 ```
 
 ## Explicit Simplified-Field Fallback
@@ -90,6 +109,8 @@ If this happens, inspect:
 find -L /home/user/gaden_ws/src/gaden/test_env/scenarios/h2track_warehouse/environment_configurations/config1 -maxdepth 4 \( -type f -o -type l \) | sort
 ```
 
+Then regenerate the local preprocessing and filament outputs instead of recreating symlinks.
+
 ### 2. `ros2 param get /gaden_environment ...` returns the wrong project path
 
 Root cause was stale old GADEN processes from another scenario using the same node names, for example an old `Exp_C` launch.
@@ -125,7 +146,8 @@ If it never does, inspect the static `gaden_map -> map` transform and the robot 
 
 ## Notes
 
-This first warehouse GADEN integration is intentionally approximate:
+This warehouse GADEN integration is still approximate in geometry, but the runtime assets are now scene-local, generated in place, and aligned to the warehouse map frame:
 - warehouse geometry is custom and simplified
-- wind and playback assets are currently reused to keep the scene runnable
+- occupancy, wind, and playback results are generated under `h2track_warehouse/config1`
+- the generated occupancy covers the full warehouse map extents used by Nav2
 - the scene is now scene-owned and no longer falls back to the baseline room path by default
