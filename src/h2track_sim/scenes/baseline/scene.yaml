@@ -1,4 +1,5 @@
 world: scenes/baseline/h2track_lab.world
+map: maps/h2track_map.yaml
 scene_name: baseline
 use_gaden: true
 use_rviz: true
@@ -9,14 +10,10 @@ mission_manager:
     y: 2.6
     yaw: 3.14159
   patrol_points:
-  - - 2.6
-    - 2.6
-  - - 0.8
-    - 2.4
-  - - -1.8
-    - 2.45
-  - - -3.45
-    - 2.45
+    - [2.6, 2.6]
+    - [0.8, 2.4]
+    - [-1.8, 2.45]
+    - [-3.45, 2.45]
   enter_threshold: 1.5
   exit_threshold: 0.6
   source_threshold: 4.5

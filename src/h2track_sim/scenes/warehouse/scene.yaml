@@ -1,5 +1,6 @@
 scene_name: warehouse
 world: scenes/warehouse/warehouse.world
+map: scenes/warehouse/maps/warehouse_map.yaml
 model_path: scenes/warehouse/models
 upstream:
   name: aws-robomaker-small-warehouse-world
@@ -11,14 +12,10 @@ mission_manager:
     y: 1.0
     yaw: 0.0
   patrol_points:
-  - - 0.5
-    - 3.0
-  - - 0.5
-    - 6.0
-  - - 3.2
-    - 6.0
-  - - 3.2
-    - 3.0
+    - [0.5, 3.0]
+    - [0.5, 6.0]
+    - [3.2, 6.0]
+    - [3.2, 3.0]
   enter_threshold: 1.5
   exit_threshold: 0.6
   source_threshold: 4.5

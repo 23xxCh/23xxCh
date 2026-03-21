@@ -89,6 +89,11 @@ def test_bringup_launch_forwards_world_and_model_path_to_sim_launch():
     assert '"gazebo_model_path": gazebo_model_path' in text
 
 
+def test_bringup_launch_forwards_scene_to_nav2_launch():
+    text = _launch_text("bringup.launch.py")
+    assert '"scene": scene' in text
+
+
 def test_bringup_launch_forces_patrol_points_parameter_to_string():
     text = _launch_text("bringup.launch.py")
     assert 'ParameterValue(patrol_points, value_type=str)' in text
@@ -128,6 +133,21 @@ def test_sim_launch_uses_world_launch_argument():
     text = _launch_text("sim.launch.py")
     assert 'DeclareLaunchArgument("world"' in text
     assert 'LaunchConfiguration("world")' in text
+
+
+def test_nav2_launch_resolves_runtime_map_from_selected_scene():
+    text = _launch_text("nav2.launch.py")
+    assert 'DeclareLaunchArgument("scene"' in text or "DeclareLaunchArgument('scene'" in text
+    assert 'resolve_scene_map' in text
+    assert 'scene.perform(context)' in text or 'LaunchConfiguration("scene").perform(context)' in text or "LaunchConfiguration('scene').perform(context)" in text
+
+
+def test_nav2_launch_rewrites_runtime_params_for_selected_scene_initial_pose():
+    text = _launch_text("nav2.launch.py")
+    assert 'initial_pose.x' in text
+    assert 'initial_pose.y' in text
+    assert 'initial_pose.yaw' in text
+    assert 'runtime_params_path' in text
 
 
 def test_sim_launch_sets_gazebo_model_path_for_scene_assets():

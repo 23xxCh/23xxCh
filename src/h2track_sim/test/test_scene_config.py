@@ -74,3 +74,14 @@ def test_scene_loader_resolves_world_and_model_paths_from_selected_scene():
     assert warehouse_world.endswith('scenes/warehouse/warehouse.world')
     assert warehouse_model_path.endswith('scenes/warehouse/models')
     assert baseline_world.endswith('scenes/baseline/h2track_lab.world')
+
+
+def test_scene_loader_resolves_map_paths_from_selected_scene():
+    pkg_share = str(Path(__file__).resolve().parents[1])
+    loader = _scene_loader_module()
+
+    baseline_map = loader.resolve_scene_map(pkg_share, 'baseline')
+    warehouse_map = loader.resolve_scene_map(pkg_share, 'warehouse')
+
+    assert baseline_map.endswith('maps/h2track_map.yaml')
+    assert warehouse_map.endswith('scenes/warehouse/maps/warehouse_map.yaml')

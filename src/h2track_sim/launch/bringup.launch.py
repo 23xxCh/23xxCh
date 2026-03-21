@@ -156,7 +156,7 @@ def generate_launch_description():
 
     nav2 = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(pkg_share, "launch", "nav2.launch.py")),
-        launch_arguments={"use_sim_time": use_sim_time, "params_file": nav2_params_file, "autostart": nav2_autostart}.items(),
+        launch_arguments={"scene": scene, "use_sim_time": use_sim_time, "params_file": nav2_params_file, "autostart": nav2_autostart}.items(),
     )
 
     nav2_startup_gate = Node(

@@ -26,3 +26,8 @@ def resolve_scene_model_path(pkg_share: str, scene_name: str) -> str:
     if not model_path:
         return ''
     return str(Path(pkg_share) / model_path)
+
+
+def resolve_scene_map(pkg_share: str, scene_name: str) -> str:
+    profile = load_scene_profile(pkg_share, scene_name)
+    return str(Path(pkg_share) / profile['map'])
