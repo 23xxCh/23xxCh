@@ -1,5 +1,4 @@
 <?xml version="1.0"?>
-<!-- baseline scene canonical world; kept in sync with scenes/baseline/h2track_lab.world -->
 <sdf version="1.6">
   <world name="h2track_lab">
     <gravity>0 0 -9.8</gravity>
@@ -141,4 +140,3 @@
     </model>
   </world>
 </sdf>
-
