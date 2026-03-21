@@ -108,6 +108,24 @@ def test_cli_warehouse_auto_mode_skips_gaden_package_requirement(capsys):
     assert 'missing package: simulated_gas_sensor' not in captured
     assert 'missing package: gaden_player' not in captured
 
+def test_cli_warehouse_auto_mode_requires_gaden_packages_when_scene_defaults_true(capsys):
+    exit_code = main(
+        ['--scene', 'warehouse'],
+        ps_output='',
+        package_resolver=lambda name: None if name in ('simulated_gas_sensor', 'gaden_player') else f'/prefix/{name}',
+        scene_profile_loader=lambda scene_name: {
+            'world': 'scenes/warehouse/warehouse.world',
+            'use_gaden': True,
+        },
+        package_share_resolver=lambda package_name: '/tmp/h2track',
+    )
+
+    captured = capsys.readouterr().out
+    assert exit_code == 1
+    assert 'missing package: simulated_gas_sensor' in captured
+    assert 'missing package: gaden_player' in captured
+    assert 'DEMO PREP FAILED' in captured
+
 def test_cli_dry_run_does_not_kill_processes(capsys):
     killed = []
 

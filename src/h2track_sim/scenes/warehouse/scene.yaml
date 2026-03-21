@@ -1,7 +1,7 @@
 scene_name: warehouse
 world: scenes/warehouse/warehouse.world
 map: scenes/warehouse/maps/warehouse_map.yaml
-use_gaden: false
+use_gaden: true
 model_path: scenes/warehouse/models
 upstream:
   name: aws-robomaker-small-warehouse-world
@@ -32,6 +32,19 @@ mission_manager:
 gas_source:
   x: 3.6
   y: -3.038551
+gaden:
+  enabled: true
+  project_path: /home/user/gaden_ws/src/gaden/test_env/scenarios/h2track_warehouse/environment_configurations/config1
+  playback_id: scene1
+  sensor_topic: /gaden/sensor_reading
+  sensor_frame: base_link
+  fixed_frame: gaden_map
+  map_offset_x: 0.0
+  map_offset_y: 0.0
+  map_offset_z: 0.0
+  map_roll: 0.0
+  map_pitch: 0.0
+  map_yaw: 0.0
 gas_field:
   source_strength: 160.0
   decay_rate: 0.32
