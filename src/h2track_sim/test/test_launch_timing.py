@@ -57,6 +57,14 @@ def test_bringup_launch_reads_scene_specific_gaden_block():
     assert 'gaden_project_path' in text
     assert 'gaden_playback_id' in text
     assert 'gaden_sensor_topic' in text
+    assert 'gaden_player_freq' in text
+
+
+def test_bringup_launch_routes_scene_specific_gaden_player_frequency():
+    text = _launch_text("bringup.launch.py")
+    assert 'DeclareLaunchArgument("gaden_player_freq"' in text or "DeclareLaunchArgument('gaden_player_freq'" in text
+    assert 'str(gaden.get("player_freq"' in text or "str(gaden.get('player_freq'" in text
+    assert '"player_freq": gaden_player_freq' in text or "'player_freq': gaden_player_freq" in text
 
 
 def test_bringup_launch_fails_fast_if_scene_gaden_config_is_missing():
@@ -106,6 +114,12 @@ def test_bringup_launch_exposes_nav2_params_file_argument():
     text = _launch_text("bringup.launch.py")
     assert 'DeclareLaunchArgument("nav2_params_file"' in text
     assert '"params_file": nav2_params_file' in text
+
+
+def test_bringup_launch_routes_scene_specific_nav2_params_file():
+    text = _launch_text("bringup.launch.py")
+    assert 'resolve_scene_nav2_params' in text
+    assert 'SetLaunchConfiguration("nav2_params_file"' in text or "SetLaunchConfiguration('nav2_params_file'" in text
 
 
 def test_bringup_launch_forwards_scene_to_sim_launch():

@@ -92,6 +92,26 @@
     </inertial>
   </link>
 
+  <link name="gas_sensor_link">
+    <visual>
+      <geometry>
+        <cylinder radius="0.02" length="0.04"/>
+      </geometry>
+      <material name="green">
+        <color rgba="0.2 0.7 0.2 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="0.02" length="0.04"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.05"/>
+      <inertia ixx="0.00002" ixy="0.0" ixz="0.0" iyy="0.00002" iyz="0.0" izz="0.00002"/>
+    </inertial>
+  </link>
+
   <joint name="left_wheel_joint" type="continuous">
     <parent link="base_link"/>
     <child link="left_wheel"/>
@@ -110,6 +130,12 @@
     <parent link="base_link"/>
     <child link="laser_link"/>
     <origin xyz="0.10 0 0.08"/>
+  </joint>
+
+  <joint name="gas_sensor_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="gas_sensor_link"/>
+    <origin xyz="0 0 0.45"/>
   </joint>
 
   <gazebo reference="base_link">

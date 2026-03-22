@@ -226,14 +226,16 @@ def test_demo_launch_prefers_scene_gaden_defaults_for_warehouse():
 
 
 
-def test_demo_launch_uses_demo_nav2_params():
+def test_demo_launch_resolves_scene_specific_nav2_params():
     text = _launch_text("demo.launch.py")
-    assert "nav2_demo_params.yaml" in text
+    assert 'resolve_scene_nav2_params' in text
+    assert "SetLaunchConfiguration('nav2_params_file'" in text or 'SetLaunchConfiguration("nav2_params_file"' in text
 
 
 def test_bringup_uses_slow_enough_gaden_playback_for_live_demo_margin():
     text = _launch_text("bringup.launch.py")
-    assert '{"player_freq": 1.0}' in text or '"player_freq": 1.0' in text
+    assert 'gaden_player_freq' in text
+    assert '{"player_freq": gaden_player_freq}' in text or '"player_freq": gaden_player_freq' in text
 
 
 

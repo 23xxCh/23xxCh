@@ -1,6 +1,7 @@
 scene_name: warehouse
 world: scenes/warehouse/warehouse.world
 map: scenes/warehouse/maps/warehouse_map.yaml
+nav2_params: scenes/warehouse/nav2_params.yaml
 use_gaden: true
 model_path: scenes/warehouse/models
 upstream:
@@ -14,14 +15,16 @@ mission_manager:
     yaw: 0.0
   patrol_points:
   - - 0.5
-    - 3.0
-  - - 2.4
-    - 3.2
-  - - 2.4
-    - 4.6
-  - - 3.2
-    - 3.0
-  enter_threshold: 1.5
+    - 2.8
+  - - 2.0
+    - 2.8
+  - - 3.0
+    - 1.0
+  - - 3.4
+    - -2.2
+  - - 3.5
+    - -2.8
+  enter_threshold: 1.0
   exit_threshold: 0.6
   source_threshold: 4.5
   confirm_samples: 2
@@ -36,8 +39,9 @@ gaden:
   enabled: true
   project_path: /home/user/gaden_ws/src/gaden/test_env/scenarios/h2track_warehouse/environment_configurations/config1
   playback_id: scene1
+  player_freq: 0.5
   sensor_topic: /gaden/sensor_reading
-  sensor_frame: base_link
+  sensor_frame: gas_sensor_link
   fixed_frame: gaden_map
   map_offset_x: 0.0
   map_offset_y: 0.0

@@ -27,13 +27,13 @@ def _load_scene_loader():
 
 SCENE_LOADER = _load_scene_loader()
 load_scene_profile = SCENE_LOADER.load_scene_profile
+resolve_scene_nav2_params = SCENE_LOADER.resolve_scene_nav2_params
 resolve_scene_model_path = SCENE_LOADER.resolve_scene_model_path
 resolve_scene_world = SCENE_LOADER.resolve_scene_world
 
 
 def generate_launch_description():
     pkg_share = get_package_share_directory("h2track_sim")
-    default_nav2_params = os.path.join(pkg_share, "config", "nav2_params.yaml")
 
     scene = LaunchConfiguration("scene")
     use_rviz = LaunchConfiguration("use_rviz")
@@ -74,6 +74,7 @@ def generate_launch_description():
     gas_publish_rate_hz = LaunchConfiguration("gas_publish_rate_hz")
     gaden_project_path = LaunchConfiguration("gaden_project_path")
     gaden_playback_id = LaunchConfiguration("gaden_playback_id")
+    gaden_player_freq = LaunchConfiguration("gaden_player_freq")
     gaden_sensor_topic = LaunchConfiguration("gaden_sensor_topic")
     gaden_sensor_frame = LaunchConfiguration("gaden_sensor_frame")
     gaden_fixed_frame = LaunchConfiguration("gaden_fixed_frame")
@@ -91,7 +92,7 @@ def generate_launch_description():
     declare_world = DeclareLaunchArgument("world", default_value="")
     declare_gazebo_model_path = DeclareLaunchArgument("gazebo_model_path", default_value="")
     declare_use_gaden = DeclareLaunchArgument("use_gaden", default_value="false")
-    declare_nav2_params_file = DeclareLaunchArgument("nav2_params_file", default_value=default_nav2_params)
+    declare_nav2_params_file = DeclareLaunchArgument("nav2_params_file", default_value="")
     declare_nav2_autostart = DeclareLaunchArgument("nav2_autostart", default_value="true")
     declare_mission_manager_delay = DeclareLaunchArgument("mission_manager_delay", default_value="10.0")
     declare_nav2_startup_gate_timeout = DeclareLaunchArgument("nav2_startup_gate_timeout", default_value="30.0")
@@ -123,6 +124,7 @@ def generate_launch_description():
     declare_gas_publish_rate_hz = DeclareLaunchArgument("gas_publish_rate_hz", default_value="")
     declare_gaden_project_path = DeclareLaunchArgument("gaden_project_path", default_value="")
     declare_gaden_playback_id = DeclareLaunchArgument("gaden_playback_id", default_value="")
+    declare_gaden_player_freq = DeclareLaunchArgument("gaden_player_freq", default_value="")
     declare_gaden_sensor_topic = DeclareLaunchArgument("gaden_sensor_topic", default_value="")
     declare_gaden_sensor_frame = DeclareLaunchArgument("gaden_sensor_frame", default_value="")
     declare_gaden_fixed_frame = DeclareLaunchArgument("gaden_fixed_frame", default_value="")
@@ -142,8 +144,10 @@ def generate_launch_description():
         use_gaden_enabled = use_gaden_value in ("1", "true", "yes", "on")
         resolved_world = world.perform(context).strip() or resolve_scene_world(pkg_share, scene_name)
         resolved_model_path = gazebo_model_path.perform(context).strip() or resolve_scene_model_path(pkg_share, scene_name)
+        resolved_nav2_params_file = nav2_params_file.perform(context).strip() or resolve_scene_nav2_params(pkg_share, scene_name)
         resolved_gaden_project_path = gaden_project_path.perform(context).strip()
         resolved_gaden_playback_id = gaden_playback_id.perform(context).strip()
+        resolved_gaden_player_freq = gaden_player_freq.perform(context).strip()
         resolved_gaden_sensor_topic = gaden_sensor_topic.perform(context).strip()
         resolved_gaden_sensor_frame = gaden_sensor_frame.perform(context).strip()
         resolved_gaden_fixed_frame = gaden_fixed_frame.perform(context).strip()
@@ -172,6 +176,7 @@ def generate_launch_description():
                     f"Scene '{scene_name}' GADEN project_path does not exist: {resolved_gaden_project_path}"
                 )
             resolved_gaden_playback_id = resolved_gaden_playback_id or str(gaden.get("playback_id", "scene1"))
+            resolved_gaden_player_freq = resolved_gaden_player_freq or str(gaden.get("player_freq", 1.0))
             resolved_gaden_sensor_topic = resolved_gaden_sensor_topic or str(gaden.get("sensor_topic", "/gaden/sensor_reading"))
             resolved_gaden_sensor_frame = resolved_gaden_sensor_frame or str(gaden.get("sensor_frame", "base_link"))
             resolved_gaden_fixed_frame = resolved_gaden_fixed_frame or str(gaden.get("fixed_frame", "gaden_map"))
@@ -184,6 +189,7 @@ def generate_launch_description():
         return [
             SetLaunchConfiguration("world", resolved_world),
             SetLaunchConfiguration("gazebo_model_path", resolved_model_path),
+            SetLaunchConfiguration("nav2_params_file", resolved_nav2_params_file),
             SetLaunchConfiguration("gas_source_strength", resolved_gas_source_strength),
             SetLaunchConfiguration("gas_decay_rate", resolved_gas_decay_rate),
             SetLaunchConfiguration("gas_plume_stddev", resolved_gas_plume_stddev),
@@ -193,6 +199,7 @@ def generate_launch_description():
             SetLaunchConfiguration("gas_publish_rate_hz", resolved_gas_publish_rate_hz),
             SetLaunchConfiguration("gaden_project_path", resolved_gaden_project_path),
             SetLaunchConfiguration("gaden_playback_id", resolved_gaden_playback_id),
+            SetLaunchConfiguration("gaden_player_freq", resolved_gaden_player_freq),
             SetLaunchConfiguration("gaden_sensor_topic", resolved_gaden_sensor_topic),
             SetLaunchConfiguration("gaden_sensor_frame", resolved_gaden_sensor_frame),
             SetLaunchConfiguration("gaden_fixed_frame", resolved_gaden_fixed_frame),
@@ -286,7 +293,7 @@ def generate_launch_description():
             {"use_sim_time": use_sim_time},
             {"projectPath": gaden_project_path},
             {"playbackID": gaden_playback_id},
-            {"player_freq": 1.0},
+            {"player_freq": gaden_player_freq},
         ],
     )
 
@@ -455,6 +462,7 @@ def generate_launch_description():
             declare_gas_publish_rate_hz,
             declare_gaden_project_path,
             declare_gaden_playback_id,
+            declare_gaden_player_freq,
             declare_gaden_sensor_topic,
             declare_gaden_sensor_frame,
             declare_gaden_fixed_frame,

@@ -1,9 +1,15 @@
 import math
+from pathlib import Path
 
+from geometry_msgs.msg import PoseWithCovarianceStamped
 import rclpy
 
 from h2track_tracking.gas_model import GasFieldModel, GasFieldParams, Pose2D
-from h2track_tracking.mission_manager_node import MissionManagerNode, select_tracking_target
+from h2track_tracking.mission_manager_node import (
+    MissionManagerNode,
+    map_pose_from_amcl,
+    select_tracking_target,
+)
 
 
 def _make_tracking_model() -> GasFieldModel:
@@ -34,19 +40,49 @@ def test_mission_manager_accepts_string_patrol_points_override():
             rclpy.shutdown()
 
 
-def test_select_tracking_target_holds_position_once_source_threshold_is_reached():
-    current_pose = Pose2D(-2.4, 1.4)
+def test_map_pose_from_amcl_reads_map_frame_pose_and_yaw():
+    yaw = math.pi / 3.0
+    msg = PoseWithCovarianceStamped()
+    msg.pose.pose.position.x = 3.12
+    msg.pose.pose.position.y = -2.38
+    msg.pose.pose.orientation.z = math.sin(yaw / 2.0)
+    msg.pose.pose.orientation.w = math.cos(yaw / 2.0)
+
+    pose, parsed_yaw = map_pose_from_amcl(msg)
+
+    assert pose == Pose2D(3.12, -2.38)
+    assert parsed_yaw == yaw
+
+
+def test_mission_manager_uses_amcl_pose_subscription_for_tracking_reference():
+    text = (
+        Path(__file__).resolve().parents[1]
+        / 'h2track_tracking'
+        / 'mission_manager_node.py'
+    ).read_text(encoding='utf-8')
+
+    assert 'PoseWithCovarianceStamped' in text
+    assert '"/amcl_pose"' in text
+
+
+def test_select_tracking_target_continues_search_when_current_pose_is_already_the_strongest_peak():
+    current_pose = Pose2D(3.13, -2.08)
     target = select_tracking_target(
         gas_model=_make_tracking_model(),
         current_pose=current_pose,
-        current_yaw=math.pi,
-        history=[(Pose2D(-2.0, 1.5), 2.1), (current_pose, 2.7)],
+        current_yaw=-math.pi / 2.0,
+        history=[
+            (Pose2D(3.00, -1.80), 2.3),
+            (Pose2D(3.12, -2.02), 4.8),
+            (current_pose, 5.4),
+        ],
         step_size=0.4,
         sweep_angle=math.pi / 6.0,
-        source_threshold=2.5,
+        source_threshold=4.5,
     )
 
-    assert target == current_pose
+    assert target != current_pose
+    assert target.y < current_pose.y - 0.2
 
 
 def test_select_tracking_target_continues_search_below_source_threshold():

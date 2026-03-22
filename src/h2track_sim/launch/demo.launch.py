@@ -24,6 +24,7 @@ def _load_scene_loader():
 
 SCENE_LOADER = _load_scene_loader()
 load_scene_profile = SCENE_LOADER.load_scene_profile
+resolve_scene_nav2_params = SCENE_LOADER.resolve_scene_nav2_params
 resolve_scene_model_path = SCENE_LOADER.resolve_scene_model_path
 resolve_scene_world = SCENE_LOADER.resolve_scene_world
 
@@ -43,10 +44,13 @@ def _flatten_patrol_points(points: list[list[float]]) -> list[float]:
 def _scene_actions(context, *, pkg_share: str, bringup_path: str, default_use_gaden: str):
     scene = LaunchConfiguration('scene')
     use_gaden = LaunchConfiguration('use_gaden')
+    nav2_params_file = LaunchConfiguration('nav2_params_file')
     scene_name = scene.perform(context)
     requested_use_gaden = use_gaden.perform(context).strip()
+    requested_nav2_params = nav2_params_file.perform(context).strip()
     scene_profile = load_scene_profile(pkg_share, scene_name)
     resolved_use_gaden = requested_use_gaden if requested_use_gaden else str(scene_profile.get('use_gaden', default_use_gaden)).lower()
+    resolved_nav2_params = requested_nav2_params or resolve_scene_nav2_params(pkg_share, scene_name)
     mission = scene_profile['mission_manager']
     source = scene_profile['gas_source']
     initial_pose = mission['initial_pose']
@@ -56,6 +60,7 @@ def _scene_actions(context, *, pkg_share: str, bringup_path: str, default_use_ga
         SetLaunchConfiguration('initial_pose_x', str(initial_pose['x'])),
         SetLaunchConfiguration('initial_pose_y', str(initial_pose['y'])),
         SetLaunchConfiguration('initial_pose_yaw', str(initial_pose['yaw'])),
+        SetLaunchConfiguration('nav2_params_file', resolved_nav2_params),
         SetLaunchConfiguration('patrol_points', json.dumps(_flatten_patrol_points(mission['patrol_points']))),
         SetLaunchConfiguration('enter_threshold', str(mission['enter_threshold'])),
         SetLaunchConfiguration('exit_threshold', str(mission['exit_threshold'])),
@@ -88,7 +93,6 @@ def generate_launch_description():
     pkg_share = get_package_share_directory('h2track_sim')
     bringup_path = os.path.join(pkg_share, 'launch', 'bringup.launch.py')
     demo_config_path = Path(pkg_share) / 'config' / 'demo.yaml'
-    demo_nav2_params_path = os.path.join(pkg_share, 'config', 'nav2_demo_params.yaml')
     demo = _load_yaml(demo_config_path)
 
     declare_scene = DeclareLaunchArgument('scene', default_value=demo.get('scene', 'baseline'))
@@ -96,7 +100,7 @@ def generate_launch_description():
     declare_headless = DeclareLaunchArgument('headless', default_value=str(demo.get('headless', False)).lower())
     default_use_gaden = str(demo.get('use_gaden', True)).lower()
     declare_use_gaden = DeclareLaunchArgument('use_gaden', default_value='')
-    declare_nav2_params_file = DeclareLaunchArgument('nav2_params_file', default_value=demo_nav2_params_path)
+    declare_nav2_params_file = DeclareLaunchArgument('nav2_params_file', default_value='')
 
     set_demo_values = [
         SetLaunchConfiguration('mission_manager_delay', str(demo.get('mission_manager_delay', 10.0))),

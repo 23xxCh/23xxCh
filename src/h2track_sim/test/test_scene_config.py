@@ -110,6 +110,23 @@ def test_scene_loader_reads_warehouse_gaden_settings():
 
     assert warehouse['gaden']['project_path'].endswith('h2track_warehouse/environment_configurations/config1')
     assert warehouse['gaden']['playback_id'] == 'scene1'
+    assert warehouse['gaden']['player_freq'] == 0.5
+
+
+def test_warehouse_scene_uses_dedicated_gas_sensor_frame():
+    pkg_share = str(Path(__file__).resolve().parents[1])
+    loader = _scene_loader_module()
+    warehouse = loader.load_scene_profile(pkg_share, 'warehouse')
+
+    assert warehouse['gaden']['sensor_frame'] == 'gas_sensor_link'
+
+
+def test_robot_urdf_declares_elevated_gas_sensor_link():
+    urdf = (Path(__file__).resolve().parents[1] / 'urdf' / 'h2track_bot.urdf.xacro').read_text(encoding='utf-8')
+
+    assert '<link name="gas_sensor_link">' in urdf
+    assert '<joint name="gas_sensor_joint" type="fixed">' in urdf
+    assert '<origin xyz="0 0 0.45"/>' in urdf
 
 
 def test_scene_loader_resolves_world_and_model_paths_from_selected_scene():
@@ -124,6 +141,18 @@ def test_scene_loader_resolves_world_and_model_paths_from_selected_scene():
     assert warehouse_model_path.endswith('scenes/warehouse/models')
     assert baseline_world.endswith('scenes/baseline/h2track_lab.world')
 
+
+
+
+def test_scene_loader_resolves_nav2_params_from_selected_scene():
+    pkg_share = str(Path(__file__).resolve().parents[1])
+    loader = _scene_loader_module()
+
+    baseline_nav2 = loader.resolve_scene_nav2_params(pkg_share, 'baseline')
+    warehouse_nav2 = loader.resolve_scene_nav2_params(pkg_share, 'warehouse')
+
+    assert baseline_nav2.endswith('config/nav2_demo_params.yaml')
+    assert warehouse_nav2.endswith('scenes/warehouse/nav2_params.yaml')
 
 def test_scene_loader_resolves_map_paths_from_selected_scene():
     pkg_share = str(Path(__file__).resolve().parents[1])
