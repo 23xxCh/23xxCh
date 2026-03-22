@@ -38,6 +38,12 @@ def _prepare_tracking_localization(context):
     scene_profile = load_scene_profile(pkg_share, scene_name)
     mission = scene_profile["mission_manager"]
     gas_source = scene_profile.get("gas_source", {})
+    resolved_source_x = (
+        LaunchConfiguration("source_x").perform(context).strip() or str(gas_source.get("x", -4.0))
+    )
+    resolved_source_y = (
+        LaunchConfiguration("source_y").perform(context).strip() or str(gas_source.get("y", 1.95))
+    )
 
     runtime_map = LaunchConfiguration("runtime_map").perform(context).strip()
     if not runtime_map:
@@ -73,8 +79,8 @@ def _prepare_tracking_localization(context):
         SetLaunchConfiguration("source_hold_steps", str(mission["source_hold_steps"])),
         SetLaunchConfiguration("track_step", str(mission["track_step"])),
         SetLaunchConfiguration("sweep_angle_deg", str(mission["sweep_angle_deg"])),
-        SetLaunchConfiguration("source_x", str(gas_source.get("x", -4.0))),
-        SetLaunchConfiguration("source_y", str(gas_source.get("y", 1.95))),
+        SetLaunchConfiguration("source_x", resolved_source_x),
+        SetLaunchConfiguration("source_y", resolved_source_y),
     ]
 
 

@@ -299,3 +299,13 @@ def test_tracking_localization_launch_exists_and_uses_localization_bringup():
     assert "mission_manager_node" in text
     assert '"start_in_tracking_mode": True' in text or "'start_in_tracking_mode': True" in text
     assert 'runtime_map' in text
+
+
+def test_tracking_localization_launch_honors_explicit_source_override_before_scene_default():
+    text = _launch_text("tracking_localization.launch.py")
+    assert 'LaunchConfiguration("source_x").perform(context).strip()' in text
+    assert 'LaunchConfiguration("source_y").perform(context).strip()' in text
+    assert 'resolved_source_x' in text
+    assert 'resolved_source_y' in text
+    assert 'SetLaunchConfiguration("source_x", resolved_source_x)' in text
+    assert 'SetLaunchConfiguration("source_y", resolved_source_y)' in text
