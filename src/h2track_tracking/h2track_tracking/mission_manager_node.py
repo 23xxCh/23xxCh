@@ -34,12 +34,31 @@ def select_tracking_target(
     sweep_angle: float,
     source_threshold: float,
 ) -> Pose2D:
+    source_dx = gas_model.params.source_x - current_pose.x
+    source_dy = gas_model.params.source_y - current_pose.y
+    source_distance = math.hypot(source_dx, source_dy)
+
+    def step_toward_model_source() -> Pose2D:
+        if source_distance <= 1e-6:
+            return current_pose
+        scale = step_size / source_distance
+        return Pose2D(
+            x=current_pose.x + source_dx * scale,
+            y=current_pose.y + source_dy * scale,
+        )
+
     if history:
         strongest_index, (strongest_pose, strongest_concentration) = max(
             enumerate(history),
             key=lambda sample: sample[1][1],
         )
+        strongest_radius = math.hypot(
+            strongest_pose.x - current_pose.x,
+            strongest_pose.y - current_pose.y,
+        )
         if strongest_concentration >= source_threshold and strongest_index < len(history) - 1:
+            if strongest_radius <= max(0.01, step_size * 0.025):
+                return step_toward_model_source()
             return strongest_pose
 
     return gas_model.next_search_target(
@@ -70,6 +89,7 @@ def _coerce_patrol_points(raw_value: object) -> list[tuple[float, float]]:
 class MissionManagerNode(Node):
     def __init__(self) -> None:
         super().__init__("mission_manager_node")
+        self.declare_parameter("start_in_tracking_mode", False)
         self.declare_parameter("initial_pose_x", 0.0)
         self.declare_parameter("initial_pose_y", 0.0)
         self.declare_parameter("initial_pose_yaw", 0.0)
@@ -114,19 +134,22 @@ class MissionManagerNode(Node):
             )
         )
         self._navigator = BasicNavigator()
+        self._start_in_tracking_mode = bool(self.get_parameter("start_in_tracking_mode").value)
         self._initial_pose = Pose2D(
             float(self.get_parameter("initial_pose_x").value),
             float(self.get_parameter("initial_pose_y").value),
         )
         self._initial_yaw = float(self.get_parameter("initial_pose_yaw").value)
-        self._current_pose = Pose2D(0.0, 0.0)
-        self._current_yaw = 0.0
+        self._current_pose = self._initial_pose
+        self._current_yaw = self._initial_yaw
         self._current_concentration = 0.0
         self._history: list[tuple[Pose2D, float]] = []
+        self._have_amcl_pose = False
         self._active_mode = None
         self._nav_ready = False
         self._current_goal_kind = None
         self._source_announced = False
+        self._tracking_mode_start_consumed = False
 
         self.create_subscription(PoseWithCovarianceStamped, "/amcl_pose", self._amcl_pose_callback, 10)
         self.create_subscription(Float32, "/gas_concentration", self._concentration_callback, 10)
@@ -137,6 +160,7 @@ class MissionManagerNode(Node):
 
     def _amcl_pose_callback(self, msg: PoseWithCovarianceStamped) -> None:
         self._current_pose, self._current_yaw = map_pose_from_amcl(msg)
+        self._have_amcl_pose = True
 
     def _concentration_callback(self, msg: Float32) -> None:
         self._current_concentration = float(msg.data)
@@ -177,13 +201,24 @@ class MissionManagerNode(Node):
         estimate = self._make_goal(self._machine.source_estimate[0], self._machine.source_estimate[1])
         self._estimate_pub.publish(estimate)
 
+    def _enter_tracking_mode(self) -> None:
+        self._machine.mode = MissionMode.SEEK_TRACK
+        if self._active_mode is not MissionMode.SEEK_TRACK:
+            self._mode_pub.publish(String(data=MissionMode.SEEK_TRACK.name))
+            self._active_mode = MissionMode.SEEK_TRACK
+
     def _control_loop(self) -> None:
         if not self._nav_ready:
             initial_pose = self._make_goal(self._initial_pose.x, self._initial_pose.y, self._initial_yaw)
             self._navigator.setInitialPose(initial_pose)
             self._navigator.waitUntilNav2Active(localizer="amcl")
             self._nav_ready = True
-            self._send_patrol_goal()
+            if self._start_in_tracking_mode and not self._tracking_mode_start_consumed:
+                self._enter_tracking_mode()
+                self._tracking_mode_start_consumed = True
+                self._send_tracking_goal()
+            else:
+                self._send_patrol_goal()
             return
 
         task_complete = self._navigator.isTaskComplete()
@@ -198,6 +233,14 @@ class MissionManagerNode(Node):
         if mode is not self._active_mode:
             self._mode_pub.publish(String(data=mode.name))
             self._active_mode = mode
+
+        if (
+            self._start_in_tracking_mode
+            and mode is MissionMode.SEEK_TRACK
+            and self._current_goal_kind is None
+        ):
+            self._send_tracking_goal()
+            return
 
         if previous_mode is not mode:
             if mode is MissionMode.SEEK_CONFIRM:

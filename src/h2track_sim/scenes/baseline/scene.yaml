@@ -52,3 +52,9 @@ gas_field:
   wind_y: 0.0
   noise_stddev: 0.05
   publish_rate_hz: 5.0
+autonomy:
+  slam_nav2_params: config/nav2_slam_baseline_params.yaml
+  exploration:
+    frontier_min_cluster_size: 6
+    min_goal_distance: 0.8
+    control_period_sec: 1.0

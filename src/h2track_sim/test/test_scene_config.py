@@ -163,3 +163,15 @@ def test_scene_loader_resolves_map_paths_from_selected_scene():
 
     assert baseline_map.endswith('maps/h2track_map.yaml')
     assert warehouse_map.endswith('scenes/warehouse/maps/warehouse_map.yaml')
+
+
+def test_baseline_scene_declares_autonomy_config_for_slam_exploration():
+    pkg_share = str(Path(__file__).resolve().parents[1])
+    loader = _scene_loader_module()
+    baseline = loader.load_scene_profile(pkg_share, 'baseline')
+
+    assert 'autonomy' in baseline
+    assert baseline['autonomy']['slam_nav2_params'].endswith('config/nav2_slam_baseline_params.yaml')
+    assert 'exploration' in baseline['autonomy']
+    assert baseline['autonomy']['exploration']['frontier_min_cluster_size'] >= 4
+    assert baseline['autonomy']['exploration']['min_goal_distance'] > 0.0

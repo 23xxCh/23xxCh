@@ -216,3 +216,86 @@ def test_sim_launch_shuts_down_if_gazebo_exits():
     assert "target_action=gazebo_gui" in text
     assert "target_action=gazebo_headless" in text
     assert 'Shutdown(reason="Gazebo process exited")' in text
+
+
+def test_autonomy_launch_exists_and_imports():
+    module = _load_launch_module("autonomy.launch.py")
+    assert hasattr(module, 'generate_launch_description')
+
+
+def test_autonomy_launch_includes_slam_navigation_and_exploration_manager():
+    text = _launch_text("autonomy.launch.py")
+    assert 'slam_nav2.launch.py' in text
+    assert 'exploration_manager_node' in text
+    assert '"scene": scene' in text or "'scene': scene" in text
+
+
+def test_autonomy_launch_includes_mapping_mission_manager_for_gas_detection():
+    text = _launch_text("autonomy.launch.py")
+    assert 'mapping_mission_manager_node' in text
+    assert '"enter_threshold": enter_threshold' in text or "'enter_threshold': enter_threshold" in text
+    assert '"exit_threshold": exit_threshold' in text or "'exit_threshold': exit_threshold" in text
+    assert '"confirm_samples": confirm_samples' in text or "'confirm_samples': confirm_samples" in text
+
+
+def test_autonomy_launch_includes_transition_manager_for_map_freeze():
+    text = _launch_text("autonomy.launch.py")
+    assert 'transition_manager_node' in text
+    assert '"scene_name": scene' in text or "'scene_name': scene" in text
+
+
+def test_autonomy_launch_disables_nav2_autostart_until_gate_releases_it():
+    text = _launch_text("autonomy.launch.py")
+    assert '"autostart": "false"' in text or "'autostart': 'false'" in text
+    assert '"map_saver_autostart": "true"' in text or "'map_saver_autostart': 'true'" in text
+    assert 'nav2_startup_gate_node' in text
+    assert '"/lifecycle_manager_navigation/manage_nodes"' in text or "'/lifecycle_manager_navigation/manage_nodes'" in text
+
+
+def test_autonomy_launch_routes_scene_gas_source_into_gas_field_node():
+    text = _launch_text("autonomy.launch.py")
+    assert 'SetLaunchConfiguration(\'source_x\'' in text or 'SetLaunchConfiguration("source_x"' in text
+    assert 'SetLaunchConfiguration(\'source_y\'' in text or 'SetLaunchConfiguration("source_y"' in text
+    assert "'source_x': source_x" in text or '"source_x": source_x' in text
+    assert "'source_y': source_y" in text or '"source_y": source_y' in text
+    assert "'source_x': '-4.0'" not in text
+    assert '"source_x": "-4.0"' not in text
+
+
+def test_autonomy_launch_sets_gas_field_pose_source_to_auto():
+    text = _launch_text("autonomy.launch.py")
+    assert "'pose_source': 'auto'" in text or '"pose_source": "auto"' in text
+
+
+def test_autonomy_launch_honors_explicit_source_override_before_scene_default():
+    text = _launch_text("autonomy.launch.py")
+    assert "source_x.perform(context).strip() or str(gas_source.get('x'" in text or 'source_x.perform(context).strip() or str(gas_source.get("x"' in text
+    assert "source_y.perform(context).strip() or str(gas_source.get('y'" in text or 'source_y.perform(context).strip() or str(gas_source.get("y"' in text
+
+
+def test_autonomy_launch_honors_explicit_gas_confirm_threshold_overrides():
+    text = _launch_text("autonomy.launch.py")
+    assert "enter_threshold.perform(context).strip() or str(mission['enter_threshold'])" in text or 'enter_threshold.perform(context).strip() or str(mission["enter_threshold"])' in text
+    assert "exit_threshold.perform(context).strip() or str(mission['exit_threshold'])" in text or 'exit_threshold.perform(context).strip() or str(mission["exit_threshold"])' in text
+    assert "confirm_samples.perform(context).strip() or str(mission['confirm_samples'])" in text or 'confirm_samples.perform(context).strip() or str(mission["confirm_samples"])' in text
+
+
+def test_slam_nav2_launch_exists_and_enables_slam_mode():
+    text = _launch_text("slam_nav2.launch.py")
+    assert "online_async_launch.py" in text
+    assert "navigation_launch.py" in text
+    assert 'resolve_scene_slam_nav2_params' in text
+
+
+def test_slam_nav2_launch_separates_map_saver_autostart_from_navigation_autostart():
+    text = _launch_text("slam_nav2.launch.py")
+    assert 'DeclareLaunchArgument(\'map_saver_autostart\'' in text or 'DeclareLaunchArgument("map_saver_autostart"' in text
+    assert "'autostart': map_saver_autostart" in text or '"autostart": map_saver_autostart' in text
+
+
+def test_tracking_localization_launch_exists_and_uses_localization_bringup():
+    text = _launch_text("tracking_localization.launch.py")
+    assert "localization_launch.py" in text
+    assert "mission_manager_node" in text
+    assert '"start_in_tracking_mode": True' in text or "'start_in_tracking_mode': True" in text
+    assert 'runtime_map' in text

@@ -57,3 +57,5 @@ gas_field:
   wind_y: -0.06
   noise_stddev: 0.03
   publish_rate_hz: 5.0
+autonomy:
+  enabled: false

@@ -1,4 +1,10 @@
-from h2track_tracking.mission_logic import MissionConfig, MissionMode, MissionStateMachine
+from h2track_tracking.mission_logic import (
+    ExplorationMissionConfig,
+    ExplorationMissionStateMachine,
+    MissionConfig,
+    MissionMode,
+    MissionStateMachine,
+)
 
 
 def test_patrol_switches_to_confirm_after_sustained_detection():
@@ -246,3 +252,57 @@ def test_tracking_declares_source_found_when_estimate_is_near_actual_source():
     machine.update(9.3, (1.95, 2.05), False)
 
     assert machine.mode is MissionMode.SOURCE_FOUND
+
+
+def test_explore_mapping_switches_to_confirm_after_sustained_detection():
+    machine = ExplorationMissionStateMachine(
+        ExplorationMissionConfig(
+            enter_threshold=1.2,
+            exit_threshold=0.5,
+            confirm_samples=3,
+        )
+    )
+
+    for concentration in (1.3, 1.4, 1.5):
+        machine.update(concentration)
+
+    assert machine.mode is MissionMode.GAS_CONFIRM
+
+
+def test_gas_confirm_returns_to_explore_after_sustained_collapse():
+    machine = ExplorationMissionStateMachine(
+        ExplorationMissionConfig(
+            enter_threshold=1.2,
+            exit_threshold=0.5,
+            confirm_samples=2,
+        )
+    )
+
+    machine.update(1.3)
+    machine.update(1.4)
+    assert machine.mode is MissionMode.GAS_CONFIRM
+
+    machine.update(0.3)
+    assert machine.mode is MissionMode.GAS_CONFIRM
+
+    machine.update(0.2)
+    assert machine.mode is MissionMode.EXPLORE_MAPPING
+
+
+def test_gas_confirm_escalates_to_freeze_after_sustained_confirmation():
+    machine = ExplorationMissionStateMachine(
+        ExplorationMissionConfig(
+            enter_threshold=1.2,
+            exit_threshold=0.5,
+            confirm_samples=2,
+        )
+    )
+
+    machine.update(1.3)
+    machine.update(1.4)
+    assert machine.mode is MissionMode.GAS_CONFIRM
+
+    machine.update(1.6)
+    machine.update(1.7)
+
+    assert machine.mode is MissionMode.FREEZE_AND_RELOCALIZE

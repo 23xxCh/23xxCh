@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from geometry_msgs.msg import Point
+from geometry_msgs.msg import Point, PoseWithCovarianceStamped
 from nav_msgs.msg import Odometry
 import rclpy
 from rclpy.node import Node
@@ -10,6 +10,27 @@ from std_msgs.msg import Float32
 from visualization_msgs.msg import Marker
 
 from .gas_model import GasFieldModel, GasFieldParams, Pose2D
+
+
+def pose_from_odom(msg: Odometry) -> Pose2D:
+    return Pose2D(msg.pose.pose.position.x, msg.pose.pose.position.y)
+
+
+def pose_from_amcl(msg: PoseWithCovarianceStamped) -> Pose2D:
+    return Pose2D(msg.pose.pose.position.x, msg.pose.pose.position.y)
+
+
+def select_pose_for_gas_field(
+    pose_source: str,
+    odom_pose: Pose2D,
+    amcl_pose: Pose2D | None,
+) -> Pose2D:
+    normalized = pose_source.strip().lower()
+    if normalized == "odom":
+        return odom_pose
+    if normalized == "amcl":
+        return amcl_pose or odom_pose
+    return amcl_pose or odom_pose
 
 
 class GasFieldNode(Node):
@@ -24,8 +45,11 @@ class GasFieldNode(Node):
         self.declare_parameter("wind_y", 0.0)
         self.declare_parameter("noise_stddev", 0.05)
         self.declare_parameter("publish_rate_hz", 5.0)
+        self.declare_parameter("pose_source", "odom")
 
-        self._pose = Pose2D(0.0, 0.0)
+        self._odom_pose = Pose2D(0.0, 0.0)
+        self._amcl_pose: Pose2D | None = None
+        self._pose_source = str(self.get_parameter("pose_source").value)
         params = GasFieldParams(
             source_x=float(self.get_parameter("source_x").value),
             source_y=float(self.get_parameter("source_y").value),
@@ -40,15 +64,20 @@ class GasFieldNode(Node):
         self._model = GasFieldModel(params)
 
         self.create_subscription(Odometry, "/odom", self._odom_callback, 10)
+        self.create_subscription(PoseWithCovarianceStamped, "/amcl_pose", self._amcl_callback, 10)
         self._concentration_pub = self.create_publisher(Float32, "/gas_concentration", 10)
         self._marker_pub = self.create_publisher(Marker, "/gas_source_marker", 1)
         self.create_timer(1.0 / float(self.get_parameter("publish_rate_hz").value), self._publish)
 
     def _odom_callback(self, msg: Odometry) -> None:
-        self._pose = Pose2D(msg.pose.pose.position.x, msg.pose.pose.position.y)
+        self._odom_pose = pose_from_odom(msg)
+
+    def _amcl_callback(self, msg: PoseWithCovarianceStamped) -> None:
+        self._amcl_pose = pose_from_amcl(msg)
 
     def _publish(self) -> None:
-        concentration = self._model.concentration_at(self._pose)
+        pose = select_pose_for_gas_field(self._pose_source, self._odom_pose, self._amcl_pose)
+        concentration = self._model.concentration_at(pose)
         self._concentration_pub.publish(Float32(data=float(concentration)))
 
         marker = Marker()

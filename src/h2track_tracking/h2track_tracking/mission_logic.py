@@ -9,6 +9,9 @@ import math
 
 
 class MissionMode(Enum):
+    EXPLORE_MAPPING = auto()
+    GAS_CONFIRM = auto()
+    FREEZE_AND_RELOCALIZE = auto()
     PATROL = auto()
     SEEK_CONFIRM = auto()
     SEEK_TRACK = auto()
@@ -25,6 +28,46 @@ class MissionConfig:
     source_radius: float
     source_hold_steps: int
     actual_source: tuple[float, float] | None = None
+
+
+@dataclass(frozen=True)
+class ExplorationMissionConfig:
+    enter_threshold: float
+    exit_threshold: float
+    confirm_samples: int
+
+
+class ExplorationMissionStateMachine:
+    def __init__(self, config: ExplorationMissionConfig) -> None:
+        self.config = config
+        self.mode = MissionMode.EXPLORE_MAPPING
+        self._recent_concentrations: deque[float] = deque(maxlen=max(1, config.confirm_samples))
+
+    def update(self, concentration: float) -> MissionMode:
+        self._recent_concentrations.append(concentration)
+        recent_count = len(self._recent_concentrations)
+        recent_values = list(self._recent_concentrations)
+
+        if self.mode is MissionMode.EXPLORE_MAPPING:
+            if (
+                recent_count == self.config.confirm_samples
+                and min(recent_values) >= self.config.enter_threshold
+            ):
+                self.mode = MissionMode.GAS_CONFIRM
+        elif self.mode is MissionMode.GAS_CONFIRM:
+            if (
+                recent_count == self.config.confirm_samples
+                and max(recent_values) < self.config.exit_threshold
+            ):
+                self.mode = MissionMode.EXPLORE_MAPPING
+                self._recent_concentrations.clear()
+            elif (
+                recent_count == self.config.confirm_samples
+                and min(recent_values) >= self.config.enter_threshold
+            ):
+                self.mode = MissionMode.FREEZE_AND_RELOCALIZE
+
+        return self.mode
 
 
 class MissionStateMachine:

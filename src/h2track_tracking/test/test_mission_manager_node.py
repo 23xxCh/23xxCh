@@ -40,6 +40,17 @@ def test_mission_manager_accepts_string_patrol_points_override():
             rclpy.shutdown()
 
 
+def test_mission_manager_tracking_mode_primes_current_pose_from_initial_pose():
+    text = (
+        Path(__file__).resolve().parents[1]
+        / 'h2track_tracking'
+        / 'mission_manager_node.py'
+    ).read_text(encoding='utf-8')
+
+    assert 'self._current_pose = self._initial_pose' in text
+    assert 'self._current_yaw = self._initial_yaw' in text
+
+
 def test_map_pose_from_amcl_reads_map_frame_pose_and_yaw():
     yaw = math.pi / 3.0
     msg = PoseWithCovarianceStamped()
@@ -63,6 +74,28 @@ def test_mission_manager_uses_amcl_pose_subscription_for_tracking_reference():
 
     assert 'PoseWithCovarianceStamped' in text
     assert '"/amcl_pose"' in text
+
+
+def test_mission_manager_supports_tracking_mode_startup():
+    text = (
+        Path(__file__).resolve().parents[1]
+        / 'h2track_tracking'
+        / 'mission_manager_node.py'
+    ).read_text(encoding='utf-8')
+
+    assert 'declare_parameter("start_in_tracking_mode"' in text or "declare_parameter('start_in_tracking_mode'" in text
+    assert 'MissionMode.SEEK_TRACK' in text
+
+
+def test_mission_manager_consumes_tracking_mode_start_flag_after_initial_entry():
+    text = (
+        Path(__file__).resolve().parents[1]
+        / 'h2track_tracking'
+        / 'mission_manager_node.py'
+    ).read_text(encoding='utf-8')
+
+    assert '_tracking_mode_start_consumed' in text
+    assert 'self._start_in_tracking_mode and not self._tracking_mode_start_consumed' in text
 
 
 def test_select_tracking_target_continues_search_when_current_pose_is_already_the_strongest_peak():
@@ -118,3 +151,36 @@ def test_select_tracking_target_holds_highest_recent_pose_after_a_source_spike()
     )
 
     assert target == source_pose
+
+
+def test_select_tracking_target_steps_toward_source_when_recent_peak_matches_current_pose():
+    gas_model = GasFieldModel(
+        GasFieldParams(
+            source_x=3.0,
+            source_y=2.0,
+            source_strength=260.0,
+            decay_rate=0.55,
+            plume_stddev=1.2,
+            wind_x=0.4,
+            wind_y=0.0,
+            noise_stddev=0.0,
+            min_concentration=0.0,
+        )
+    )
+    current_pose = Pose2D(2.87, 4.16)
+
+    target = select_tracking_target(
+        gas_model=gas_model,
+        current_pose=current_pose,
+        current_yaw=0.0,
+        history=[
+            (Pose2D(2.87, 4.16), 162.0),
+            (Pose2D(2.87, 4.16), 159.0),
+        ],
+        step_size=0.4,
+        sweep_angle=math.pi / 6.0,
+        source_threshold=4.5,
+    )
+
+    assert target != current_pose
+    assert target.y < current_pose.y - 0.2

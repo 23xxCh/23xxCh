@@ -1,0 +1,57 @@
+from pathlib import Path
+
+
+def test_transition_manager_listens_for_freeze_requests_and_uses_save_map_service():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "h2track_tracking"
+        / "transition_manager_node.py"
+    ).read_text(encoding="utf-8")
+
+    assert '/freeze_map_requested' in source
+    assert 'SaveMap' in source
+    assert '/map_saver_server/save_map' in source
+    assert '/map_frozen' in source
+
+
+def test_transition_manager_keeps_freeze_request_pending_until_save_service_is_ready():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "h2track_tracking"
+        / "transition_manager_node.py"
+    ).read_text(encoding="utf-8")
+
+    assert '_freeze_pending' in source
+    assert 'wait_for_service(timeout_sec=0.0)' in source
+    assert 'OccupancyGrid' in source
+    assert 'freeze_ready_min_map_samples' in source
+    assert 'freeze_ready_min_map_age_sec' in source
+    assert 'freeze_gate_ready' in source
+
+
+def test_transition_manager_starts_tracking_localization_and_stops_slam_after_freeze():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "h2track_tracking"
+        / "transition_manager_node.py"
+    ).read_text(encoding="utf-8")
+
+    assert "subprocess" in source
+    assert "tracking_localization.launch.py" in source
+    assert "async_slam_toolbox_node" in source
+    assert "baseline_freeze_map.yaml" not in source
+    assert "source_x:=" in source
+    assert "source_y:=" in source
+
+
+def test_transition_manager_transforms_source_from_odom_into_frozen_map_frame():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "h2track_tracking"
+        / "transition_manager_node.py"
+    ).read_text(encoding="utf-8")
+
+    assert 'source_frame' in source
+    assert '"odom"' in source or "'odom'" in source
+    assert '"map"' in source or "'map'" in source
+    assert "transform_point_into_map_frame" in source
