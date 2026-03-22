@@ -4,6 +4,7 @@ import yaml
 
 
 MAP_YAML = Path('/home/user/h2track-xian/.worktrees/dual-scene-platform/src/h2track_sim/scenes/warehouse/maps/warehouse_map.yaml')
+SCENE_YAML = Path('/home/user/h2track-xian/.worktrees/dual-scene-platform/src/h2track_sim/scenes/warehouse/scene.yaml')
 
 
 def _load_map():
@@ -33,17 +34,26 @@ def _sample(wx: float, wy: float) -> int:
 
 
 def test_warehouse_map_marks_left_corridor_clutter():
-    # This clutter exists in warehouse.world and sits near the old second-patrol corridor.
     assert _sample(-1.491287, 5.222435) < 80
 
 
-def test_warehouse_patrol_uses_conservative_l_shaped_upper_route():
-    scene = yaml.safe_load(Path('/home/user/h2track-xian/.worktrees/dual-scene-platform/src/h2track_sim/scenes/warehouse/scene.yaml').read_text(encoding='utf-8'))
-    second = scene['mission_manager']['patrol_points'][1]
-    third = scene['mission_manager']['patrol_points'][2]
+def test_warehouse_patrol_reaches_detectable_source_approach_route():
+    scene = yaml.safe_load(SCENE_YAML.read_text(encoding='utf-8'))
+    patrol = scene['mission_manager']['patrol_points']
+    source = scene['gas_source']
+    first, second, third, fourth, fifth = patrol
 
-    assert second == [2.4, 3.2]
-    assert third == [2.4, 4.6]
-    assert abs(second[1] - 3.0) <= 0.3
-    assert third[0] == second[0]
-    assert third[1] > second[1]
+    assert first == [0.5, 2.8]
+    assert second == [2.0, 2.8]
+    assert third == [3.0, 1.0]
+    assert fourth == [3.4, -2.2]
+    assert fifth == [3.5, -2.8]
+    assert scene['mission_manager']['enter_threshold'] == 1.0
+    assert second[1] == first[1]
+    assert third[0] > second[0]
+    assert third[1] < second[1]
+    assert fourth[1] < third[1]
+    assert fifth[0] >= fourth[0]
+    assert fifth[1] < fourth[1]
+    assert abs(fifth[0] - source['x']) <= 0.2
+    assert abs(fifth[1] - source['y']) <= 0.3

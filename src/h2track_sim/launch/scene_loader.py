@@ -31,3 +31,9 @@ def resolve_scene_model_path(pkg_share: str, scene_name: str) -> str:
 def resolve_scene_map(pkg_share: str, scene_name: str) -> str:
     profile = load_scene_profile(pkg_share, scene_name)
     return str(Path(pkg_share) / profile['map'])
+
+
+def resolve_scene_nav2_params(pkg_share: str, scene_name: str) -> str:
+    profile = load_scene_profile(pkg_share, scene_name)
+    nav2_params = profile.get('nav2_params', 'config/nav2_params.yaml')
+    return str(Path(pkg_share) / nav2_params)

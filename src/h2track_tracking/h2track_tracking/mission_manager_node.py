@@ -5,15 +5,24 @@ from __future__ import annotations
 import ast
 import math
 
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
-from nav_msgs.msg import Odometry
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Bool, Float32, String
 
 from .gas_model import GasFieldModel, GasFieldParams, Pose2D
 from .mission_logic import MissionConfig, MissionMode, MissionStateMachine
+
+
+def map_pose_from_amcl(msg: PoseWithCovarianceStamped) -> tuple[Pose2D, float]:
+    position = msg.pose.pose.position
+    orientation = msg.pose.pose.orientation
+    yaw = math.atan2(
+        2.0 * (orientation.w * orientation.z + orientation.x * orientation.y),
+        1.0 - 2.0 * (orientation.y * orientation.y + orientation.z * orientation.z),
+    )
+    return Pose2D(position.x, position.y), yaw
 
 
 def select_tracking_target(
@@ -26,8 +35,11 @@ def select_tracking_target(
     source_threshold: float,
 ) -> Pose2D:
     if history:
-        strongest_pose, strongest_concentration = max(history, key=lambda sample: sample[1])
-        if strongest_concentration >= source_threshold:
+        strongest_index, (strongest_pose, strongest_concentration) = max(
+            enumerate(history),
+            key=lambda sample: sample[1][1],
+        )
+        if strongest_concentration >= source_threshold and strongest_index < len(history) - 1:
             return strongest_pose
 
     return gas_model.next_search_target(
@@ -116,20 +128,15 @@ class MissionManagerNode(Node):
         self._current_goal_kind = None
         self._source_announced = False
 
-        self.create_subscription(Odometry, "/odom", self._odom_callback, 10)
+        self.create_subscription(PoseWithCovarianceStamped, "/amcl_pose", self._amcl_pose_callback, 10)
         self.create_subscription(Float32, "/gas_concentration", self._concentration_callback, 10)
         self._mode_pub = self.create_publisher(String, "/robot_mode", 10)
         self._source_pub = self.create_publisher(Bool, "/source_found", 10)
         self._estimate_pub = self.create_publisher(PoseStamped, "/estimated_source_pose", 10)
         self.create_timer(1.0, self._control_loop)
 
-    def _odom_callback(self, msg: Odometry) -> None:
-        self._current_pose = Pose2D(msg.pose.pose.position.x, msg.pose.pose.position.y)
-        q = msg.pose.pose.orientation
-        self._current_yaw = math.atan2(
-            2.0 * (q.w * q.z + q.x * q.y),
-            1.0 - 2.0 * (q.y * q.y + q.z * q.z),
-        )
+    def _amcl_pose_callback(self, msg: PoseWithCovarianceStamped) -> None:
+        self._current_pose, self._current_yaw = map_pose_from_amcl(msg)
 
     def _concentration_callback(self, msg: Float32) -> None:
         self._current_concentration = float(msg.data)
