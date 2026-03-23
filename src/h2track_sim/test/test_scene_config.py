@@ -183,6 +183,11 @@ def test_baseline_scene_declares_autonomy_config_for_slam_exploration():
     assert baseline['autonomy']['exploration']['min_goal_distance'] > 0.0
     assert baseline['autonomy']['exploration']['min_goal_x'] < baseline['autonomy']['exploration']['max_goal_x']
     assert baseline['autonomy']['exploration']['min_goal_y'] < baseline['autonomy']['exploration']['max_goal_y']
+    assert baseline['autonomy']['exploration']['stuck_timeout_sec'] >= 8.0
+    assert baseline['autonomy']['exploration']['stuck_movement_epsilon'] > 0.0
+    assert baseline['autonomy']['exploration']['stuck_goal_tolerance'] > 0.0
+    assert baseline['autonomy']['exploration']['blocked_goal_ttl_sec'] >= 20.0
+    assert baseline['autonomy']['exploration']['blocked_goal_radius'] > 0.0
     assert baseline['mission_manager']['track_exit_samples'] >= baseline['mission_manager']['confirm_samples']
     assert baseline['autonomy']['tracking_handoff']['track_exit_samples'] >= baseline['autonomy']['tracking_handoff']['confirm_samples']
 

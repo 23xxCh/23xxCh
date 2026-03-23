@@ -14,8 +14,10 @@ from tf2_ros import Buffer, TransformListener, TransformException
 
 from .exploration_logic import (
     GridSnapshot,
+    goal_progress_stalled,
     navigation_state_allows_new_frontier,
     select_frontier_goal,
+    FrontierGoal,
 )
 
 
@@ -32,6 +34,11 @@ class ExplorationManagerNode(Node):
         self.declare_parameter("max_goal_x", 1.0e9)
         self.declare_parameter("min_goal_y", -1.0e9)
         self.declare_parameter("max_goal_y", 1.0e9)
+        self.declare_parameter("stuck_timeout_sec", 15.0)
+        self.declare_parameter("stuck_movement_epsilon", 0.08)
+        self.declare_parameter("stuck_goal_tolerance", 0.45)
+        self.declare_parameter("blocked_goal_ttl_sec", 60.0)
+        self.declare_parameter("blocked_goal_radius", 0.9)
         self.declare_parameter("target_frame", "map")
         self.declare_parameter("robot_frame", "base_link")
         self.declare_parameter("exploration_enabled_topic", "/exploration_enabled")
@@ -43,6 +50,10 @@ class ExplorationManagerNode(Node):
         self._nav_ready = False
         self._exploration_enabled = True
         self._no_frontier_cycles = 0
+        self._active_goal: FrontierGoal | None = None
+        self._last_progress_xy: tuple[float, float] | None = None
+        self._last_progress_time_sec: float | None = None
+        self._blocked_goals: list[tuple[float, float, float, float]] = []
 
         map_qos = QoSProfile(
             history=QoSHistoryPolicy.KEEP_LAST,
@@ -101,6 +112,34 @@ class ExplorationManagerNode(Node):
         goal.pose.orientation.w = 1.0
         return goal
 
+    def _now_sec(self) -> float:
+        return self.get_clock().now().nanoseconds / 1e9
+
+    def _prune_blocked_goals(self, now_sec: float) -> None:
+        self._blocked_goals = [
+            item for item in self._blocked_goals
+            if item[3] > now_sec
+        ]
+
+    def _blocked_goal_regions(self, now_sec: float) -> list[tuple[float, float, float]]:
+        self._prune_blocked_goals(now_sec)
+        return [(x, y, radius) for x, y, radius, _ in self._blocked_goals]
+
+    def _mark_active_goal_blocked(self, now_sec: float) -> None:
+        if self._active_goal is None:
+            return
+        ttl_sec = max(0.0, float(self.get_parameter("blocked_goal_ttl_sec").value))
+        radius = max(0.0, float(self.get_parameter("blocked_goal_radius").value))
+        expires_at = now_sec + ttl_sec
+        self._blocked_goals.append((self._active_goal.x, self._active_goal.y, radius, expires_at))
+        self.get_logger().warn(
+            "Exploration goal stalled; temporarily blocking frontier around "
+            f"({self._active_goal.x:.2f}, {self._active_goal.y:.2f}) for {ttl_sec:.1f}s"
+        )
+        self._active_goal = None
+        self._last_progress_xy = None
+        self._last_progress_time_sec = None
+
     def _control_loop(self) -> None:
         if not self._nav_ready:
             self._navigator._waitForNodeToActivate('bt_navigator')
@@ -113,17 +152,47 @@ class ExplorationManagerNode(Node):
 
         if not self._exploration_enabled:
             self._no_frontier_cycles = 0
+            self._active_goal = None
+            self._last_progress_xy = None
+            self._last_progress_time_sec = None
             return
 
         robot_xy = self._lookup_robot_xy()
         if robot_xy is None:
             return
 
+        now_sec = self._now_sec()
+
+        if self._active_goal is not None and self._last_progress_xy is not None:
+            movement_epsilon = float(self.get_parameter("stuck_movement_epsilon").value)
+            if math.dist(robot_xy, self._last_progress_xy) >= max(0.0, movement_epsilon):
+                self._last_progress_xy = robot_xy
+                self._last_progress_time_sec = now_sec
+
         if not navigation_state_allows_new_frontier(
             task_complete=self._navigator.isTaskComplete(),
             task_result=self._navigator.getResult(),
         ):
+            if goal_progress_stalled(
+                task_complete=self._navigator.isTaskComplete(),
+                active_goal_xy=(
+                    (self._active_goal.x, self._active_goal.y) if self._active_goal is not None else None
+                ),
+                robot_xy=robot_xy,
+                last_progress_xy=self._last_progress_xy,
+                last_progress_time_sec=self._last_progress_time_sec,
+                now_sec=now_sec,
+                movement_epsilon=float(self.get_parameter("stuck_movement_epsilon").value),
+                stall_timeout_sec=float(self.get_parameter("stuck_timeout_sec").value),
+                goal_tolerance=float(self.get_parameter("stuck_goal_tolerance").value),
+            ):
+                self._navigator.cancelTask()
+                self._mark_active_goal_blocked(now_sec)
             return
+
+        self._active_goal = None
+        self._last_progress_xy = None
+        self._last_progress_time_sec = None
 
         goal = select_frontier_goal(
             self._grid,
@@ -134,6 +203,7 @@ class ExplorationManagerNode(Node):
             max_goal_x=float(self.get_parameter("max_goal_x").value),
             min_goal_y=float(self.get_parameter("min_goal_y").value),
             max_goal_y=float(self.get_parameter("max_goal_y").value),
+            blocked_goals=self._blocked_goal_regions(now_sec),
         )
         if goal is None:
             self._no_frontier_cycles += 1
@@ -175,6 +245,9 @@ class ExplorationManagerNode(Node):
         self._no_frontier_cycles = 0
         self.get_logger().info(f"Exploring frontier at ({goal.x:.2f}, {goal.y:.2f})")
         self._navigator.goToPose(self._make_goal(goal.x, goal.y))
+        self._active_goal = goal
+        self._last_progress_xy = robot_xy
+        self._last_progress_time_sec = now_sec
 
 
 def main(args: list[str] | None = None) -> None:

@@ -80,6 +80,11 @@ def _scene_defaults(context):
     max_goal_x = LaunchConfiguration('max_goal_x')
     min_goal_y = LaunchConfiguration('min_goal_y')
     max_goal_y = LaunchConfiguration('max_goal_y')
+    stuck_timeout_sec = LaunchConfiguration('stuck_timeout_sec')
+    stuck_movement_epsilon = LaunchConfiguration('stuck_movement_epsilon')
+    stuck_goal_tolerance = LaunchConfiguration('stuck_goal_tolerance')
+    blocked_goal_ttl_sec = LaunchConfiguration('blocked_goal_ttl_sec')
+    blocked_goal_radius = LaunchConfiguration('blocked_goal_radius')
     nav2_startup_gate_timeout = LaunchConfiguration('nav2_startup_gate_timeout')
     gaden_sensor_gate_timeout = LaunchConfiguration('gaden_sensor_gate_timeout')
     enter_threshold = LaunchConfiguration('enter_threshold')
@@ -151,6 +156,11 @@ def _scene_defaults(context):
     default_exit_threshold = mapping_detection.get('exit_threshold', mission['exit_threshold'])
     default_confirm_samples = mapping_detection.get('confirm_samples', mission['confirm_samples'])
     default_min_explore_samples = mapping_detection.get('min_explore_samples', 0)
+    default_stuck_timeout_sec = explore.get('stuck_timeout_sec', 15.0)
+    default_stuck_movement_epsilon = explore.get('stuck_movement_epsilon', 0.08)
+    default_stuck_goal_tolerance = explore.get('stuck_goal_tolerance', 0.45)
+    default_blocked_goal_ttl_sec = explore.get('blocked_goal_ttl_sec', 60.0)
+    default_blocked_goal_radius = explore.get('blocked_goal_radius', 0.9)
     default_tracking_source_x = tracking_handoff.get('source_x', gas_source.get('x', -4.0))
     default_tracking_source_y = tracking_handoff.get('source_y', gas_source.get('y', 1.95))
     default_tracking_enter = tracking_handoff.get('enter_threshold', mission['enter_threshold'])
@@ -259,6 +269,26 @@ def _scene_defaults(context):
         SetLaunchConfiguration('min_goal_y', str(explore.get('min_goal_y', -1.0e9))),
         SetLaunchConfiguration('max_goal_y', str(explore.get('max_goal_y', 1.0e9))),
         SetLaunchConfiguration(
+            'stuck_timeout_sec',
+            stuck_timeout_sec.perform(context).strip() or str(default_stuck_timeout_sec),
+        ),
+        SetLaunchConfiguration(
+            'stuck_movement_epsilon',
+            stuck_movement_epsilon.perform(context).strip() or str(default_stuck_movement_epsilon),
+        ),
+        SetLaunchConfiguration(
+            'stuck_goal_tolerance',
+            stuck_goal_tolerance.perform(context).strip() or str(default_stuck_goal_tolerance),
+        ),
+        SetLaunchConfiguration(
+            'blocked_goal_ttl_sec',
+            blocked_goal_ttl_sec.perform(context).strip() or str(default_blocked_goal_ttl_sec),
+        ),
+        SetLaunchConfiguration(
+            'blocked_goal_radius',
+            blocked_goal_radius.perform(context).strip() or str(default_blocked_goal_radius),
+        ),
+        SetLaunchConfiguration(
             'nav2_startup_gate_timeout',
             nav2_startup_gate_timeout.perform(context).strip() or str(default_nav2_startup_gate_timeout),
         ),
@@ -312,6 +342,11 @@ def generate_launch_description():
     max_goal_x = LaunchConfiguration('max_goal_x')
     min_goal_y = LaunchConfiguration('min_goal_y')
     max_goal_y = LaunchConfiguration('max_goal_y')
+    stuck_timeout_sec = LaunchConfiguration('stuck_timeout_sec')
+    stuck_movement_epsilon = LaunchConfiguration('stuck_movement_epsilon')
+    stuck_goal_tolerance = LaunchConfiguration('stuck_goal_tolerance')
+    blocked_goal_ttl_sec = LaunchConfiguration('blocked_goal_ttl_sec')
+    blocked_goal_radius = LaunchConfiguration('blocked_goal_radius')
     nav2_startup_gate_timeout = LaunchConfiguration('nav2_startup_gate_timeout')
     gaden_sensor_gate_timeout = LaunchConfiguration('gaden_sensor_gate_timeout')
     enter_threshold = LaunchConfiguration('enter_threshold')
@@ -383,6 +418,11 @@ def generate_launch_description():
     declare_max_goal_x = DeclareLaunchArgument('max_goal_x', default_value='')
     declare_min_goal_y = DeclareLaunchArgument('min_goal_y', default_value='')
     declare_max_goal_y = DeclareLaunchArgument('max_goal_y', default_value='')
+    declare_stuck_timeout_sec = DeclareLaunchArgument('stuck_timeout_sec', default_value='')
+    declare_stuck_movement_epsilon = DeclareLaunchArgument('stuck_movement_epsilon', default_value='')
+    declare_stuck_goal_tolerance = DeclareLaunchArgument('stuck_goal_tolerance', default_value='')
+    declare_blocked_goal_ttl_sec = DeclareLaunchArgument('blocked_goal_ttl_sec', default_value='')
+    declare_blocked_goal_radius = DeclareLaunchArgument('blocked_goal_radius', default_value='')
     declare_nav2_startup_gate_timeout = DeclareLaunchArgument('nav2_startup_gate_timeout', default_value='')
     declare_gaden_sensor_gate_timeout = DeclareLaunchArgument('gaden_sensor_gate_timeout', default_value='')
     declare_enter_threshold = DeclareLaunchArgument('enter_threshold', default_value='')
@@ -578,6 +618,11 @@ def generate_launch_description():
                 'max_goal_x': max_goal_x,
                 'min_goal_y': min_goal_y,
                 'max_goal_y': max_goal_y,
+                'stuck_timeout_sec': stuck_timeout_sec,
+                'stuck_movement_epsilon': stuck_movement_epsilon,
+                'stuck_goal_tolerance': stuck_goal_tolerance,
+                'blocked_goal_ttl_sec': blocked_goal_ttl_sec,
+                'blocked_goal_radius': blocked_goal_radius,
             },
         ],
     )
@@ -666,6 +711,11 @@ def generate_launch_description():
         declare_max_goal_x,
         declare_min_goal_y,
         declare_max_goal_y,
+        declare_stuck_timeout_sec,
+        declare_stuck_movement_epsilon,
+        declare_stuck_goal_tolerance,
+        declare_blocked_goal_ttl_sec,
+        declare_blocked_goal_radius,
         declare_nav2_startup_gate_timeout,
         declare_gaden_sensor_gate_timeout,
         declare_enter_threshold,

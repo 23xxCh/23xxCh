@@ -2,9 +2,17 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
+from enum import Enum, auto
 import math
 
-from nav2_simple_commander.robot_navigator import TaskResult
+try:
+    from nav2_simple_commander.robot_navigator import TaskResult
+except ImportError:
+    class TaskResult(Enum):
+        UNKNOWN = auto()
+        SUCCEEDED = auto()
+        CANCELED = auto()
+        FAILED = auto()
 
 
 @dataclass(frozen=True)
@@ -99,9 +107,11 @@ def select_frontier_goal(
     max_goal_x: float = 1.0e9,
     min_goal_y: float = -1.0e9,
     max_goal_y: float = 1.0e9,
+    blocked_goals: list[tuple[float, float, float]] | None = None,
 ) -> FrontierGoal | None:
     viable: list[FrontierGoal] = []
     robot_x, robot_y = robot_xy
+    blocked = blocked_goals or []
 
     for cluster in _cluster_frontiers(grid):
         if len(cluster) < min_frontier_cluster_size:
@@ -114,6 +124,11 @@ def select_frontier_goal(
             or centroid.x > max_goal_x
             or centroid.y < min_goal_y
             or centroid.y > max_goal_y
+        ):
+            continue
+        if any(
+            math.dist((centroid.x, centroid.y), (blocked_x, blocked_y)) <= max(0.0, blocked_radius)
+            for blocked_x, blocked_y, blocked_radius in blocked
         ):
             continue
         viable.append(centroid)
@@ -139,3 +154,26 @@ def navigation_state_allows_new_frontier(
         TaskResult.UNKNOWN,
         None,
     )
+
+
+def goal_progress_stalled(
+    *,
+    task_complete: bool,
+    active_goal_xy: tuple[float, float] | None,
+    robot_xy: tuple[float, float],
+    last_progress_xy: tuple[float, float] | None,
+    last_progress_time_sec: float | None,
+    now_sec: float,
+    movement_epsilon: float,
+    stall_timeout_sec: float,
+    goal_tolerance: float,
+) -> bool:
+    if task_complete or active_goal_xy is None:
+        return False
+    if last_progress_xy is None or last_progress_time_sec is None:
+        return False
+    if math.dist(robot_xy, active_goal_xy) <= max(0.0, goal_tolerance):
+        return False
+    if math.dist(robot_xy, last_progress_xy) >= max(0.0, movement_epsilon):
+        return False
+    return (now_sec - last_progress_time_sec) >= max(0.0, stall_timeout_sec)

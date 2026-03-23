@@ -70,3 +70,30 @@ def test_exploration_manager_supports_scene_specific_exploration_bounds():
     assert 'max_goal_x' in source
     assert 'min_goal_y' in source
     assert 'max_goal_y' in source
+
+
+def test_exploration_manager_declares_stuck_goal_recovery_parameters():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "h2track_tracking"
+        / "exploration_manager_node.py"
+    ).read_text(encoding="utf-8")
+
+    assert 'stuck_timeout_sec' in source
+    assert 'stuck_movement_epsilon' in source
+    assert 'stuck_goal_tolerance' in source
+    assert 'blocked_goal_ttl_sec' in source
+    assert 'blocked_goal_radius' in source
+
+
+def test_exploration_manager_cancels_and_blocks_stalled_frontier_goal():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "h2track_tracking"
+        / "exploration_manager_node.py"
+    ).read_text(encoding="utf-8")
+
+    assert 'goal_progress_stalled(' in source
+    assert 'self._navigator.cancelTask()' in source
+    assert 'self._blocked_goals' in source
+    assert 'blocked_goals=self._blocked_goal_regions(now_sec)' in source

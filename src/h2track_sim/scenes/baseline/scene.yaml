@@ -95,3 +95,8 @@ autonomy:
     max_goal_x: 5.2
     min_goal_y: -2.2
     max_goal_y: 5.0
+    stuck_timeout_sec: 14.0
+    stuck_movement_epsilon: 0.08
+    stuck_goal_tolerance: 0.55
+    blocked_goal_ttl_sec: 60.0
+    blocked_goal_radius: 0.9

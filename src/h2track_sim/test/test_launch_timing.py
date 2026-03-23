@@ -371,6 +371,20 @@ def test_autonomy_launch_routes_scene_exploration_bounds_to_manager():
     assert "'max_goal_y': max_goal_y" in text or '"max_goal_y": max_goal_y' in text
 
 
+def test_autonomy_launch_routes_stuck_goal_recovery_parameters_to_exploration_manager():
+    text = _launch_text("autonomy.launch.py")
+    assert "explore.get('stuck_timeout_sec'" in text or 'explore.get("stuck_timeout_sec"' in text
+    assert "explore.get('stuck_movement_epsilon'" in text or 'explore.get("stuck_movement_epsilon"' in text
+    assert "explore.get('stuck_goal_tolerance'" in text or 'explore.get("stuck_goal_tolerance"' in text
+    assert "explore.get('blocked_goal_ttl_sec'" in text or 'explore.get("blocked_goal_ttl_sec"' in text
+    assert "explore.get('blocked_goal_radius'" in text or 'explore.get("blocked_goal_radius"' in text
+    assert "'stuck_timeout_sec': stuck_timeout_sec" in text or '"stuck_timeout_sec": stuck_timeout_sec' in text
+    assert "'stuck_movement_epsilon': stuck_movement_epsilon" in text or '"stuck_movement_epsilon": stuck_movement_epsilon' in text
+    assert "'stuck_goal_tolerance': stuck_goal_tolerance" in text or '"stuck_goal_tolerance": stuck_goal_tolerance' in text
+    assert "'blocked_goal_ttl_sec': blocked_goal_ttl_sec" in text or '"blocked_goal_ttl_sec": blocked_goal_ttl_sec' in text
+    assert "'blocked_goal_radius': blocked_goal_radius" in text or '"blocked_goal_radius": blocked_goal_radius' in text
+
+
 def test_slam_nav2_launch_exists_and_enables_slam_mode():
     text = _launch_text("slam_nav2.launch.py")
     assert "online_async_launch.py" in text
