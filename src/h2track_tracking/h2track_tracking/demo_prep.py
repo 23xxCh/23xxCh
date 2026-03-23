@@ -69,6 +69,9 @@ def find_stale_processes(ps_output: str, demo_world_path: Path = BASELINE_WORLD_
         if _is_h2track_nav2_runtime_process(command):
             matches.append(MatchedProcess(pid=pid, kind="nav2_runtime_node", command=command))
             continue
+        if _is_h2track_gaden_runtime_process(command):
+            matches.append(MatchedProcess(pid=pid, kind="gaden_runtime_node", command=command))
+            continue
         if _is_h2track_nav2_startup_gate_process(command):
             matches.append(MatchedProcess(pid=pid, kind="nav2_startup_gate", command=command))
             continue
@@ -274,7 +277,14 @@ def _is_h2track_nav2_runtime_process(command: str) -> bool:
         ("nav2_map_server/map_server", "__node:=map_server"),
         ("nav2_waypoint_follower/waypoint_follower", "__node:=waypoint_follower"),
     )
-    return any(binary in command and node_name in command for binary, node_name in nav2_nodes)
+    for binary, node_name in nav2_nodes:
+        if binary not in command:
+            continue
+        if node_name in command:
+            return True
+        if "/tmp/launch_params_" in command:
+            return True
+    return False
 
 
 def _is_h2track_nav2_startup_gate_process(command: str) -> bool:
@@ -291,9 +301,20 @@ def _is_h2track_gaden_sensor_gate_process(command: str) -> bool:
     )
 
 
+def _is_h2track_gaden_runtime_process(command: str) -> bool:
+    gaden_nodes = (
+        ("gaden_environment/gaden_environment", "__node:=gaden_environment"),
+        ("gaden_player/gaden_player", "__node:=gaden_player"),
+        ("simulated_gas_sensor/simulated_gas_sensor", "__node:=gaden_pid_sensor"),
+    )
+    return any(binary in command and node_name in command for binary, node_name in gaden_nodes)
+
+
 def _is_h2track_runtime_node_process(command: str) -> bool:
     managed_nodes = (
         "h2track_tracking/mission_manager_node",
+        "h2track_tracking/gaden_adapter_node",
+        "h2track_tracking/gas_field_node",
         "h2track_tracking/mapping_mission_manager_node",
         "h2track_tracking/transition_manager_node",
         "h2track_tracking/exploration_manager_node",

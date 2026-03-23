@@ -18,6 +18,12 @@ user       10005    1282  0 00:00 ?        00:00:00 /home/user/h2track-xian/inst
 user       10006    1282  0 00:00 ?        00:00:00 /home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/gaden_sensor_gate_node --ros-args -r __node:=gaden_sensor_gate_node
 user       10007    1282  0 00:00 ?        00:00:00 /home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/mission_manager_node --ros-args -r __node:=mission_manager_node
 user       10008    1282  0 00:00 ?        00:00:00 /opt/ros/humble/lib/nav2_planner/planner_server --ros-args --log-level info --ros-args -r __node:=planner_server --params-file /tmp/launch_params_abc
+user       10009    1282  0 00:00 ?        00:00:00 /home/user/gaden_ws/install/gaden_environment/lib/gaden_environment/gaden_environment --ros-args -r __node:=gaden_environment
+user       10010    1282  0 00:00 ?        00:00:00 /home/user/gaden_ws/install/gaden_player/lib/gaden_player/gaden_player --ros-args -r __node:=gaden_player
+user       10011    1282  0 00:00 ?        00:00:00 /home/user/gaden_ws/install/simulated_gas_sensor/lib/simulated_gas_sensor/simulated_gas_sensor --ros-args -r __node:=gaden_pid_sensor
+user       10012    1282  0 00:00 ?        00:00:00 /home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/gaden_adapter_node --ros-args -r __node:=gaden_adapter_node
+user       10013    1282  0 00:00 ?        00:00:00 /home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/gas_field_node --ros-args -r __node:=gas_field_node
+user       10014    1282  0 00:00 ?        00:00:00 /opt/ros/humble/lib/nav2_controller/controller_server --ros-args --log-level info --ros-args --params-file /tmp/launch_params_xyz
 """
 
 
@@ -31,6 +37,12 @@ def test_matches_only_h2track_demo_processes():
         MatchedProcess(pid=10006, kind="gaden_sensor_gate", command="/home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/gaden_sensor_gate_node --ros-args -r __node:=gaden_sensor_gate_node"),
         MatchedProcess(pid=10007, kind="h2track_node", command="/home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/mission_manager_node --ros-args -r __node:=mission_manager_node"),
         MatchedProcess(pid=10008, kind="nav2_runtime_node", command="/opt/ros/humble/lib/nav2_planner/planner_server --ros-args --log-level info --ros-args -r __node:=planner_server --params-file /tmp/launch_params_abc"),
+        MatchedProcess(pid=10009, kind="gaden_runtime_node", command="/home/user/gaden_ws/install/gaden_environment/lib/gaden_environment/gaden_environment --ros-args -r __node:=gaden_environment"),
+        MatchedProcess(pid=10010, kind="gaden_runtime_node", command="/home/user/gaden_ws/install/gaden_player/lib/gaden_player/gaden_player --ros-args -r __node:=gaden_player"),
+        MatchedProcess(pid=10011, kind="gaden_runtime_node", command="/home/user/gaden_ws/install/simulated_gas_sensor/lib/simulated_gas_sensor/simulated_gas_sensor --ros-args -r __node:=gaden_pid_sensor"),
+        MatchedProcess(pid=10012, kind="h2track_node", command="/home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/gaden_adapter_node --ros-args -r __node:=gaden_adapter_node"),
+        MatchedProcess(pid=10013, kind="h2track_node", command="/home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/gas_field_node --ros-args -r __node:=gas_field_node"),
+        MatchedProcess(pid=10014, kind="nav2_runtime_node", command="/opt/ros/humble/lib/nav2_controller/controller_server --ros-args --log-level info --ros-args --params-file /tmp/launch_params_xyz"),
     ]
 
 
