@@ -1,0 +1,14 @@
+from h2track_tracking.mapping_mission_manager_node import exploration_enabled_for_mode
+from h2track_tracking.mission_logic import MissionMode
+
+
+def test_mapping_mission_keeps_exploration_enabled_while_confirming_gas():
+    assert exploration_enabled_for_mode(MissionMode.GAS_CONFIRM)
+
+
+def test_mapping_mission_keeps_exploration_enabled_while_waiting_for_freeze_handoff():
+    assert exploration_enabled_for_mode(MissionMode.FREEZE_AND_RELOCALIZE)
+
+
+def test_mapping_mission_only_disables_exploration_outside_mapping_modes():
+    assert not exploration_enabled_for_mode(MissionMode.SEEK_TRACK)

@@ -7,6 +7,14 @@ from std_msgs.msg import Bool, Float32, String
 from .mission_logic import ExplorationMissionConfig, ExplorationMissionStateMachine, MissionMode
 
 
+def exploration_enabled_for_mode(mode: MissionMode) -> bool:
+    return mode in (
+        MissionMode.EXPLORE_MAPPING,
+        MissionMode.GAS_CONFIRM,
+        MissionMode.FREEZE_AND_RELOCALIZE,
+    )
+
+
 class MappingMissionManagerNode(Node):
     def __init__(self) -> None:
         super().__init__("mapping_mission_manager_node")
@@ -33,7 +41,7 @@ class MappingMissionManagerNode(Node):
 
     def _publish_mode_and_controls(self, mode: MissionMode) -> None:
         self._mode_pub.publish(String(data=mode.name))
-        exploration_enabled = mode is MissionMode.EXPLORE_MAPPING
+        exploration_enabled = exploration_enabled_for_mode(mode)
         self._exploration_enabled_pub.publish(Bool(data=exploration_enabled))
 
         if mode is MissionMode.FREEZE_AND_RELOCALIZE and not self._freeze_requested:

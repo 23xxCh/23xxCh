@@ -60,6 +60,8 @@ autonomy:
     mission_manager_delay: 10.0
     nav2_startup_gate_timeout: 60.0
     gaden_sensor_gate_timeout: 60.0
+    tracking_launch_healthcheck_sec: 2.0
+    freeze_save_timeout_sec: 3.0
     gaden_sensor_gate_poll_period: 0.5
     gaden_sensor_gate_stable_ready_count: 3
   mapping_detection:

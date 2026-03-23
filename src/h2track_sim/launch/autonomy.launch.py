@@ -87,6 +87,8 @@ def _scene_defaults(context):
     blocked_goal_radius = LaunchConfiguration('blocked_goal_radius')
     nav2_startup_gate_timeout = LaunchConfiguration('nav2_startup_gate_timeout')
     gaden_sensor_gate_timeout = LaunchConfiguration('gaden_sensor_gate_timeout')
+    tracking_launch_healthcheck_sec = LaunchConfiguration('tracking_launch_healthcheck_sec')
+    freeze_save_timeout_sec = LaunchConfiguration('freeze_save_timeout_sec')
     enter_threshold = LaunchConfiguration('enter_threshold')
     exit_threshold = LaunchConfiguration('exit_threshold')
     confirm_samples = LaunchConfiguration('confirm_samples')
@@ -177,6 +179,8 @@ def _scene_defaults(context):
     default_tracking_seed_max_distance = tracking_handoff.get('source_seed_max_distance', 2.0)
     default_nav2_startup_gate_timeout = startup_gates.get('nav2_startup_gate_timeout', 60.0)
     default_gaden_sensor_gate_timeout = startup_gates.get('gaden_sensor_gate_timeout', 60.0)
+    default_tracking_launch_healthcheck_sec = startup_gates.get('tracking_launch_healthcheck_sec', 5.0)
+    default_freeze_save_timeout_sec = startup_gates.get('freeze_save_timeout_sec', 8.0)
     return [
         SetLaunchConfiguration('world', resolved_world),
         SetLaunchConfiguration('gazebo_model_path', resolved_model_path),
@@ -296,6 +300,15 @@ def _scene_defaults(context):
             'gaden_sensor_gate_timeout',
             gaden_sensor_gate_timeout.perform(context).strip() or str(default_gaden_sensor_gate_timeout),
         ),
+        SetLaunchConfiguration(
+            'tracking_launch_healthcheck_sec',
+            tracking_launch_healthcheck_sec.perform(context).strip()
+            or str(default_tracking_launch_healthcheck_sec),
+        ),
+        SetLaunchConfiguration(
+            'freeze_save_timeout_sec',
+            freeze_save_timeout_sec.perform(context).strip() or str(default_freeze_save_timeout_sec),
+        ),
         SetLaunchConfiguration('enter_threshold', enter_threshold.perform(context).strip() or str(default_enter_threshold)),
         SetLaunchConfiguration('exit_threshold', exit_threshold.perform(context).strip() or str(default_exit_threshold)),
         SetLaunchConfiguration('confirm_samples', confirm_samples.perform(context).strip() or str(default_confirm_samples)),
@@ -349,6 +362,8 @@ def generate_launch_description():
     blocked_goal_radius = LaunchConfiguration('blocked_goal_radius')
     nav2_startup_gate_timeout = LaunchConfiguration('nav2_startup_gate_timeout')
     gaden_sensor_gate_timeout = LaunchConfiguration('gaden_sensor_gate_timeout')
+    tracking_launch_healthcheck_sec = LaunchConfiguration('tracking_launch_healthcheck_sec')
+    freeze_save_timeout_sec = LaunchConfiguration('freeze_save_timeout_sec')
     enter_threshold = LaunchConfiguration('enter_threshold')
     exit_threshold = LaunchConfiguration('exit_threshold')
     confirm_samples = LaunchConfiguration('confirm_samples')
@@ -425,6 +440,8 @@ def generate_launch_description():
     declare_blocked_goal_radius = DeclareLaunchArgument('blocked_goal_radius', default_value='')
     declare_nav2_startup_gate_timeout = DeclareLaunchArgument('nav2_startup_gate_timeout', default_value='')
     declare_gaden_sensor_gate_timeout = DeclareLaunchArgument('gaden_sensor_gate_timeout', default_value='')
+    declare_tracking_launch_healthcheck_sec = DeclareLaunchArgument('tracking_launch_healthcheck_sec', default_value='')
+    declare_freeze_save_timeout_sec = DeclareLaunchArgument('freeze_save_timeout_sec', default_value='')
     declare_enter_threshold = DeclareLaunchArgument('enter_threshold', default_value='')
     declare_exit_threshold = DeclareLaunchArgument('exit_threshold', default_value='')
     declare_confirm_samples = DeclareLaunchArgument('confirm_samples', default_value='')
@@ -663,6 +680,8 @@ def generate_launch_description():
                 'tracking_source_hold_steps': tracking_source_hold_steps,
                 'tracking_track_step': tracking_track_step,
                 'tracking_source_seed_max_distance': tracking_source_seed_max_distance,
+                'tracking_launch_healthcheck_sec': tracking_launch_healthcheck_sec,
+                'freeze_save_timeout_sec': freeze_save_timeout_sec,
             },
         ],
     )
@@ -718,6 +737,8 @@ def generate_launch_description():
         declare_blocked_goal_radius,
         declare_nav2_startup_gate_timeout,
         declare_gaden_sensor_gate_timeout,
+        declare_tracking_launch_healthcheck_sec,
+        declare_freeze_save_timeout_sec,
         declare_enter_threshold,
         declare_exit_threshold,
         declare_confirm_samples,

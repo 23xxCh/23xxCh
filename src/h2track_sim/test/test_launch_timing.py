@@ -359,6 +359,16 @@ def test_autonomy_launch_applies_startup_gate_timeout_defaults_from_scene():
     assert "'timeout_sec': gaden_sensor_gate_timeout" in text or '"timeout_sec": gaden_sensor_gate_timeout' in text
 
 
+def test_autonomy_launch_routes_transition_freeze_and_handoff_timing_from_scene_startup_gates():
+    text = _launch_text("autonomy.launch.py")
+    assert "DeclareLaunchArgument('tracking_launch_healthcheck_sec'" in text or 'DeclareLaunchArgument("tracking_launch_healthcheck_sec"' in text
+    assert "DeclareLaunchArgument('freeze_save_timeout_sec'" in text or 'DeclareLaunchArgument("freeze_save_timeout_sec"' in text
+    assert "startup_gates.get('tracking_launch_healthcheck_sec'" in text or 'startup_gates.get("tracking_launch_healthcheck_sec"' in text
+    assert "startup_gates.get('freeze_save_timeout_sec'" in text or 'startup_gates.get("freeze_save_timeout_sec"' in text
+    assert "'tracking_launch_healthcheck_sec': tracking_launch_healthcheck_sec" in text or '"tracking_launch_healthcheck_sec": tracking_launch_healthcheck_sec' in text
+    assert "'freeze_save_timeout_sec': freeze_save_timeout_sec" in text or '"freeze_save_timeout_sec": freeze_save_timeout_sec' in text
+
+
 def test_autonomy_launch_routes_scene_exploration_bounds_to_manager():
     text = _launch_text("autonomy.launch.py")
     assert "explore.get('min_goal_x'" in text or 'explore.get("min_goal_x"' in text
