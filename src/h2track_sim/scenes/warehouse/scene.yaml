@@ -59,3 +59,8 @@ gas_field:
   publish_rate_hz: 5.0
 autonomy:
   enabled: false
+  startup_gates:
+    mission_manager_delay: 4.0
+    gaden_sensor_gate_timeout: 45.0
+    gaden_sensor_gate_poll_period: 0.5
+    gaden_sensor_gate_stable_ready_count: 3

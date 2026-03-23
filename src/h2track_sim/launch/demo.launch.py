@@ -41,7 +41,17 @@ def _flatten_patrol_points(points: list[list[float]]) -> list[float]:
     return flattened
 
 
-def _scene_actions(context, *, pkg_share: str, bringup_path: str, default_use_gaden: str):
+def _scene_actions(
+    context,
+    *,
+    pkg_share: str,
+    bringup_path: str,
+    default_use_gaden: str,
+    default_mission_manager_delay: str,
+    default_gaden_sensor_gate_timeout: str,
+    default_gaden_sensor_gate_poll_period: str,
+    default_gaden_sensor_gate_stable_ready_count: str,
+):
     scene = LaunchConfiguration('scene')
     use_gaden = LaunchConfiguration('use_gaden')
     nav2_params_file = LaunchConfiguration('nav2_params_file')
@@ -49,14 +59,26 @@ def _scene_actions(context, *, pkg_share: str, bringup_path: str, default_use_ga
     requested_use_gaden = use_gaden.perform(context).strip()
     requested_nav2_params = nav2_params_file.perform(context).strip()
     scene_profile = load_scene_profile(pkg_share, scene_name)
+    autonomy = scene_profile.get('autonomy', {})
+    startup_gates = autonomy.get('startup_gates', {})
     resolved_use_gaden = requested_use_gaden if requested_use_gaden else str(scene_profile.get('use_gaden', default_use_gaden)).lower()
     resolved_nav2_params = requested_nav2_params or resolve_scene_nav2_params(pkg_share, scene_name)
+    resolved_mission_manager_delay = str(startup_gates.get('mission_manager_delay', default_mission_manager_delay))
+    resolved_gaden_sensor_gate_timeout = str(startup_gates.get('gaden_sensor_gate_timeout', default_gaden_sensor_gate_timeout))
+    resolved_gaden_sensor_gate_poll_period = str(startup_gates.get('gaden_sensor_gate_poll_period', default_gaden_sensor_gate_poll_period))
+    resolved_gaden_sensor_gate_stable_ready_count = str(
+        startup_gates.get('gaden_sensor_gate_stable_ready_count', default_gaden_sensor_gate_stable_ready_count)
+    )
     mission = scene_profile['mission_manager']
     source = scene_profile['gas_source']
     initial_pose = mission['initial_pose']
 
     return [
         SetLaunchConfiguration('use_gaden', resolved_use_gaden),
+        SetLaunchConfiguration('mission_manager_delay', resolved_mission_manager_delay),
+        SetLaunchConfiguration('gaden_sensor_gate_timeout', resolved_gaden_sensor_gate_timeout),
+        SetLaunchConfiguration('gaden_sensor_gate_poll_period', resolved_gaden_sensor_gate_poll_period),
+        SetLaunchConfiguration('gaden_sensor_gate_stable_ready_count', resolved_gaden_sensor_gate_stable_ready_count),
         SetLaunchConfiguration('initial_pose_x', str(initial_pose['x'])),
         SetLaunchConfiguration('initial_pose_y', str(initial_pose['y'])),
         SetLaunchConfiguration('initial_pose_yaw', str(initial_pose['yaw'])),
@@ -103,15 +125,22 @@ def generate_launch_description():
     declare_use_gaden = DeclareLaunchArgument('use_gaden', default_value='')
     declare_nav2_params_file = DeclareLaunchArgument('nav2_params_file', default_value='')
 
-    set_demo_values = [
-        SetLaunchConfiguration('mission_manager_delay', str(demo.get('mission_manager_delay', 10.0))),
-        SetLaunchConfiguration('gaden_sensor_gate_timeout', str(demo.get('gaden_sensor_gate_timeout', 30.0))),
-        SetLaunchConfiguration('gaden_sensor_gate_poll_period', str(demo.get('gaden_sensor_gate_poll_period', 0.5))),
-    ]
+    default_mission_manager_delay = str(demo.get('mission_manager_delay', 10.0))
+    default_gaden_sensor_gate_timeout = str(demo.get('gaden_sensor_gate_timeout', 30.0))
+    default_gaden_sensor_gate_poll_period = str(demo.get('gaden_sensor_gate_poll_period', 0.5))
+    default_gaden_sensor_gate_stable_ready_count = str(demo.get('gaden_sensor_gate_stable_ready_count', 3))
 
     configure_scene = OpaqueFunction(
         function=_scene_actions,
-        kwargs={'pkg_share': pkg_share, 'bringup_path': bringup_path, 'default_use_gaden': default_use_gaden},
+        kwargs={
+            'pkg_share': pkg_share,
+            'bringup_path': bringup_path,
+            'default_use_gaden': default_use_gaden,
+            'default_mission_manager_delay': default_mission_manager_delay,
+            'default_gaden_sensor_gate_timeout': default_gaden_sensor_gate_timeout,
+            'default_gaden_sensor_gate_poll_period': default_gaden_sensor_gate_poll_period,
+            'default_gaden_sensor_gate_stable_ready_count': default_gaden_sensor_gate_stable_ready_count,
+        },
     )
 
     return LaunchDescription([
@@ -120,6 +149,5 @@ def generate_launch_description():
         declare_headless,
         declare_use_gaden,
         declare_nav2_params_file,
-        *set_demo_values,
         configure_scene,
     ])

@@ -185,3 +185,17 @@ def test_baseline_scene_declares_autonomy_config_for_slam_exploration():
     assert baseline['autonomy']['exploration']['min_goal_y'] < baseline['autonomy']['exploration']['max_goal_y']
     assert baseline['mission_manager']['track_exit_samples'] >= baseline['mission_manager']['confirm_samples']
     assert baseline['autonomy']['tracking_handoff']['track_exit_samples'] >= baseline['autonomy']['tracking_handoff']['confirm_samples']
+
+
+def test_warehouse_scene_declares_autonomy_startup_gates_for_launch_timing():
+    pkg_share = str(Path(__file__).resolve().parents[1])
+    loader = _scene_loader_module()
+    warehouse = loader.load_scene_profile(pkg_share, 'warehouse')
+
+    assert 'autonomy' in warehouse
+    assert 'startup_gates' in warehouse['autonomy']
+    startup = warehouse['autonomy']['startup_gates']
+    assert startup['mission_manager_delay'] >= 3.0
+    assert startup['gaden_sensor_gate_timeout'] >= 30.0
+    assert startup['gaden_sensor_gate_poll_period'] > 0.0
+    assert startup['gaden_sensor_gate_stable_ready_count'] >= 2

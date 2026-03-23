@@ -250,3 +250,12 @@ def test_demo_launch_sets_mission_values_as_launch_configurations():
     text = _launch_text("demo.launch.py")
     assert "SetLaunchConfiguration('mission_manager_delay'" in text
     assert "SetLaunchConfiguration('patrol_points'" in text
+
+
+def test_demo_launch_uses_scene_startup_gate_defaults_when_available():
+    text = _launch_text("demo.launch.py")
+    assert "startup_gates" in text
+    assert "mission_manager_delay" in text
+    assert "gaden_sensor_gate_timeout" in text
+    assert "gaden_sensor_gate_poll_period" in text
+    assert "gaden_sensor_gate_stable_ready_count" in text
