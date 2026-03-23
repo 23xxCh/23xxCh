@@ -275,9 +275,10 @@ def test_autonomy_launch_honors_explicit_source_override_before_scene_default():
 
 def test_autonomy_launch_honors_explicit_gas_confirm_threshold_overrides():
     text = _launch_text("autonomy.launch.py")
-    assert "enter_threshold.perform(context).strip() or str(mission['enter_threshold'])" in text or 'enter_threshold.perform(context).strip() or str(mission["enter_threshold"])' in text
-    assert "exit_threshold.perform(context).strip() or str(mission['exit_threshold'])" in text or 'exit_threshold.perform(context).strip() or str(mission["exit_threshold"])' in text
-    assert "confirm_samples.perform(context).strip() or str(mission['confirm_samples'])" in text or 'confirm_samples.perform(context).strip() or str(mission["confirm_samples"])' in text
+    assert "autonomy.get('mapping_detection'" in text or 'autonomy.get("mapping_detection"' in text
+    assert "enter_threshold.perform(context).strip() or str(" in text
+    assert "exit_threshold.perform(context).strip() or str(" in text
+    assert "confirm_samples.perform(context).strip() or str(" in text
 
 
 def test_slam_nav2_launch_exists_and_enables_slam_mode():

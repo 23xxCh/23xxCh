@@ -123,6 +123,10 @@ def _scene_defaults(context):
         resolved_gaden_map_yaw = ''
 
     explore = autonomy.get('exploration', {})
+    mapping_detection = autonomy.get('mapping_detection', {})
+    default_enter_threshold = mapping_detection.get('enter_threshold', mission['enter_threshold'])
+    default_exit_threshold = mapping_detection.get('exit_threshold', mission['exit_threshold'])
+    default_confirm_samples = mapping_detection.get('confirm_samples', mission['confirm_samples'])
     return [
         SetLaunchConfiguration('world', resolved_world),
         SetLaunchConfiguration('gazebo_model_path', resolved_model_path),
@@ -154,9 +158,9 @@ def _scene_defaults(context):
         SetLaunchConfiguration('frontier_min_cluster_size', str(explore.get('frontier_min_cluster_size', 6))),
         SetLaunchConfiguration('min_goal_distance', str(explore.get('min_goal_distance', 0.8))),
         SetLaunchConfiguration('control_period_sec', str(explore.get('control_period_sec', 1.0))),
-        SetLaunchConfiguration('enter_threshold', enter_threshold.perform(context).strip() or str(mission['enter_threshold'])),
-        SetLaunchConfiguration('exit_threshold', exit_threshold.perform(context).strip() or str(mission['exit_threshold'])),
-        SetLaunchConfiguration('confirm_samples', confirm_samples.perform(context).strip() or str(mission['confirm_samples'])),
+        SetLaunchConfiguration('enter_threshold', enter_threshold.perform(context).strip() or str(default_enter_threshold)),
+        SetLaunchConfiguration('exit_threshold', exit_threshold.perform(context).strip() or str(default_exit_threshold)),
+        SetLaunchConfiguration('confirm_samples', confirm_samples.perform(context).strip() or str(default_confirm_samples)),
     ]
 
 

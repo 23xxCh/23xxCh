@@ -38,8 +38,8 @@ gaden:
   sensor_topic: /gaden/sensor_reading
   sensor_frame: base_link
   fixed_frame: gaden_map
-  map_offset_x: 5.0
-  map_offset_y: 3.0
+  map_offset_x: 0.0
+  map_offset_y: 0.0
   map_offset_z: 0.0
   map_roll: 0.0
   map_pitch: 0.0
@@ -54,6 +54,10 @@ gas_field:
   publish_rate_hz: 5.0
 autonomy:
   slam_nav2_params: config/nav2_slam_baseline_params.yaml
+  mapping_detection:
+    enter_threshold: 0.7
+    exit_threshold: 0.3
+    confirm_samples: 3
   exploration:
     frontier_min_cluster_size: 6
     min_goal_distance: 0.8
