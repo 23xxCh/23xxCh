@@ -78,6 +78,21 @@ def test_mission_manager_uses_amcl_pose_subscription_for_tracking_reference():
     assert '"/amcl_pose"' in text
 
 
+def test_mission_manager_waits_for_odom_before_initial_pose_publication():
+    text = (
+        Path(__file__).resolve().parents[1]
+        / 'h2track_tracking'
+        / 'mission_manager_node.py'
+    ).read_text(encoding='utf-8')
+
+    assert 'Odometry' in text
+    assert '"/odom"' in text
+    assert 'self._have_odom' in text
+    assert 'if not self._have_odom:' in text
+    assert 'self._odom_tf_ready()' in text
+    assert 'can_transform(' in text
+
+
 def test_should_force_exploration_target_when_goal_repeats_near_robot():
     current_pose = Pose2D(2.24, -0.19)
     target_pose = Pose2D(2.26, -0.20)

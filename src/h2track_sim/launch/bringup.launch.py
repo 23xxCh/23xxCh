@@ -44,6 +44,7 @@ def generate_launch_description():
     use_gaden = LaunchConfiguration("use_gaden")
     nav2_params_file = LaunchConfiguration("nav2_params_file")
     nav2_autostart = LaunchConfiguration("nav2_autostart")
+    nav2_launch_delay = LaunchConfiguration("nav2_launch_delay")
     mission_manager_delay = LaunchConfiguration("mission_manager_delay")
     nav2_startup_gate_timeout = LaunchConfiguration("nav2_startup_gate_timeout")
     nav2_startup_gate_poll_period = LaunchConfiguration("nav2_startup_gate_poll_period")
@@ -96,6 +97,7 @@ def generate_launch_description():
     declare_use_gaden = DeclareLaunchArgument("use_gaden", default_value="false")
     declare_nav2_params_file = DeclareLaunchArgument("nav2_params_file", default_value="")
     declare_nav2_autostart = DeclareLaunchArgument("nav2_autostart", default_value="true")
+    declare_nav2_launch_delay = DeclareLaunchArgument("nav2_launch_delay", default_value="0.0")
     declare_mission_manager_delay = DeclareLaunchArgument("mission_manager_delay", default_value="10.0")
     declare_nav2_startup_gate_timeout = DeclareLaunchArgument("nav2_startup_gate_timeout", default_value="30.0")
     declare_nav2_startup_gate_poll_period = DeclareLaunchArgument("nav2_startup_gate_poll_period", default_value="0.5")
@@ -142,6 +144,8 @@ def generate_launch_description():
     def _scene_defaults(context):
         scene_name = scene.perform(context)
         scene_profile = load_scene_profile(pkg_share, scene_name)
+        autonomy = scene_profile.get("autonomy", {})
+        startup_gates = autonomy.get("startup_gates", {})
         gas_field = scene_profile.get("gas_field", {})
         gaden = scene_profile.get("gaden")
         use_gaden_value = use_gaden.perform(context).strip().lower()
@@ -168,6 +172,21 @@ def generate_launch_description():
         resolved_gas_wind_y = gas_wind_y.perform(context).strip() or str(gas_field.get("wind_y", 0.0))
         resolved_gas_noise_stddev = gas_noise_stddev.perform(context).strip() or str(gas_field.get("noise_stddev", 0.05))
         resolved_gas_publish_rate_hz = gas_publish_rate_hz.perform(context).strip() or str(gas_field.get("publish_rate_hz", 5.0))
+        resolved_nav2_launch_delay = nav2_launch_delay.perform(context).strip() or str(
+            startup_gates.get("nav2_launch_delay", 0.0)
+        )
+        resolved_mission_manager_delay = mission_manager_delay.perform(context).strip() or str(
+            startup_gates.get("mission_manager_delay", 10.0)
+        )
+        resolved_gaden_sensor_gate_timeout = gaden_sensor_gate_timeout.perform(context).strip() or str(
+            startup_gates.get("gaden_sensor_gate_timeout", 30.0)
+        )
+        resolved_gaden_sensor_gate_poll_period = gaden_sensor_gate_poll_period.perform(context).strip() or str(
+            startup_gates.get("gaden_sensor_gate_poll_period", 0.5)
+        )
+        resolved_gaden_sensor_gate_stable_ready_count = gaden_sensor_gate_stable_ready_count.perform(context).strip() or str(
+            startup_gates.get("gaden_sensor_gate_stable_ready_count", 3)
+        )
         if use_gaden_enabled:
             if not gaden:
                 raise RuntimeError(f"Scene '{scene_name}' is missing a gaden configuration block")
@@ -194,6 +213,14 @@ def generate_launch_description():
             SetLaunchConfiguration("world", resolved_world),
             SetLaunchConfiguration("gazebo_model_path", resolved_model_path),
             SetLaunchConfiguration("nav2_params_file", resolved_nav2_params_file),
+            SetLaunchConfiguration("nav2_launch_delay", resolved_nav2_launch_delay),
+            SetLaunchConfiguration("mission_manager_delay", resolved_mission_manager_delay),
+            SetLaunchConfiguration("gaden_sensor_gate_timeout", resolved_gaden_sensor_gate_timeout),
+            SetLaunchConfiguration("gaden_sensor_gate_poll_period", resolved_gaden_sensor_gate_poll_period),
+            SetLaunchConfiguration(
+                "gaden_sensor_gate_stable_ready_count",
+                resolved_gaden_sensor_gate_stable_ready_count,
+            ),
             SetLaunchConfiguration("gas_source_strength", resolved_gas_source_strength),
             SetLaunchConfiguration("gas_decay_rate", resolved_gas_decay_rate),
             SetLaunchConfiguration("gas_plume_stddev", resolved_gas_plume_stddev),
@@ -234,6 +261,11 @@ def generate_launch_description():
     nav2 = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(pkg_share, "launch", "nav2.launch.py")),
         launch_arguments={"scene": scene, "use_sim_time": use_sim_time, "params_file": nav2_params_file, "autostart": nav2_autostart}.items(),
+    )
+
+    delayed_nav2 = TimerAction(
+        period=nav2_launch_delay,
+        actions=[nav2],
     )
 
     nav2_startup_gate = Node(
@@ -438,6 +470,7 @@ def generate_launch_description():
             declare_use_gaden,
             declare_nav2_params_file,
             declare_nav2_autostart,
+            declare_nav2_launch_delay,
             declare_mission_manager_delay,
             declare_nav2_startup_gate_timeout,
             declare_nav2_startup_gate_poll_period,
@@ -482,7 +515,7 @@ def generate_launch_description():
             declare_gaden_map_yaw,
             scene_defaults,
             sim,
-            nav2,
+            delayed_nav2,
             nav2_startup_gate,
             gas_field,
             gaden_environment,

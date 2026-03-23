@@ -6,11 +6,15 @@ import ast
 import math
 
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
+from nav_msgs.msg import Odometry
 from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
 import rclpy
+from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
+from rclpy.time import Time
 from std_msgs.msg import Bool, Float32, String
+from tf2_ros import Buffer, TransformListener
 
 from .gas_model import GasFieldModel, GasFieldParams, Pose2D
 from .mission_logic import MissionConfig, MissionMode, MissionStateMachine
@@ -197,6 +201,7 @@ class MissionManagerNode(Node):
         self._current_concentration = 0.0
         self._history: list[tuple[Pose2D, float]] = []
         self._have_amcl_pose = False
+        self._have_odom = False
         self._active_mode = None
         self._nav_ready = False
         self._current_goal_kind = None
@@ -206,8 +211,11 @@ class MissionManagerNode(Node):
         self._last_tracking_source_distance: float | None = None
         self._source_announced = False
         self._tracking_mode_start_consumed = False
+        self._tf_buffer = Buffer(cache_time=Duration(seconds=30.0))
+        self._tf_listener = TransformListener(self._tf_buffer, self)
 
         self.create_subscription(PoseWithCovarianceStamped, "/amcl_pose", self._amcl_pose_callback, 10)
+        self.create_subscription(Odometry, "/odom", self._odom_callback, 10)
         self.create_subscription(Float32, "/gas_concentration", self._concentration_callback, 10)
         mode_qos = QoSProfile(depth=10)
         mode_qos.durability = DurabilityPolicy.TRANSIENT_LOCAL
@@ -224,6 +232,17 @@ class MissionManagerNode(Node):
         self._current_concentration = float(msg.data)
         self._history.append((self._current_pose, self._current_concentration))
         self._history = self._history[-8:]
+
+    def _odom_callback(self, _: Odometry) -> None:
+        self._have_odom = True
+
+    def _odom_tf_ready(self) -> bool:
+        return self._tf_buffer.can_transform(
+            "odom",
+            "base_link",
+            Time(),
+            timeout=Duration(seconds=0.0),
+        )
 
     def _make_goal(self, x: float, y: float, yaw: float = 0.0) -> PoseStamped:
         goal = PoseStamped()
@@ -354,6 +373,10 @@ class MissionManagerNode(Node):
 
     def _control_loop(self) -> None:
         if not self._nav_ready:
+            if not self._have_odom:
+                return
+            if not self._odom_tf_ready():
+                return
             initial_pose = self._make_goal(self._initial_pose.x, self._initial_pose.y, self._initial_yaw)
             self._navigator.setInitialPose(initial_pose)
             self._navigator.waitUntilNav2Active(localizer="amcl")

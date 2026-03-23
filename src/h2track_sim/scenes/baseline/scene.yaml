@@ -56,6 +56,7 @@ gas_field:
 autonomy:
   slam_nav2_params: config/nav2_slam_baseline_params.yaml
   startup_gates:
+    nav2_launch_delay: 0.0
     mission_manager_delay: 10.0
     nav2_startup_gate_timeout: 60.0
     gaden_sensor_gate_timeout: 60.0

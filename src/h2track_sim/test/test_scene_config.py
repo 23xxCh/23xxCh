@@ -195,6 +195,7 @@ def test_warehouse_scene_declares_autonomy_startup_gates_for_launch_timing():
     assert 'autonomy' in warehouse
     assert 'startup_gates' in warehouse['autonomy']
     startup = warehouse['autonomy']['startup_gates']
+    assert startup['nav2_launch_delay'] > 0.0
     assert startup['mission_manager_delay'] >= 3.0
     assert startup['gaden_sensor_gate_timeout'] >= 30.0
     assert startup['gaden_sensor_gate_poll_period'] > 0.0

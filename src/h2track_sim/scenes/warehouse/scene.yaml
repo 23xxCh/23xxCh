@@ -60,6 +60,7 @@ gas_field:
 autonomy:
   enabled: false
   startup_gates:
+    nav2_launch_delay: 2.5
     mission_manager_delay: 4.0
     gaden_sensor_gate_timeout: 45.0
     gaden_sensor_gate_poll_period: 0.5
