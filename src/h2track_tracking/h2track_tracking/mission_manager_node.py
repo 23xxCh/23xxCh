@@ -9,6 +9,7 @@ from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile
 from std_msgs.msg import Bool, Float32, String
 
 from .gas_model import GasFieldModel, GasFieldParams, Pose2D
@@ -208,7 +209,9 @@ class MissionManagerNode(Node):
 
         self.create_subscription(PoseWithCovarianceStamped, "/amcl_pose", self._amcl_pose_callback, 10)
         self.create_subscription(Float32, "/gas_concentration", self._concentration_callback, 10)
-        self._mode_pub = self.create_publisher(String, "/robot_mode", 10)
+        mode_qos = QoSProfile(depth=10)
+        mode_qos.durability = DurabilityPolicy.TRANSIENT_LOCAL
+        self._mode_pub = self.create_publisher(String, "/robot_mode", mode_qos)
         self._source_pub = self.create_publisher(Bool, "/source_found", 10)
         self._estimate_pub = self.create_publisher(PoseStamped, "/estimated_source_pose", 10)
         self.create_timer(1.0, self._control_loop)
@@ -235,6 +238,7 @@ class MissionManagerNode(Node):
     def _send_patrol_goal(self) -> None:
         goal_x, goal_y = self._machine.current_patrol_goal
         self._navigator.goToPose(self._make_goal(goal_x, goal_y))
+        self.get_logger().info(f"Navigating to patrol goal: ({goal_x:.3f}, {goal_y:.3f})")
         self._current_goal_kind = "patrol"
         self._last_tracking_goal = None
         self._tracking_repeat_streak = 0
@@ -307,6 +311,9 @@ class MissionManagerNode(Node):
             )
 
         self._navigator.goToPose(self._make_goal(next_target.x, next_target.y))
+        self.get_logger().info(
+            f"Navigating to tracking goal: ({next_target.x:.3f}, {next_target.y:.3f})"
+        )
         self._current_goal_kind = "track"
         self._last_tracking_goal = next_target
         self._last_tracking_source_distance = source_distance
@@ -357,6 +364,8 @@ class MissionManagerNode(Node):
                 self._send_tracking_goal()
             else:
                 self._send_patrol_goal()
+            self._mode_pub.publish(String(data=self._machine.mode.name))
+            self._active_mode = self._machine.mode
             return
 
         task_complete = self._navigator.isTaskComplete()

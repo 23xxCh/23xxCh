@@ -184,6 +184,40 @@ def test_mission_manager_supports_non_improving_tracking_source_pull():
     assert 'Tracking source pull engaged after non-improving streak' in text
 
 
+def test_mission_manager_publishes_robot_mode_with_transient_local_qos():
+    text = (
+        Path(__file__).resolve().parents[1]
+        / 'h2track_tracking'
+        / 'mission_manager_node.py'
+    ).read_text(encoding='utf-8')
+
+    assert 'QoSProfile' in text
+    assert 'DurabilityPolicy.TRANSIENT_LOCAL' in text
+    assert 'self.create_publisher(String, "/robot_mode", mode_qos)' in text
+
+
+def test_mission_manager_logs_patrol_and_tracking_goal_dispatches():
+    text = (
+        Path(__file__).resolve().parents[1]
+        / 'h2track_tracking'
+        / 'mission_manager_node.py'
+    ).read_text(encoding='utf-8')
+
+    assert 'Navigating to patrol goal' in text
+    assert 'Navigating to tracking goal' in text
+
+
+def test_mission_manager_publishes_initial_mode_after_nav_startup():
+    text = (
+        Path(__file__).resolve().parents[1]
+        / 'h2track_tracking'
+        / 'mission_manager_node.py'
+    ).read_text(encoding='utf-8')
+
+    assert 'self._mode_pub.publish(String(data=self._machine.mode.name))' in text
+    assert 'self._active_mode = self._machine.mode' in text
+
+
 def test_mission_manager_counts_goal_reached_only_on_success():
     text = (
         Path(__file__).resolve().parents[1]
