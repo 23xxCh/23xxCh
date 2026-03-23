@@ -74,6 +74,10 @@ def _scene_defaults(context):
     no_frontier_relaxed_cluster_size = LaunchConfiguration('no_frontier_relaxed_cluster_size')
     no_frontier_relaxed_min_goal_distance = LaunchConfiguration('no_frontier_relaxed_min_goal_distance')
     control_period_sec = LaunchConfiguration('control_period_sec')
+    min_goal_x = LaunchConfiguration('min_goal_x')
+    max_goal_x = LaunchConfiguration('max_goal_x')
+    min_goal_y = LaunchConfiguration('min_goal_y')
+    max_goal_y = LaunchConfiguration('max_goal_y')
     nav2_startup_gate_timeout = LaunchConfiguration('nav2_startup_gate_timeout')
     gaden_sensor_gate_timeout = LaunchConfiguration('gaden_sensor_gate_timeout')
     enter_threshold = LaunchConfiguration('enter_threshold')
@@ -238,6 +242,10 @@ def _scene_defaults(context):
             str(explore.get('no_frontier_relaxed_min_goal_distance', 0.35)),
         ),
         SetLaunchConfiguration('control_period_sec', str(explore.get('control_period_sec', 1.0))),
+        SetLaunchConfiguration('min_goal_x', str(explore.get('min_goal_x', -1.0e9))),
+        SetLaunchConfiguration('max_goal_x', str(explore.get('max_goal_x', 1.0e9))),
+        SetLaunchConfiguration('min_goal_y', str(explore.get('min_goal_y', -1.0e9))),
+        SetLaunchConfiguration('max_goal_y', str(explore.get('max_goal_y', 1.0e9))),
         SetLaunchConfiguration(
             'nav2_startup_gate_timeout',
             nav2_startup_gate_timeout.perform(context).strip() or str(default_nav2_startup_gate_timeout),
@@ -286,6 +294,10 @@ def generate_launch_description():
     no_frontier_relaxed_cluster_size = LaunchConfiguration('no_frontier_relaxed_cluster_size')
     no_frontier_relaxed_min_goal_distance = LaunchConfiguration('no_frontier_relaxed_min_goal_distance')
     control_period_sec = LaunchConfiguration('control_period_sec')
+    min_goal_x = LaunchConfiguration('min_goal_x')
+    max_goal_x = LaunchConfiguration('max_goal_x')
+    min_goal_y = LaunchConfiguration('min_goal_y')
+    max_goal_y = LaunchConfiguration('max_goal_y')
     nav2_startup_gate_timeout = LaunchConfiguration('nav2_startup_gate_timeout')
     gaden_sensor_gate_timeout = LaunchConfiguration('gaden_sensor_gate_timeout')
     enter_threshold = LaunchConfiguration('enter_threshold')
@@ -348,6 +360,10 @@ def generate_launch_description():
         default_value='',
     )
     declare_control_period_sec = DeclareLaunchArgument('control_period_sec', default_value='')
+    declare_min_goal_x = DeclareLaunchArgument('min_goal_x', default_value='')
+    declare_max_goal_x = DeclareLaunchArgument('max_goal_x', default_value='')
+    declare_min_goal_y = DeclareLaunchArgument('min_goal_y', default_value='')
+    declare_max_goal_y = DeclareLaunchArgument('max_goal_y', default_value='')
     declare_nav2_startup_gate_timeout = DeclareLaunchArgument('nav2_startup_gate_timeout', default_value='')
     declare_gaden_sensor_gate_timeout = DeclareLaunchArgument('gaden_sensor_gate_timeout', default_value='')
     declare_enter_threshold = DeclareLaunchArgument('enter_threshold', default_value='')
@@ -539,6 +555,10 @@ def generate_launch_description():
                 'no_frontier_relaxed_cluster_size': no_frontier_relaxed_cluster_size,
                 'no_frontier_relaxed_min_goal_distance': no_frontier_relaxed_min_goal_distance,
                 'control_period_sec': control_period_sec,
+                'min_goal_x': min_goal_x,
+                'max_goal_x': max_goal_x,
+                'min_goal_y': min_goal_y,
+                'max_goal_y': max_goal_y,
             },
         ],
     )
@@ -619,6 +639,10 @@ def generate_launch_description():
         declare_no_frontier_relaxed_cluster_size,
         declare_no_frontier_relaxed_min_goal_distance,
         declare_control_period_sec,
+        declare_min_goal_x,
+        declare_max_goal_x,
+        declare_min_goal_y,
+        declare_max_goal_y,
         declare_nav2_startup_gate_timeout,
         declare_gaden_sensor_gate_timeout,
         declare_enter_threshold,

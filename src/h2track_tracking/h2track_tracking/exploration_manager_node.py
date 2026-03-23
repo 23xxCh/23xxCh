@@ -28,6 +28,10 @@ class ExplorationManagerNode(Node):
         self.declare_parameter("no_frontier_relaxed_after_cycles", 8)
         self.declare_parameter("no_frontier_relaxed_cluster_size", 1)
         self.declare_parameter("no_frontier_relaxed_min_goal_distance", 0.35)
+        self.declare_parameter("min_goal_x", -1.0e9)
+        self.declare_parameter("max_goal_x", 1.0e9)
+        self.declare_parameter("min_goal_y", -1.0e9)
+        self.declare_parameter("max_goal_y", 1.0e9)
         self.declare_parameter("target_frame", "map")
         self.declare_parameter("robot_frame", "base_link")
         self.declare_parameter("exploration_enabled_topic", "/exploration_enabled")
@@ -126,6 +130,10 @@ class ExplorationManagerNode(Node):
             robot_xy=robot_xy,
             min_frontier_cluster_size=int(self.get_parameter("frontier_min_cluster_size").value),
             min_goal_distance=float(self.get_parameter("min_goal_distance").value),
+            min_goal_x=float(self.get_parameter("min_goal_x").value),
+            max_goal_x=float(self.get_parameter("max_goal_x").value),
+            min_goal_y=float(self.get_parameter("min_goal_y").value),
+            max_goal_y=float(self.get_parameter("max_goal_y").value),
         )
         if goal is None:
             self._no_frontier_cycles += 1
@@ -145,6 +153,10 @@ class ExplorationManagerNode(Node):
                     robot_xy=robot_xy,
                     min_frontier_cluster_size=relaxed_cluster_size,
                     min_goal_distance=relaxed_min_goal_distance,
+                    min_goal_x=float(self.get_parameter("min_goal_x").value),
+                    max_goal_x=float(self.get_parameter("max_goal_x").value),
+                    min_goal_y=float(self.get_parameter("min_goal_y").value),
+                    max_goal_y=float(self.get_parameter("max_goal_y").value),
                 )
                 if goal is not None:
                     self.get_logger().info(

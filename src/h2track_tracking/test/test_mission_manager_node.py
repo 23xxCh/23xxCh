@@ -9,6 +9,7 @@ from h2track_tracking.mission_manager_node import (
     MissionManagerNode,
     map_pose_from_amcl,
     select_tracking_target,
+    should_force_exploration_target,
 )
 
 
@@ -76,6 +77,49 @@ def test_mission_manager_uses_amcl_pose_subscription_for_tracking_reference():
     assert '"/amcl_pose"' in text
 
 
+def test_should_force_exploration_target_when_goal_repeats_near_robot():
+    current_pose = Pose2D(2.24, -0.19)
+    target_pose = Pose2D(2.26, -0.20)
+    assert should_force_exploration_target(
+        current_pose=current_pose,
+        proposed_target=target_pose,
+        previous_target=target_pose,
+        repeat_goal_radius=0.08,
+        repeat_pose_radius=0.25,
+        repeated_streak=1,
+        streak_threshold=3,
+    )
+
+
+def test_should_not_force_exploration_when_target_changed():
+    current_pose = Pose2D(2.24, -0.19)
+    previous_target = Pose2D(2.26, -0.20)
+    proposed_target = Pose2D(1.98, -0.41)
+    assert not should_force_exploration_target(
+        current_pose=current_pose,
+        proposed_target=proposed_target,
+        previous_target=previous_target,
+        repeat_goal_radius=0.08,
+        repeat_pose_radius=0.25,
+        repeated_streak=1,
+        streak_threshold=3,
+    )
+
+
+def test_should_force_exploration_when_repeat_streak_exceeds_threshold():
+    current_pose = Pose2D(0.7, -1.4)
+    repeated_target = Pose2D(1.32, -0.57)
+    assert should_force_exploration_target(
+        current_pose=current_pose,
+        proposed_target=repeated_target,
+        previous_target=repeated_target,
+        repeat_goal_radius=0.08,
+        repeat_pose_radius=0.25,
+        repeated_streak=3,
+        streak_threshold=3,
+    )
+
+
 def test_mission_manager_supports_tracking_mode_startup():
     text = (
         Path(__file__).resolve().parents[1]
@@ -97,6 +141,20 @@ def test_mission_manager_supports_tracking_only_mode_to_prevent_patrol_fallback(
     assert 'declare_parameter("tracking_only_mode"' in text or "declare_parameter('tracking_only_mode'" in text
     assert 'self._tracking_only_mode' in text
     assert 'if self._tracking_only_mode and mode is MissionMode.PATROL' in text
+
+
+def test_mission_manager_supports_duplicate_tracking_goal_escape():
+    text = (
+        Path(__file__).resolve().parents[1]
+        / 'h2track_tracking'
+        / 'mission_manager_node.py'
+    ).read_text(encoding='utf-8')
+
+    assert 'tracking_repeat_goal_radius' in text
+    assert 'tracking_repeat_pose_radius' in text
+    assert 'tracking_repeat_streak_threshold' in text
+    assert 'should_force_exploration_target' in text
+    assert 'Tracking target repeated near robot pose; forcing exploratory offset goal' in text
 
 
 def test_mission_manager_consumes_tracking_mode_start_flag_after_initial_entry():
@@ -220,3 +278,51 @@ def test_select_tracking_target_steps_toward_source_when_recent_peak_matches_cur
 
     assert target != current_pose
     assert target.y < current_pose.y - 0.2
+
+
+def test_select_tracking_target_uses_plume_search_when_history_is_empty():
+    current_pose = Pose2D(1.0, 1.0)
+    target = select_tracking_target(
+        gas_model=_make_tracking_model(),
+        current_pose=current_pose,
+        current_yaw=0.0,
+        history=[],
+        step_size=0.4,
+        sweep_angle=math.pi / 6.0,
+        source_threshold=4.5,
+    )
+
+    displacement = math.hypot(target.x - current_pose.x, target.y - current_pose.y)
+    assert displacement > 0.3
+    assert target.x > current_pose.x
+
+
+def test_select_tracking_target_does_not_overshoot_when_source_is_within_step_size():
+    gas_model = GasFieldModel(
+        GasFieldParams(
+            source_x=1.18,
+            source_y=1.12,
+            source_strength=120.0,
+            decay_rate=0.55,
+            plume_stddev=1.2,
+            wind_x=0.4,
+            wind_y=0.0,
+            noise_stddev=0.0,
+            min_concentration=0.0,
+        )
+    )
+    current_pose = Pose2D(1.0, 1.0)
+    target = select_tracking_target(
+        gas_model=gas_model,
+        current_pose=current_pose,
+        current_yaw=0.0,
+        history=[
+            (current_pose, 6.2),
+            (Pose2D(1.05, 1.02), 1.1),
+        ],
+        step_size=0.4,
+        sweep_angle=math.pi / 6.0,
+        source_threshold=4.5,
+    )
+
+    assert target == Pose2D(1.18, 1.12)

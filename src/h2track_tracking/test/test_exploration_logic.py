@@ -101,3 +101,35 @@ def test_navigation_state_blocks_dispatch_while_goal_is_still_running():
         task_complete=False,
         task_result=TaskResult.UNKNOWN,
     )
+
+
+def test_select_frontier_goal_respects_optional_world_bounds():
+    grid = GridSnapshot(
+        width=8,
+        height=6,
+        resolution=1.0,
+        origin_x=0.0,
+        origin_y=0.0,
+        data=[
+            100, 100, 100, 100, 100, 100, 100, 100,
+            100,   0,  -1, 100, 100, 100, 100, 100,
+            100,   0,   0, 100,   0,   0,  -1, 100,
+            100, 100, 100, 100,   0,   0,  -1, 100,
+            100, 100, 100, 100, 100, 100, 100, 100,
+            100, 100, 100, 100, 100, 100, 100, 100,
+        ],
+    )
+
+    goal = select_frontier_goal(
+        grid,
+        robot_xy=(1.5, 1.5),
+        min_frontier_cluster_size=2,
+        min_goal_distance=0.5,
+        min_goal_x=0.0,
+        max_goal_x=3.0,
+        min_goal_y=0.0,
+        max_goal_y=5.0,
+    )
+
+    assert goal is not None
+    assert goal.x <= 3.0

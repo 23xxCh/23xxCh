@@ -95,6 +95,10 @@ def select_frontier_goal(
     *,
     min_frontier_cluster_size: int,
     min_goal_distance: float,
+    min_goal_x: float = -1.0e9,
+    max_goal_x: float = 1.0e9,
+    min_goal_y: float = -1.0e9,
+    max_goal_y: float = 1.0e9,
 ) -> FrontierGoal | None:
     viable: list[FrontierGoal] = []
     robot_x, robot_y = robot_xy
@@ -104,6 +108,13 @@ def select_frontier_goal(
             continue
         centroid = _cluster_centroid_world(grid, cluster)
         if math.dist((centroid.x, centroid.y), (robot_x, robot_y)) < min_goal_distance:
+            continue
+        if (
+            centroid.x < min_goal_x
+            or centroid.x > max_goal_x
+            or centroid.y < min_goal_y
+            or centroid.y > max_goal_y
+        ):
             continue
         viable.append(centroid)
 

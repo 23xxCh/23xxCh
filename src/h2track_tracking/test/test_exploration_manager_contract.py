@@ -57,3 +57,16 @@ def test_exploration_manager_attempts_relaxed_frontier_selection_after_patience_
     assert 'self._no_frontier_cycles >= relaxed_after_cycles' in source
     assert 'min_frontier_cluster_size=relaxed_cluster_size' in source
     assert 'min_goal_distance=relaxed_min_goal_distance' in source
+
+
+def test_exploration_manager_supports_scene_specific_exploration_bounds():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "h2track_tracking"
+        / "exploration_manager_node.py"
+    ).read_text(encoding="utf-8")
+
+    assert 'min_goal_x' in source
+    assert 'max_goal_x' in source
+    assert 'min_goal_y' in source
+    assert 'max_goal_y' in source

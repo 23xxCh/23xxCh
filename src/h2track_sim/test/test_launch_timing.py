@@ -346,6 +346,18 @@ def test_autonomy_launch_applies_startup_gate_timeout_defaults_from_scene():
     assert "'timeout_sec': gaden_sensor_gate_timeout" in text or '"timeout_sec": gaden_sensor_gate_timeout' in text
 
 
+def test_autonomy_launch_routes_scene_exploration_bounds_to_manager():
+    text = _launch_text("autonomy.launch.py")
+    assert "explore.get('min_goal_x'" in text or 'explore.get("min_goal_x"' in text
+    assert "explore.get('max_goal_x'" in text or 'explore.get("max_goal_x"' in text
+    assert "explore.get('min_goal_y'" in text or 'explore.get("min_goal_y"' in text
+    assert "explore.get('max_goal_y'" in text or 'explore.get("max_goal_y"' in text
+    assert "'min_goal_x': min_goal_x" in text or '"min_goal_x": min_goal_x' in text
+    assert "'max_goal_x': max_goal_x" in text or '"max_goal_x": max_goal_x' in text
+    assert "'min_goal_y': min_goal_y" in text or '"min_goal_y": min_goal_y' in text
+    assert "'max_goal_y': max_goal_y" in text or '"max_goal_y": max_goal_y' in text
+
+
 def test_slam_nav2_launch_exists_and_enables_slam_mode():
     text = _launch_text("slam_nav2.launch.py")
     assert "online_async_launch.py" in text

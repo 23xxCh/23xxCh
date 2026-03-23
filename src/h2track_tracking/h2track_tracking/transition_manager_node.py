@@ -61,6 +61,25 @@ def resolve_tracking_source_point(
     raise ValueError(f"Unsupported source frame: {source_frame}")
 
 
+def clamp_tracking_source_seed(
+    source_xy: tuple[float, float],
+    current_xy: tuple[float, float],
+    max_distance: float,
+) -> tuple[float, float]:
+    if max_distance <= 0.0:
+        return source_xy
+    dx = source_xy[0] - current_xy[0]
+    dy = source_xy[1] - current_xy[1]
+    distance = math.hypot(dx, dy)
+    if distance <= max_distance or distance <= 1e-9:
+        return source_xy
+    scale = max_distance / distance
+    return (
+        current_xy[0] + dx * scale,
+        current_xy[1] + dy * scale,
+    )
+
+
 class TransitionManagerNode(Node):
     def __init__(self) -> None:
         super().__init__("transition_manager_node")
@@ -84,6 +103,7 @@ class TransitionManagerNode(Node):
         self.declare_parameter("tracking_launch_file", "tracking_localization.launch.py")
         self.declare_parameter("tracking_disable_fastdds_shm", True)
         self.declare_parameter("tracking_launch_healthcheck_sec", 5.0)
+        self.declare_parameter("tracking_source_seed_max_distance", 2.0)
         self.declare_parameter("freeze_ready_min_map_samples", 2)
         self.declare_parameter("freeze_ready_min_map_age_sec", 2.0)
 
@@ -93,6 +113,9 @@ class TransitionManagerNode(Node):
         self._tracking_launch_file = str(self.get_parameter("tracking_launch_file").value)
         self._tracking_launch_healthcheck_sec = float(
             self.get_parameter("tracking_launch_healthcheck_sec").value
+        )
+        self._tracking_source_seed_max_distance = float(
+            self.get_parameter("tracking_source_seed_max_distance").value
         )
         self._freeze_ready_min_map_samples = int(
             self.get_parameter("freeze_ready_min_map_samples").value
@@ -416,6 +439,18 @@ class TransitionManagerNode(Node):
             if tracking_source is None:
                 self._save_future = None
                 return
+            clamped_source = clamp_tracking_source_seed(
+                tracking_source,
+                (pose[0], pose[1]),
+                self._tracking_source_seed_max_distance,
+            )
+            if clamped_source != tracking_source:
+                self.get_logger().info(
+                    "Clamped projected source seed for tracking handoff from "
+                    f"({tracking_source[0]:.3f}, {tracking_source[1]:.3f}) to "
+                    f"({clamped_source[0]:.3f}, {clamped_source[1]:.3f})"
+                )
+            tracking_source = clamped_source
             self._pending_tracking_pose = pose
             self._pending_tracking_source = tracking_source
             if not self._request_navigation_shutdown():

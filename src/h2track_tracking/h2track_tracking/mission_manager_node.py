@@ -41,7 +41,7 @@ def select_tracking_target(
     def step_toward_model_source() -> Pose2D:
         if source_distance <= 1e-6:
             return current_pose
-        scale = step_size / source_distance
+        scale = min(1.0, step_size / source_distance)
         return Pose2D(
             x=current_pose.x + source_dx * scale,
             y=current_pose.y + source_dy * scale,
@@ -68,6 +68,31 @@ def select_tracking_target(
         step_size=step_size,
         sweep_angle=sweep_angle,
     )
+
+
+def should_force_exploration_target(
+    current_pose: Pose2D,
+    proposed_target: Pose2D,
+    previous_target: Pose2D | None,
+    repeat_goal_radius: float,
+    repeat_pose_radius: float,
+    repeated_streak: int,
+    streak_threshold: int,
+) -> bool:
+    if previous_target is None:
+        return False
+    repeated_goal = math.hypot(
+        proposed_target.x - previous_target.x,
+        proposed_target.y - previous_target.y,
+    ) <= repeat_goal_radius
+    if not repeated_goal:
+        return False
+    if repeated_streak >= streak_threshold:
+        return True
+    return math.hypot(
+        proposed_target.x - current_pose.x,
+        proposed_target.y - current_pose.y,
+    ) <= repeat_pose_radius
 
 
 def _coerce_patrol_points(raw_value: object) -> list[tuple[float, float]]:
@@ -104,6 +129,9 @@ class MissionManagerNode(Node):
         self.declare_parameter("source_hold_steps", 3)
         self.declare_parameter("track_step", 0.7)
         self.declare_parameter("sweep_angle_deg", 30.0)
+        self.declare_parameter("tracking_repeat_goal_radius", 0.08)
+        self.declare_parameter("tracking_repeat_pose_radius", 0.25)
+        self.declare_parameter("tracking_repeat_streak_threshold", 3)
         self.declare_parameter("source_x", -3.5)
         self.declare_parameter("source_y", -3.5)
 
@@ -152,6 +180,8 @@ class MissionManagerNode(Node):
         self._active_mode = None
         self._nav_ready = False
         self._current_goal_kind = None
+        self._last_tracking_goal: Pose2D | None = None
+        self._tracking_repeat_streak = 0
         self._source_announced = False
         self._tracking_mode_start_consumed = False
 
@@ -185,19 +215,55 @@ class MissionManagerNode(Node):
         goal_x, goal_y = self._machine.current_patrol_goal
         self._navigator.goToPose(self._make_goal(goal_x, goal_y))
         self._current_goal_kind = "patrol"
+        self._last_tracking_goal = None
+        self._tracking_repeat_streak = 0
 
     def _send_tracking_goal(self) -> None:
+        track_step = float(self.get_parameter("track_step").value)
+        sweep_angle = math.radians(float(self.get_parameter("sweep_angle_deg").value))
         next_target = select_tracking_target(
             gas_model=self._gas_model,
             current_pose=self._current_pose,
             current_yaw=self._current_yaw,
             history=self._history,
-            step_size=float(self.get_parameter("track_step").value),
-            sweep_angle=math.radians(float(self.get_parameter("sweep_angle_deg").value)),
+            step_size=track_step,
+            sweep_angle=sweep_angle,
             source_threshold=float(self.get_parameter("source_threshold").value),
         )
+        if (
+            self._last_tracking_goal is not None
+            and math.hypot(
+                next_target.x - self._last_tracking_goal.x,
+                next_target.y - self._last_tracking_goal.y,
+            )
+            <= float(self.get_parameter("tracking_repeat_goal_radius").value)
+        ):
+            self._tracking_repeat_streak += 1
+        else:
+            self._tracking_repeat_streak = 0
+        if should_force_exploration_target(
+            current_pose=self._current_pose,
+            proposed_target=next_target,
+            previous_target=self._last_tracking_goal,
+            repeat_goal_radius=float(self.get_parameter("tracking_repeat_goal_radius").value),
+            repeat_pose_radius=float(self.get_parameter("tracking_repeat_pose_radius").value),
+            repeated_streak=self._tracking_repeat_streak,
+            streak_threshold=int(self.get_parameter("tracking_repeat_streak_threshold").value),
+        ):
+            next_target = self._gas_model.next_search_target(
+                current_pose=self._current_pose,
+                current_yaw=self._current_yaw + math.pi / 4.0,
+                history=[],
+                step_size=track_step,
+                sweep_angle=sweep_angle,
+            )
+            self._tracking_repeat_streak = 0
+            self.get_logger().info(
+                "Tracking target repeated near robot pose; forcing exploratory offset goal"
+            )
         self._navigator.goToPose(self._make_goal(next_target.x, next_target.y))
         self._current_goal_kind = "track"
+        self._last_tracking_goal = next_target
 
     def _publish_source_estimate(self) -> None:
         if self._machine.source_estimate is None:
