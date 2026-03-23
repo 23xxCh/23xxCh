@@ -57,7 +57,7 @@ def select_tracking_target(
             strongest_pose.y - current_pose.y,
         )
         if strongest_concentration >= source_threshold and strongest_index < len(history) - 1:
-            if strongest_radius <= max(0.01, step_size * 0.025):
+            if strongest_radius <= max(0.15, step_size * 0.5):
                 return step_toward_model_source()
             return strongest_pose
 

@@ -134,7 +134,7 @@ def test_select_tracking_target_continues_search_below_source_threshold():
 
 
 def test_select_tracking_target_holds_highest_recent_pose_after_a_source_spike():
-    source_pose = Pose2D(-1.44, 3.098)
+    source_pose = Pose2D(-1.72, 2.84)
     current_pose = Pose2D(-1.40, 3.10)
     target = select_tracking_target(
         gas_model=_make_tracking_model(),
@@ -151,6 +151,30 @@ def test_select_tracking_target_holds_highest_recent_pose_after_a_source_spike()
     )
 
     assert target == source_pose
+
+
+def test_select_tracking_target_avoids_reissuing_tiny_goals_when_peak_pose_is_almost_current():
+    source_pose = Pose2D(-1.44, 3.098)
+    current_pose = Pose2D(-1.40, 3.10)
+    target = select_tracking_target(
+        gas_model=_make_tracking_model(),
+        current_pose=current_pose,
+        current_yaw=math.pi,
+        history=[
+            (Pose2D(-1.32, 3.285), 2.468),
+            (source_pose, 5.42),
+            (current_pose, 1.765),
+        ],
+        step_size=0.4,
+        sweep_angle=math.pi / 6.0,
+        source_threshold=4.5,
+    )
+
+    assert target != source_pose
+    assert target != current_pose
+    displacement = math.hypot(target.x - current_pose.x, target.y - current_pose.y)
+    assert displacement > 0.3
+    assert target.y < current_pose.y
 
 
 def test_select_tracking_target_steps_toward_source_when_recent_peak_matches_current_pose():
