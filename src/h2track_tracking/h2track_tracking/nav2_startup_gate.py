@@ -36,6 +36,7 @@ class Nav2StartupGateState:
         tf_ready: bool,
         service_ready: bool,
         startup_result: bool | None,
+        nav_ready: bool = False,
         elapsed_sec: float,
     ) -> GateAction:
         if self._failed:
@@ -43,6 +44,9 @@ class Nav2StartupGateState:
         if self._completed:
             return GateAction.COMPLETE
         if self._startup_requested:
+            if nav_ready:
+                self._completed = True
+                return GateAction.COMPLETE
             if startup_result is None:
                 return GateAction.MONITOR
             if startup_result:

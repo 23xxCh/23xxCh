@@ -36,11 +36,43 @@ def test_gate_tracks_startup_request_until_success():
     assert state.step(tf_ready=True, service_ready=True, startup_result=True, elapsed_sec=1.5) is GateAction.COMPLETE
 
 
+def test_gate_completes_if_navigation_action_is_ready_while_waiting_for_startup_result():
+    state = Nav2StartupGateState(Nav2StartupGateConfig(timeout_sec=5.0, stable_ready_count=1))
+
+    assert state.step(tf_ready=True, service_ready=True, startup_result=None, elapsed_sec=0.5) is GateAction.STARTUP
+    assert (
+        state.step(
+            tf_ready=True,
+            service_ready=True,
+            startup_result=None,
+            nav_ready=True,
+            elapsed_sec=1.0,
+        )
+        is GateAction.COMPLETE
+    )
+
+
 def test_gate_fails_when_startup_service_returns_failure():
     state = Nav2StartupGateState(Nav2StartupGateConfig(timeout_sec=5.0, stable_ready_count=1))
 
     assert state.step(tf_ready=True, service_ready=True, startup_result=None, elapsed_sec=0.5) is GateAction.STARTUP
     assert state.step(tf_ready=True, service_ready=True, startup_result=False, elapsed_sec=1.0) is GateAction.FAIL
+
+
+def test_gate_completes_if_navigation_action_is_ready_after_startup_failure():
+    state = Nav2StartupGateState(Nav2StartupGateConfig(timeout_sec=5.0, stable_ready_count=1))
+
+    assert state.step(tf_ready=True, service_ready=True, startup_result=None, elapsed_sec=0.5) is GateAction.STARTUP
+    assert (
+        state.step(
+            tf_ready=True,
+            service_ready=True,
+            startup_result=False,
+            nav_ready=True,
+            elapsed_sec=1.0,
+        )
+        is GateAction.COMPLETE
+    )
 
 
 def test_gate_retries_startup_before_failing_when_retry_budget_exists():

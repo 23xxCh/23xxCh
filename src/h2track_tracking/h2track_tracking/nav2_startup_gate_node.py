@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import time
 
+from nav2_msgs.action import NavigateToPose
 from nav2_msgs.srv import ManageLifecycleNodes
 import rclpy
+from rclpy.action import ActionClient
 from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.task import Future
@@ -45,6 +47,7 @@ class Nav2StartupGateNode(Node):
         self._tf_buffer = Buffer(cache_time=Duration(seconds=30.0))
         self._tf_listener = TransformListener(self._tf_buffer, self)
         self._client = self.create_client(ManageLifecycleNodes, self._lifecycle_manager_service)
+        self._navigate_action_client = ActionClient(self, NavigateToPose, "navigate_to_pose")
         self._timer = self.create_timer(self._poll_period_sec, self._poll)
 
         self.get_logger().info(
@@ -77,10 +80,12 @@ class Nav2StartupGateNode(Node):
             timeout=Duration(seconds=0.0),
         )
         service_ready = self._client.wait_for_service(timeout_sec=0.0)
+        nav_ready = self._navigate_action_client.server_is_ready()
         action = self._state.step(
             tf_ready=tf_ready,
             service_ready=service_ready,
             startup_result=startup_result,
+            nav_ready=nav_ready,
             elapsed_sec=elapsed_sec,
         )
 
@@ -95,6 +100,10 @@ class Nav2StartupGateNode(Node):
             self._send_startup_request()
             return
         if action is GateAction.COMPLETE:
+            if startup_result is False and nav_ready:
+                self.get_logger().warn(
+                    "Nav2 STARTUP call returned failure, but navigate_to_pose is already ready; treating gate as complete"
+                )
             self.get_logger().info("Nav2 startup gate completed successfully")
             if rclpy.ok():
                 rclpy.shutdown()
