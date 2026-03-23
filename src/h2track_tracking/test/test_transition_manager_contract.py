@@ -44,6 +44,18 @@ def test_transition_manager_starts_tracking_localization_and_stops_slam_after_fr
     assert "source_y:=" in source
 
 
+def test_transition_manager_shuts_down_navigation_stack_before_tracking_handoff():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "h2track_tracking"
+        / "transition_manager_node.py"
+    ).read_text(encoding="utf-8")
+
+    assert "ManageLifecycleNodes" in source
+    assert "lifecycle_manager_service" in source
+    assert "SHUTDOWN" in source
+
+
 def test_transition_manager_transforms_source_from_odom_into_frozen_map_frame():
     source = (
         Path(__file__).resolve().parents[1]

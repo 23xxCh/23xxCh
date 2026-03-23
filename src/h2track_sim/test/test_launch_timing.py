@@ -301,6 +301,12 @@ def test_tracking_localization_launch_exists_and_uses_localization_bringup():
     assert 'runtime_map' in text
 
 
+def test_tracking_localization_launch_also_starts_navigation_bringup():
+    text = _launch_text("tracking_localization.launch.py")
+    assert "navigation_launch.py" in text
+    assert '"autostart": "true"' in text or "'autostart': 'true'" in text
+
+
 def test_tracking_localization_launch_honors_explicit_source_override_before_scene_default():
     text = _launch_text("tracking_localization.launch.py")
     assert 'LaunchConfiguration("source_x").perform(context).strip()' in text

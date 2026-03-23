@@ -138,6 +138,17 @@ def generate_launch_description():
         }.items(),
     )
 
+    navigation = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(os.path.join(nav2_share, "launch", "navigation_launch.py")),
+        launch_arguments={
+            "use_sim_time": use_sim_time,
+            "params_file": params_file,
+            "autostart": "true",
+            "use_composition": "False",
+            "use_respawn": "False",
+        }.items(),
+    )
+
     mission_manager = Node(
         package="h2track_tracking",
         executable="mission_manager_node",
@@ -187,6 +198,7 @@ def generate_launch_description():
             declare_source_y,
             tracking_defaults,
             localization,
+            navigation,
             mission_manager,
         ]
     )

@@ -6,7 +6,7 @@ import subprocess
 
 from nav_msgs.msg import OccupancyGrid
 import rclpy
-from nav2_msgs.srv import SaveMap
+from nav2_msgs.srv import ManageLifecycleNodes, SaveMap
 from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.time import Time
@@ -68,12 +68,17 @@ class TransitionManagerNode(Node):
         self.declare_parameter("source_y", 1.95)
         self.declare_parameter("source_frame", "map")
         self.declare_parameter("save_map_service", "/map_saver_server/save_map")
+        self.declare_parameter(
+            "lifecycle_manager_service",
+            "/lifecycle_manager_navigation/manage_nodes",
+        )
         self.declare_parameter("runtime_map_dir", "/tmp/h2track_runtime_maps")
         self.declare_parameter("tracking_launch_file", "tracking_localization.launch.py")
         self.declare_parameter("freeze_ready_min_map_samples", 2)
         self.declare_parameter("freeze_ready_min_map_age_sec", 2.0)
 
         service_name = str(self.get_parameter("save_map_service").value)
+        lifecycle_service_name = str(self.get_parameter("lifecycle_manager_service").value)
         self._runtime_map_dir = Path(str(self.get_parameter("runtime_map_dir").value))
         self._tracking_launch_file = str(self.get_parameter("tracking_launch_file").value)
         self._freeze_ready_min_map_samples = int(
@@ -83,12 +88,19 @@ class TransitionManagerNode(Node):
             self.get_parameter("freeze_ready_min_map_age_sec").value
         )
         self._save_map_client = self.create_client(SaveMap, service_name)
+        self._lifecycle_manager_client = self.create_client(
+            ManageLifecycleNodes,
+            lifecycle_service_name,
+        )
         self._map_frozen_pub = self.create_publisher(Bool, "/map_frozen", 10)
         self._tf_buffer = Buffer(cache_time=Duration(seconds=5.0))
         self._tf_listener = TransformListener(self._tf_buffer, self, spin_thread=False)
         self._save_requested = False
         self._freeze_pending = False
         self._save_future = None
+        self._shutdown_future = None
+        self._pending_tracking_pose: tuple[float, float, float] | None = None
+        self._pending_tracking_source: tuple[float, float] | None = None
         self._current_map_path: Path | None = None
         self._tracking_process: subprocess.Popen[str] | None = None
         self._valid_map_samples = 0
@@ -194,6 +206,43 @@ class TransitionManagerNode(Node):
                 return None
         return resolve_tracking_source_point(source_point, source_frame, map_to_odom_transform)
 
+    def _request_navigation_shutdown(self) -> bool:
+        if self._shutdown_future is not None:
+            return True
+        if not self._lifecycle_manager_client.wait_for_service(timeout_sec=0.0):
+            self.get_logger().error(
+                "Cannot hand off to tracking: lifecycle manager service is unavailable"
+            )
+            return False
+        request = ManageLifecycleNodes.Request()
+        request.command = ManageLifecycleNodes.Request.SHUTDOWN
+        self._shutdown_future = self._lifecycle_manager_client.call_async(request)
+        self.get_logger().info("Requested navigation lifecycle shutdown before tracking handoff")
+        return True
+
+    def _complete_handoff_after_shutdown(self) -> None:
+        if self._shutdown_future is None or not self._shutdown_future.done():
+            return
+        response = self._shutdown_future.result()
+        if response is not None and response.success:
+            if self._pending_tracking_pose is None or self._pending_tracking_source is None:
+                self.get_logger().error("Tracking handoff data missing after navigation shutdown")
+            else:
+                self._stop_slam_toolbox()
+                self._launch_tracking_localization(
+                    self._pending_tracking_pose,
+                    self._pending_tracking_source,
+                )
+                self._map_frozen_pub.publish(Bool(data=True))
+                self.get_logger().info("Frozen map saved successfully")
+        else:
+            self.get_logger().error(
+                "Failed to shut down navigation lifecycle stack before tracking handoff"
+            )
+        self._shutdown_future = None
+        self._pending_tracking_pose = None
+        self._pending_tracking_source = None
+
     def _launch_tracking_localization(
         self,
         pose: tuple[float, float, float],
@@ -229,6 +278,8 @@ class TransitionManagerNode(Node):
         )
 
     def _poll_save_future(self) -> None:
+        self._complete_handoff_after_shutdown()
+
         if self._freeze_pending and self._save_future is None:
             if not self._save_map_client.wait_for_service(timeout_sec=0.0):
                 return
@@ -264,10 +315,11 @@ class TransitionManagerNode(Node):
             if tracking_source is None:
                 self._save_future = None
                 return
-            self._stop_slam_toolbox()
-            self._launch_tracking_localization(pose, tracking_source)
-            self._map_frozen_pub.publish(Bool(data=True))
-            self.get_logger().info("Frozen map saved successfully")
+            self._pending_tracking_pose = pose
+            self._pending_tracking_source = tracking_source
+            if not self._request_navigation_shutdown():
+                self._pending_tracking_pose = None
+                self._pending_tracking_source = None
         else:
             self.get_logger().error("Failed to save frozen map")
         self._save_future = None
