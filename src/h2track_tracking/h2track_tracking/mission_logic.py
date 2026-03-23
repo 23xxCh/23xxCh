@@ -116,6 +116,8 @@ class MissionStateMachine:
         recent_concentrations = [value for _, value in self._recent_observations]
         confirm_recent = recent_concentrations[-self.config.confirm_samples :]
         confirm_ready = len(confirm_recent) == self.config.confirm_samples
+        confirm_hits = sum(value >= self.config.enter_threshold for value in confirm_recent)
+        confirm_required_hits = max(1, self.config.confirm_samples - 1)
         track_exit_recent = recent_concentrations[-self._track_exit_samples :]
         track_exit_ready = len(track_exit_recent) == self._track_exit_samples
 
@@ -124,7 +126,7 @@ class MissionStateMachine:
                 self.advance_patrol()
             if (
                 confirm_ready
-                and min(confirm_recent) >= self.config.enter_threshold
+                and confirm_hits >= confirm_required_hits
             ):
                 self.mode = MissionMode.SEEK_CONFIRM
 

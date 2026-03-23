@@ -406,6 +406,16 @@ class MissionManagerNode(Node):
             mode = MissionMode.SEEK_TRACK
 
         if mode is not self._active_mode:
+            self.get_logger().info(
+                "Mode transition: %s -> %s (conc=%.3f, pose=(%.3f, %.3f))"
+                % (
+                    self._active_mode.name if self._active_mode is not None else "NONE",
+                    mode.name,
+                    self._current_concentration,
+                    self._current_pose.x,
+                    self._current_pose.y,
+                )
+            )
             self._mode_pub.publish(String(data=mode.name))
             self._active_mode = mode
 
@@ -432,6 +442,26 @@ class MissionManagerNode(Node):
                 self._source_pub.publish(Bool(data=True))
                 self._publish_source_estimate()
                 self._source_announced = True
+                if self._machine.source_estimate is not None:
+                    self.get_logger().info(
+                        "SOURCE_FOUND at estimate=(%.3f, %.3f), pose=(%.3f, %.3f), conc=%.3f"
+                        % (
+                            self._machine.source_estimate[0],
+                            self._machine.source_estimate[1],
+                            self._current_pose.x,
+                            self._current_pose.y,
+                            self._current_concentration,
+                        )
+                    )
+                else:
+                    self.get_logger().info(
+                        "SOURCE_FOUND without estimate, pose=(%.3f, %.3f), conc=%.3f"
+                        % (
+                            self._current_pose.x,
+                            self._current_pose.y,
+                            self._current_concentration,
+                        )
+                    )
             return
 
         if mode is MissionMode.PATROL and task_complete:

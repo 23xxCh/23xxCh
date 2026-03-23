@@ -30,6 +30,52 @@ def test_patrol_switches_to_confirm_after_sustained_detection():
     assert machine.mode is MissionMode.SEEK_CONFIRM
 
 
+def test_patrol_switches_to_confirm_with_two_of_three_samples_over_threshold():
+    machine = MissionStateMachine(
+        MissionConfig(
+            patrol_points=[(1.0, 1.0), (2.0, 2.0)],
+            enter_threshold=4.0,
+            exit_threshold=2.0,
+            source_threshold=9.0,
+            confirm_samples=3,
+            source_radius=0.5,
+            source_hold_steps=2,
+        )
+    )
+
+    for concentration in (4.5, 3.7, 4.6):
+        machine.update(
+            concentration=concentration,
+            robot_position=(0.0, 0.0),
+            goal_reached=False,
+        )
+
+    assert machine.mode is MissionMode.SEEK_CONFIRM
+
+
+def test_patrol_stays_in_patrol_when_only_one_of_three_samples_is_over_threshold():
+    machine = MissionStateMachine(
+        MissionConfig(
+            patrol_points=[(1.0, 1.0), (2.0, 2.0)],
+            enter_threshold=4.0,
+            exit_threshold=2.0,
+            source_threshold=9.0,
+            confirm_samples=3,
+            source_radius=0.5,
+            source_hold_steps=2,
+        )
+    )
+
+    for concentration in (4.3, 3.6, 3.5):
+        machine.update(
+            concentration=concentration,
+            robot_position=(0.0, 0.0),
+            goal_reached=False,
+        )
+
+    assert machine.mode is MissionMode.PATROL
+
+
 def test_confirm_requires_sustained_collapse_before_returning_to_patrol():
     machine = MissionStateMachine(
         MissionConfig(
