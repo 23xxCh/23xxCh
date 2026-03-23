@@ -30,6 +30,7 @@ GADEN_REQUIRED_PACKAGES = (
     "gaden_player",
 )
 REQUIRED_PACKAGES = CORE_REQUIRED_PACKAGES + GADEN_REQUIRED_PACKAGES
+H2TRACK_WORLD_TOKEN = "/h2track_sim/share/h2track_sim/"
 
 
 @dataclass(frozen=True)
@@ -248,10 +249,11 @@ def main(
 
 
 def _is_h2track_gazebo_process(command: str, demo_world_path: Path) -> bool:
-    return (
-        (command.startswith("gzserver ") or command.startswith("gazebo "))
-        and str(demo_world_path) in command
-    )
+    if not (command.startswith("gzserver ") or command.startswith("gazebo ")):
+        return False
+    if str(demo_world_path) in command:
+        return True
+    return H2TRACK_WORLD_TOKEN in command and ".world" in command
 
 
 def _is_h2track_nav2_lifecycle_process(command: str) -> bool:

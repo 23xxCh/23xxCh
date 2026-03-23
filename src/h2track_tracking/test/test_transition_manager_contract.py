@@ -160,6 +160,16 @@ def test_transition_manager_can_use_observed_peak_for_tracking_source_handoff():
     assert "_lookup_current_map_pose(log_errors=False)" in source
 
 
+def test_transition_manager_disables_peak_seed_by_default_for_stability():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "h2track_tracking"
+        / "transition_manager_node.py"
+    ).read_text(encoding="utf-8")
+
+    assert 'declare_parameter("tracking_source_from_peak", False)' in source
+
+
 def test_transition_manager_publishes_tracking_handoff_completion_and_failure_signals():
     source = (
         Path(__file__).resolve().parents[1]

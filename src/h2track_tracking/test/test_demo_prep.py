@@ -68,23 +68,28 @@ def test_package_check_marks_missing_packages():
 
 
 SCENE_PS_OUTPUT = """
-user       11001    1282  0 00:00 ?        00:00:01 gzserver --verbose -s libgazebo_ros_init.so -s libgazebo_ros_factory.so /tmp/h2track/scenes/baseline/h2track_lab.world
-user       11002    1282  0 00:00 ?        00:00:01 gzserver --verbose -s libgazebo_ros_init.so -s libgazebo_ros_factory.so /tmp/h2track/scenes/warehouse/warehouse.world
+user       11001    1282  0 00:00 ?        00:00:01 gzserver --verbose -s libgazebo_ros_init.so -s libgazebo_ros_factory.so /tmp/h2track/install/h2track_sim/share/h2track_sim/scenes/baseline/h2track_lab.world
+user       11002    1282  0 00:00 ?        00:00:01 gzserver --verbose -s libgazebo_ros_init.so -s libgazebo_ros_factory.so /tmp/h2track/install/h2track_sim/share/h2track_sim/scenes/warehouse/warehouse.world
 user       11003    1282  0 00:00 ?        00:00:00 /opt/ros/humble/lib/nav2_lifecycle_manager/lifecycle_manager --ros-args -r __node:=lifecycle_manager_navigation
 """
 
 
-def test_matches_only_selected_scene_world_processes():
+def test_matches_all_h2track_scene_world_processes_to_avoid_port_conflicts():
     processes = find_stale_processes(
         SCENE_PS_OUTPUT,
-        Path('/tmp/h2track/scenes/warehouse/warehouse.world'),
+        Path('/tmp/h2track/install/h2track_sim/share/h2track_sim/scenes/warehouse/warehouse.world'),
     )
 
     assert processes == [
         MatchedProcess(
+            pid=11001,
+            kind='gazebo',
+            command='gzserver --verbose -s libgazebo_ros_init.so -s libgazebo_ros_factory.so /tmp/h2track/install/h2track_sim/share/h2track_sim/scenes/baseline/h2track_lab.world',
+        ),
+        MatchedProcess(
             pid=11002,
             kind='gazebo',
-            command='gzserver --verbose -s libgazebo_ros_init.so -s libgazebo_ros_factory.so /tmp/h2track/scenes/warehouse/warehouse.world',
+            command='gzserver --verbose -s libgazebo_ros_init.so -s libgazebo_ros_factory.so /tmp/h2track/install/h2track_sim/share/h2track_sim/scenes/warehouse/warehouse.world',
         ),
         MatchedProcess(
             pid=11003,

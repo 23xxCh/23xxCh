@@ -169,7 +169,7 @@ class TransitionManagerNode(Node):
         self.declare_parameter("tracking_launch_healthcheck_sec", 5.0)
         self.declare_parameter("tracking_source_seed_max_distance", 2.0)
         self.declare_parameter("tracking_source_snap_max_cells", 25)
-        self.declare_parameter("tracking_source_from_peak", True)
+        self.declare_parameter("tracking_source_from_peak", False)
         self.declare_parameter("tracking_source_peak_min_concentration", 0.8)
         self.declare_parameter("freeze_ready_min_map_samples", 2)
         self.declare_parameter("freeze_ready_min_map_age_sec", 2.0)
