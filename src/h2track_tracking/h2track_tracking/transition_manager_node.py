@@ -83,6 +83,7 @@ class TransitionManagerNode(Node):
         self.declare_parameter("runtime_map_dir", "/tmp/h2track_runtime_maps")
         self.declare_parameter("tracking_launch_file", "tracking_localization.launch.py")
         self.declare_parameter("tracking_disable_fastdds_shm", True)
+        self.declare_parameter("tracking_launch_healthcheck_sec", 5.0)
         self.declare_parameter("freeze_ready_min_map_samples", 2)
         self.declare_parameter("freeze_ready_min_map_age_sec", 2.0)
 
@@ -90,6 +91,9 @@ class TransitionManagerNode(Node):
         lifecycle_service_name = str(self.get_parameter("lifecycle_manager_service").value)
         self._runtime_map_dir = Path(str(self.get_parameter("runtime_map_dir").value))
         self._tracking_launch_file = str(self.get_parameter("tracking_launch_file").value)
+        self._tracking_launch_healthcheck_sec = float(
+            self.get_parameter("tracking_launch_healthcheck_sec").value
+        )
         self._freeze_ready_min_map_samples = int(
             self.get_parameter("freeze_ready_min_map_samples").value
         )
@@ -102,6 +106,12 @@ class TransitionManagerNode(Node):
             lifecycle_service_name,
         )
         self._map_frozen_pub = self.create_publisher(Bool, "/map_frozen", 10)
+        self._tracking_handoff_complete_pub = self.create_publisher(
+            Bool, "/tracking_handoff_complete", 10
+        )
+        self._tracking_handoff_failed_pub = self.create_publisher(
+            Bool, "/tracking_handoff_failed", 10
+        )
         self._tf_buffer = Buffer(cache_time=Duration(seconds=5.0))
         self._tf_listener = TransformListener(self._tf_buffer, self, spin_thread=False)
         self._save_requested = False
@@ -112,6 +122,9 @@ class TransitionManagerNode(Node):
         self._pending_tracking_source: tuple[float, float] | None = None
         self._current_map_path: Path | None = None
         self._tracking_process: subprocess.Popen[str] | None = None
+        self._tracking_launch_started_sec: float | None = None
+        self._tracking_handoff_announced = False
+        self._tracking_handoff_failed = False
         self._valid_map_samples = 0
         self._first_valid_map_time_sec: float | None = None
         self._last_freeze_wait_log_sec = 0.0
@@ -328,13 +341,45 @@ class TransitionManagerNode(Node):
         if bool(self.get_parameter("tracking_disable_fastdds_shm").value):
             env["FASTDDS_BUILTIN_TRANSPORTS"] = "UDPv4"
         self._tracking_process = subprocess.Popen(launch_cmd, env=env)
+        self._tracking_launch_started_sec = self.get_clock().now().nanoseconds / 1e9
+        self._tracking_handoff_announced = False
+        self._tracking_handoff_failed = False
+        self._tracking_handoff_complete_pub.publish(Bool(data=False))
+        self._tracking_handoff_failed_pub.publish(Bool(data=False))
         self.get_logger().info(
             "Launching tracking localization with runtime map "
             f"{self._current_map_path} and projected source ({source_xy[0]:.3f}, {source_xy[1]:.3f})"
         )
 
+    def _poll_tracking_handoff(self) -> None:
+        if self._tracking_process is None or self._tracking_launch_started_sec is None:
+            return
+
+        return_code = self._tracking_process.poll()
+        if return_code is not None:
+            if not self._tracking_handoff_failed:
+                self._tracking_handoff_failed = True
+                self._tracking_handoff_failed_pub.publish(Bool(data=True))
+                self.get_logger().error(
+                    "Tracking handoff failed: tracking localization launch exited "
+                    f"with code {return_code}"
+                )
+            return
+
+        if self._tracking_handoff_announced:
+            return
+
+        now_sec = self.get_clock().now().nanoseconds / 1e9
+        if (now_sec - self._tracking_launch_started_sec) < self._tracking_launch_healthcheck_sec:
+            return
+
+        self._tracking_handoff_announced = True
+        self._tracking_handoff_complete_pub.publish(Bool(data=True))
+        self.get_logger().info("Tracking handoff complete")
+
     def _poll_save_future(self) -> None:
         self._complete_handoff_after_shutdown()
+        self._poll_tracking_handoff()
 
         if self._freeze_pending and self._save_future is None:
             if not self._save_map_client.wait_for_service(timeout_sec=0.0):

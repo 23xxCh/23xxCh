@@ -123,3 +123,17 @@ def test_transition_manager_transforms_source_from_odom_into_frozen_map_frame():
     assert '"odom"' in source or "'odom'" in source
     assert '"map"' in source or "'map'" in source
     assert "transform_point_into_map_frame" in source
+
+
+def test_transition_manager_publishes_tracking_handoff_completion_and_failure_signals():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "h2track_tracking"
+        / "transition_manager_node.py"
+    ).read_text(encoding="utf-8")
+
+    assert "tracking_launch_healthcheck_sec" in source
+    assert "/tracking_handoff_complete" in source
+    assert "/tracking_handoff_failed" in source
+    assert "Tracking handoff complete" in source
+    assert "Tracking handoff failed" in source
