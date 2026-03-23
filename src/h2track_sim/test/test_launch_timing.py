@@ -223,6 +223,13 @@ def test_autonomy_launch_exists_and_imports():
     assert hasattr(module, 'generate_launch_description')
 
 
+def test_autonomy_launch_generate_launch_description_constructs_without_name_errors():
+    module = _load_launch_module("autonomy.launch.py")
+    module.get_package_share_directory = lambda package_name: str(Path(__file__).resolve().parents[1])
+    launch_description = module.generate_launch_description()
+    assert launch_description is not None
+
+
 def test_autonomy_launch_includes_slam_navigation_and_exploration_manager():
     text = _launch_text("autonomy.launch.py")
     assert 'slam_nav2.launch.py' in text
@@ -283,14 +290,14 @@ def test_autonomy_launch_honors_explicit_gas_confirm_threshold_overrides():
 
 def test_autonomy_launch_declares_tracking_handoff_overrides_once():
     text = _launch_text("autonomy.launch.py")
-    assert text.count("LaunchConfiguration('tracking_source_x')") == 1
-    assert text.count("LaunchConfiguration('tracking_source_y')") == 1
-    assert text.count("LaunchConfiguration('tracking_enter_threshold')") == 1
-    assert text.count("LaunchConfiguration('tracking_exit_threshold')") == 1
-    assert text.count("LaunchConfiguration('tracking_source_threshold')") == 1
-    assert text.count("LaunchConfiguration('tracking_confirm_samples')") == 1
-    assert text.count("LaunchConfiguration('tracking_source_radius')") == 1
-    assert text.count("LaunchConfiguration('tracking_source_hold_steps')") == 1
+    assert text.count("LaunchConfiguration('tracking_source_x')") == 2
+    assert text.count("LaunchConfiguration('tracking_source_y')") == 2
+    assert text.count("LaunchConfiguration('tracking_enter_threshold')") == 2
+    assert text.count("LaunchConfiguration('tracking_exit_threshold')") == 2
+    assert text.count("LaunchConfiguration('tracking_source_threshold')") == 2
+    assert text.count("LaunchConfiguration('tracking_confirm_samples')") == 2
+    assert text.count("LaunchConfiguration('tracking_source_radius')") == 2
+    assert text.count("LaunchConfiguration('tracking_source_hold_steps')") == 2
 
 
 def test_autonomy_launch_applies_tracking_handoff_defaults_from_scene():
