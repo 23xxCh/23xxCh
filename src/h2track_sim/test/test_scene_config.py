@@ -175,7 +175,7 @@ def test_baseline_scene_declares_autonomy_config_for_slam_exploration():
     assert 'exploration' in baseline['autonomy']
     assert 'mapping_detection' in baseline['autonomy']
     assert baseline['autonomy']['mapping_detection']['min_explore_samples'] > 0
-    assert baseline['autonomy']['mapping_detection']['min_explore_samples'] <= 160
+    assert baseline['autonomy']['mapping_detection']['min_explore_samples'] <= 100
     assert 'startup_gates' in baseline['autonomy']
     assert baseline['autonomy']['startup_gates']['nav2_startup_gate_timeout'] >= 45.0
     assert baseline['autonomy']['startup_gates']['gaden_sensor_gate_timeout'] >= 45.0

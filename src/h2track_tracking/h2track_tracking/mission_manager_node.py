@@ -149,6 +149,10 @@ class MissionManagerNode(Node):
         self.declare_parameter("tracking_source_pull_step_scale", 1.25)
         self.declare_parameter("source_x", -3.5)
         self.declare_parameter("source_y", -3.5)
+        source_x_default = float(self.get_parameter("source_x").value)
+        source_y_default = float(self.get_parameter("source_y").value)
+        self.declare_parameter("model_source_x", source_x_default)
+        self.declare_parameter("model_source_y", source_y_default)
 
         patrol_points = _coerce_patrol_points(self.get_parameter("patrol_points").value)
         config = MissionConfig(
@@ -168,8 +172,8 @@ class MissionManagerNode(Node):
         self._machine = MissionStateMachine(config)
         self._gas_model = GasFieldModel(
             GasFieldParams(
-                source_x=float(self.get_parameter("source_x").value),
-                source_y=float(self.get_parameter("source_y").value),
+                source_x=float(self.get_parameter("model_source_x").value),
+                source_y=float(self.get_parameter("model_source_y").value),
                 source_strength=120.0,
                 decay_rate=0.55,
                 plume_stddev=1.2,
@@ -307,6 +311,28 @@ class MissionManagerNode(Node):
         self._last_tracking_goal = next_target
         self._last_tracking_source_distance = source_distance
 
+    def _send_tracking_recovery_goal(self) -> None:
+        track_step = float(self.get_parameter("track_step").value)
+        sweep_angle = math.radians(float(self.get_parameter("sweep_angle_deg").value))
+        recovery_target = self._gas_model.next_search_target(
+            current_pose=self._current_pose,
+            current_yaw=self._current_yaw + math.pi / 2.0,
+            history=[],
+            step_size=max(0.2, track_step * 0.8),
+            sweep_angle=sweep_angle,
+        )
+        self._navigator.goToPose(self._make_goal(recovery_target.x, recovery_target.y))
+        self._current_goal_kind = "track"
+        self._last_tracking_goal = recovery_target
+        source_pose = Pose2D(self._gas_model.params.source_x, self._gas_model.params.source_y)
+        self._last_tracking_source_distance = math.hypot(
+            recovery_target.x - source_pose.x,
+            recovery_target.y - source_pose.y,
+        )
+        self._tracking_repeat_streak = 0
+        self._tracking_source_non_improving_streak = 0
+        self.get_logger().info("Tracking goal failed; issuing recovery sweep goal")
+
     def _publish_source_estimate(self) -> None:
         if self._machine.source_estimate is None:
             return
@@ -334,12 +360,14 @@ class MissionManagerNode(Node):
             return
 
         task_complete = self._navigator.isTaskComplete()
+        task_result = self._navigator.getResult() if task_complete else None
+        goal_succeeded = task_result is TaskResult.SUCCEEDED
         previous_mode = self._machine.mode
 
         mode = self._machine.update(
             concentration=self._current_concentration,
             robot_position=(self._current_pose.x, self._current_pose.y),
-            goal_reached=task_complete,
+            goal_reached=goal_succeeded,
         )
         if self._tracking_only_mode and mode is MissionMode.PATROL:
             self._machine.mode = MissionMode.SEEK_TRACK
@@ -375,10 +403,17 @@ class MissionManagerNode(Node):
             return
 
         if mode is MissionMode.PATROL and task_complete:
-            if self._navigator.getResult() in (TaskResult.SUCCEEDED, TaskResult.CANCELED, TaskResult.FAILED):
+            if goal_succeeded:
+                self._send_patrol_goal()
+            elif task_result in (TaskResult.CANCELED, TaskResult.FAILED):
+                self.get_logger().warn("Patrol goal did not succeed; advancing to next waypoint")
+                self._machine.advance_patrol()
                 self._send_patrol_goal()
         elif mode is MissionMode.SEEK_TRACK and task_complete:
-            self._send_tracking_goal()
+            if goal_succeeded:
+                self._send_tracking_goal()
+            elif task_result in (TaskResult.CANCELED, TaskResult.FAILED):
+                self._send_tracking_recovery_goal()
         elif mode is MissionMode.SOURCE_FOUND and not self._source_announced:
             self._source_pub.publish(Bool(data=True))
             self._publish_source_estimate()

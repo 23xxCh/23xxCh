@@ -44,6 +44,12 @@ def _prepare_tracking_localization(context):
     resolved_source_y = (
         LaunchConfiguration("source_y").perform(context).strip() or str(gas_source.get("y", 1.95))
     )
+    resolved_model_source_x = (
+        LaunchConfiguration("model_source_x").perform(context).strip() or resolved_source_x
+    )
+    resolved_model_source_y = (
+        LaunchConfiguration("model_source_y").perform(context).strip() or resolved_source_y
+    )
 
     runtime_map = LaunchConfiguration("runtime_map").perform(context).strip()
     if not runtime_map:
@@ -82,6 +88,8 @@ def _prepare_tracking_localization(context):
         SetLaunchConfiguration("sweep_angle_deg", str(mission["sweep_angle_deg"])),
         SetLaunchConfiguration("source_x", resolved_source_x),
         SetLaunchConfiguration("source_y", resolved_source_y),
+        SetLaunchConfiguration("model_source_x", resolved_model_source_x),
+        SetLaunchConfiguration("model_source_y", resolved_model_source_y),
     ]
 
 
@@ -106,6 +114,8 @@ def generate_launch_description():
     sweep_angle_deg = LaunchConfiguration("sweep_angle_deg")
     source_x = LaunchConfiguration("source_x")
     source_y = LaunchConfiguration("source_y")
+    model_source_x = LaunchConfiguration("model_source_x")
+    model_source_y = LaunchConfiguration("model_source_y")
 
     declare_scene = DeclareLaunchArgument("scene", default_value="baseline")
     declare_use_sim_time = DeclareLaunchArgument("use_sim_time", default_value="true")
@@ -126,6 +136,8 @@ def generate_launch_description():
     declare_sweep_angle_deg = DeclareLaunchArgument("sweep_angle_deg", default_value="")
     declare_source_x = DeclareLaunchArgument("source_x", default_value="")
     declare_source_y = DeclareLaunchArgument("source_y", default_value="")
+    declare_model_source_x = DeclareLaunchArgument("model_source_x", default_value="")
+    declare_model_source_y = DeclareLaunchArgument("model_source_y", default_value="")
 
     tracking_defaults = OpaqueFunction(function=_prepare_tracking_localization)
 
@@ -177,6 +189,8 @@ def generate_launch_description():
                 "sweep_angle_deg": sweep_angle_deg,
                 "source_x": source_x,
                 "source_y": source_y,
+                "model_source_x": model_source_x,
+                "model_source_y": model_source_y,
             },
         ],
     )
@@ -202,6 +216,8 @@ def generate_launch_description():
             declare_sweep_angle_deg,
             declare_source_x,
             declare_source_y,
+            declare_model_source_x,
+            declare_model_source_y,
             tracking_defaults,
             localization,
             navigation,

@@ -11,7 +11,7 @@ from nav2_msgs.srv import ManageLifecycleNodes, SaveMap
 from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.time import Time
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, Float32
 from tf2_ros import Buffer, TransformException, TransformListener
 
 
@@ -80,6 +80,70 @@ def clamp_tracking_source_seed(
     )
 
 
+def snap_tracking_source_to_free_space(
+    source_xy: tuple[float, float],
+    occupancy_grid: OccupancyGrid | None,
+    max_search_cells: int,
+) -> tuple[float, float]:
+    if occupancy_grid is None:
+        return source_xy
+
+    info = occupancy_grid.info
+    resolution = float(info.resolution)
+    width = int(info.width)
+    height = int(info.height)
+    if resolution <= 0.0 or width <= 0 or height <= 0:
+        return source_xy
+
+    origin_x = float(info.origin.position.x)
+    origin_y = float(info.origin.position.y)
+    data = occupancy_grid.data
+
+    def world_to_grid(point_xy: tuple[float, float]) -> tuple[int, int]:
+        gx = int(math.floor((point_xy[0] - origin_x) / resolution))
+        gy = int(math.floor((point_xy[1] - origin_y) / resolution))
+        return gx, gy
+
+    def grid_to_world(gx: int, gy: int) -> tuple[float, float]:
+        return (
+            origin_x + (gx + 0.5) * resolution,
+            origin_y + (gy + 0.5) * resolution,
+        )
+
+    def in_bounds(gx: int, gy: int) -> bool:
+        return 0 <= gx < width and 0 <= gy < height
+
+    def is_free(gx: int, gy: int) -> bool:
+        if not in_bounds(gx, gy):
+            return False
+        value = data[gy * width + gx]
+        return 0 <= value < 50
+
+    source_gx, source_gy = world_to_grid(source_xy)
+    source_gx = min(max(source_gx, 0), width - 1)
+    source_gy = min(max(source_gy, 0), height - 1)
+
+    if is_free(source_gx, source_gy):
+        return source_xy
+
+    search_limit = max(1, int(max_search_cells))
+    for radius in range(1, search_limit + 1):
+        best: tuple[float, int, int] | None = None
+        for gx in range(source_gx - radius, source_gx + radius + 1):
+            for gy in range(source_gy - radius, source_gy + radius + 1):
+                if max(abs(gx - source_gx), abs(gy - source_gy)) != radius:
+                    continue
+                if not is_free(gx, gy):
+                    continue
+                distance = math.hypot(gx - source_gx, gy - source_gy)
+                if best is None or distance < best[0]:
+                    best = (distance, gx, gy)
+        if best is not None:
+            return grid_to_world(best[1], best[2])
+
+    return source_xy
+
+
 class TransitionManagerNode(Node):
     def __init__(self) -> None:
         super().__init__("transition_manager_node")
@@ -104,6 +168,9 @@ class TransitionManagerNode(Node):
         self.declare_parameter("tracking_disable_fastdds_shm", True)
         self.declare_parameter("tracking_launch_healthcheck_sec", 5.0)
         self.declare_parameter("tracking_source_seed_max_distance", 2.0)
+        self.declare_parameter("tracking_source_snap_max_cells", 25)
+        self.declare_parameter("tracking_source_from_peak", True)
+        self.declare_parameter("tracking_source_peak_min_concentration", 0.8)
         self.declare_parameter("freeze_ready_min_map_samples", 2)
         self.declare_parameter("freeze_ready_min_map_age_sec", 2.0)
 
@@ -116,6 +183,15 @@ class TransitionManagerNode(Node):
         )
         self._tracking_source_seed_max_distance = float(
             self.get_parameter("tracking_source_seed_max_distance").value
+        )
+        self._tracking_source_snap_max_cells = int(
+            self.get_parameter("tracking_source_snap_max_cells").value
+        )
+        self._tracking_source_from_peak = bool(
+            self.get_parameter("tracking_source_from_peak").value
+        )
+        self._tracking_source_peak_min_concentration = float(
+            self.get_parameter("tracking_source_peak_min_concentration").value
         )
         self._freeze_ready_min_map_samples = int(
             self.get_parameter("freeze_ready_min_map_samples").value
@@ -143,6 +219,7 @@ class TransitionManagerNode(Node):
         self._shutdown_future = None
         self._pending_tracking_pose: tuple[float, float, float] | None = None
         self._pending_tracking_source: tuple[float, float] | None = None
+        self._pending_tracking_model_source: tuple[float, float] | None = None
         self._current_map_path: Path | None = None
         self._tracking_process: subprocess.Popen[str] | None = None
         self._tracking_launch_started_sec: float | None = None
@@ -151,9 +228,13 @@ class TransitionManagerNode(Node):
         self._valid_map_samples = 0
         self._first_valid_map_time_sec: float | None = None
         self._last_freeze_wait_log_sec = 0.0
+        self._latest_map: OccupancyGrid | None = None
+        self._peak_concentration = float("-inf")
+        self._peak_source_xy: tuple[float, float] | None = None
 
         self.create_subscription(Bool, "/freeze_map_requested", self._freeze_callback, 10)
         self.create_subscription(OccupancyGrid, "/map", self._map_callback, 10)
+        self.create_subscription(Float32, "/gas_concentration", self._gas_callback, 10)
         self.create_timer(0.25, self._poll_save_future)
 
     def _freeze_callback(self, msg: Bool) -> None:
@@ -163,12 +244,30 @@ class TransitionManagerNode(Node):
         self.get_logger().info("Freeze requested; waiting for map_saver/save_map service")
 
     def _map_callback(self, msg: OccupancyGrid) -> None:
+        self._latest_map = msg
         if msg.info.width <= 0 or msg.info.height <= 0:
             return
         self._valid_map_samples += 1
         now_sec = self.get_clock().now().nanoseconds / 1e9
         if self._first_valid_map_time_sec is None:
             self._first_valid_map_time_sec = now_sec
+
+    def _gas_callback(self, msg: Float32) -> None:
+        if not self._tracking_source_from_peak:
+            return
+        concentration = float(msg.data)
+        if concentration < self._tracking_source_peak_min_concentration:
+            return
+        pose = self._lookup_current_map_pose(log_errors=False)
+        if pose is None:
+            return
+        if concentration > self._peak_concentration:
+            self._peak_concentration = concentration
+            self._peak_source_xy = (pose[0], pose[1])
+            self.get_logger().info(
+                "Updated tracking source peak candidate to "
+                f"({pose[0]:.3f}, {pose[1]:.3f}) @ {concentration:.3f}"
+            )
 
     def _freeze_map_ready(self) -> bool:
         now_sec = self.get_clock().now().nanoseconds / 1e9
@@ -190,7 +289,7 @@ class TransitionManagerNode(Node):
             self._last_freeze_wait_log_sec = now_sec
         return ready
 
-    def _lookup_current_map_pose(self) -> tuple[float, float, float] | None:
+    def _lookup_current_map_pose(self, *, log_errors: bool = True) -> tuple[float, float, float] | None:
         try:
             transform = self._tf_buffer.lookup_transform(
                 "map",
@@ -199,7 +298,8 @@ class TransitionManagerNode(Node):
                 timeout=Duration(seconds=0.2),
             )
         except TransformException as exc:
-            self.get_logger().error(f"Failed to look up robot pose for relocalization: {exc}")
+            if log_errors:
+                self.get_logger().error(f"Failed to look up robot pose for relocalization: {exc}")
             return None
 
         translation = transform.transform.translation
@@ -258,6 +358,13 @@ class TransitionManagerNode(Node):
         return (translation.x, translation.y), yaw
 
     def _resolve_tracking_source(self) -> tuple[float, float] | None:
+        if self._tracking_source_from_peak and self._peak_source_xy is not None:
+            self.get_logger().info(
+                "Using observed peak concentration position as tracking source "
+                f"({self._peak_source_xy[0]:.3f}, {self._peak_source_xy[1]:.3f})"
+            )
+            return self._peak_source_xy
+
         source_point = (
             float(self.get_parameter("source_x").value),
             float(self.get_parameter("source_y").value),
@@ -289,7 +396,11 @@ class TransitionManagerNode(Node):
             return
         response = self._shutdown_future.result()
         if response is not None and response.success:
-            if self._pending_tracking_pose is None or self._pending_tracking_source is None:
+            if (
+                self._pending_tracking_pose is None
+                or self._pending_tracking_source is None
+                or self._pending_tracking_model_source is None
+            ):
                 self.get_logger().error("Tracking handoff data missing after navigation shutdown")
             else:
                 self._stop_primary_navigation_processes()
@@ -297,6 +408,7 @@ class TransitionManagerNode(Node):
                 self._launch_tracking_localization(
                     self._pending_tracking_pose,
                     self._pending_tracking_source,
+                    self._pending_tracking_model_source,
                 )
                 self._map_frozen_pub.publish(Bool(data=True))
                 self.get_logger().info("Frozen map saved successfully")
@@ -307,11 +419,13 @@ class TransitionManagerNode(Node):
         self._shutdown_future = None
         self._pending_tracking_pose = None
         self._pending_tracking_source = None
+        self._pending_tracking_model_source = None
 
     def _launch_tracking_localization(
         self,
         pose: tuple[float, float, float],
-        source_xy: tuple[float, float],
+        actual_source_xy: tuple[float, float],
+        model_source_xy: tuple[float, float],
     ) -> None:
         if self._tracking_process is not None and self._tracking_process.poll() is None:
             self.get_logger().info("Tracking localization launch is already running")
@@ -333,9 +447,11 @@ class TransitionManagerNode(Node):
             f"initial_pose_x:={pose[0]}",
             f"initial_pose_y:={pose[1]}",
             f"initial_pose_yaw:={pose[2]}",
-            f"source_x:={source_xy[0]}",
-            f"source_y:={source_xy[1]}",
+            f"source_x:={actual_source_xy[0]}",
+            f"source_y:={actual_source_xy[1]}",
         ]
+        launch_cmd.append(f"model_source_x:={model_source_xy[0]}")
+        launch_cmd.append(f"model_source_y:={model_source_xy[1]}")
 
         tracking_enter_threshold = float(self.get_parameter("tracking_enter_threshold").value)
         tracking_exit_threshold = float(self.get_parameter("tracking_exit_threshold").value)
@@ -371,7 +487,8 @@ class TransitionManagerNode(Node):
         self._tracking_handoff_failed_pub.publish(Bool(data=False))
         self.get_logger().info(
             "Launching tracking localization with runtime map "
-            f"{self._current_map_path} and projected source ({source_xy[0]:.3f}, {source_xy[1]:.3f})"
+            f"{self._current_map_path} and source target ({actual_source_xy[0]:.3f}, {actual_source_xy[1]:.3f}) "
+            f"with tracking model seed ({model_source_xy[0]:.3f}, {model_source_xy[1]:.3f})"
         )
 
     def _poll_tracking_handoff(self) -> None:
@@ -450,12 +567,26 @@ class TransitionManagerNode(Node):
                     f"({tracking_source[0]:.3f}, {tracking_source[1]:.3f}) to "
                     f"({clamped_source[0]:.3f}, {clamped_source[1]:.3f})"
                 )
-            tracking_source = clamped_source
+            tracking_model_source = clamped_source
+            snapped_source = snap_tracking_source_to_free_space(
+                tracking_model_source,
+                self._latest_map,
+                self._tracking_source_snap_max_cells,
+            )
+            if snapped_source != tracking_model_source:
+                self.get_logger().info(
+                    "Snapped tracking source seed to nearest free map cell from "
+                    f"({tracking_model_source[0]:.3f}, {tracking_model_source[1]:.3f}) to "
+                    f"({snapped_source[0]:.3f}, {snapped_source[1]:.3f})"
+                )
+            tracking_model_source = snapped_source
             self._pending_tracking_pose = pose
             self._pending_tracking_source = tracking_source
+            self._pending_tracking_model_source = tracking_model_source
             if not self._request_navigation_shutdown():
                 self._pending_tracking_pose = None
                 self._pending_tracking_source = None
+                self._pending_tracking_model_source = None
         else:
             self.get_logger().error("Failed to save frozen map")
         self._save_future = None

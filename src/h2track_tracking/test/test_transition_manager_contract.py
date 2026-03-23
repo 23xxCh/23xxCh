@@ -98,6 +98,8 @@ def test_transition_manager_forwards_tracking_handoff_overrides_to_tracking_laun
     assert "launch_cmd.append(f\"source_threshold:={" in source
     assert "launch_cmd.append(f\"track_exit_samples:={" in source
     assert "launch_cmd.append(f\"source_hold_steps:={" in source
+    assert "model_source_x:=" in source
+    assert "model_source_y:=" in source
 
 
 def test_transition_manager_can_disable_fastdds_shm_for_tracking_sublaunch():
@@ -135,6 +137,27 @@ def test_transition_manager_clamps_far_tracking_source_seed_before_handoff():
     assert "tracking_source_seed_max_distance" in source
     assert "clamp_tracking_source_seed" in source
     assert "Clamped projected source seed for tracking handoff" in source
+    assert "tracking_source_snap_max_cells" in source
+    assert "snap_tracking_source_to_free_space" in source
+    assert "Snapped tracking source seed to nearest free map cell" in source
+    assert "source target (" in source
+    assert "tracking model seed (" in source
+
+
+def test_transition_manager_can_use_observed_peak_for_tracking_source_handoff():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "h2track_tracking"
+        / "transition_manager_node.py"
+    ).read_text(encoding="utf-8")
+
+    assert "tracking_source_from_peak" in source
+    assert "tracking_source_peak_min_concentration" in source
+    assert '"/gas_concentration"' in source
+    assert "_peak_concentration" in source
+    assert "_peak_source_xy" in source
+    assert "Using observed peak concentration position as tracking source" in source
+    assert "_lookup_current_map_pose(log_errors=False)" in source
 
 
 def test_transition_manager_publishes_tracking_handoff_completion_and_failure_signals():

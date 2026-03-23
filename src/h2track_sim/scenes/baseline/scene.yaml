@@ -62,7 +62,7 @@ autonomy:
     enter_threshold: 0.45
     exit_threshold: 0.2
     confirm_samples: 2
-    min_explore_samples: 120
+    min_explore_samples: 70
   tracking_handoff:
     source_x: -1.55
     source_y: 3.1

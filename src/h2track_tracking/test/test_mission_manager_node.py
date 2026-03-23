@@ -184,6 +184,43 @@ def test_mission_manager_supports_non_improving_tracking_source_pull():
     assert 'Tracking source pull engaged after non-improving streak' in text
 
 
+def test_mission_manager_counts_goal_reached_only_on_success():
+    text = (
+        Path(__file__).resolve().parents[1]
+        / 'h2track_tracking'
+        / 'mission_manager_node.py'
+    ).read_text(encoding='utf-8')
+
+    assert 'goal_succeeded = task_result is TaskResult.SUCCEEDED' in text
+    assert 'goal_reached=goal_succeeded' in text
+
+
+def test_mission_manager_has_recovery_branch_for_failed_tracking_goals():
+    text = (
+        Path(__file__).resolve().parents[1]
+        / 'h2track_tracking'
+        / 'mission_manager_node.py'
+    ).read_text(encoding='utf-8')
+
+    assert 'def _send_tracking_recovery_goal' in text
+    assert 'Tracking goal failed; issuing recovery sweep goal' in text
+    assert 'Patrol goal did not succeed; advancing to next waypoint' in text
+
+
+def test_mission_manager_separates_actual_source_and_tracking_model_source():
+    text = (
+        Path(__file__).resolve().parents[1]
+        / 'h2track_tracking'
+        / 'mission_manager_node.py'
+    ).read_text(encoding='utf-8')
+
+    assert 'declare_parameter("model_source_x"' in text
+    assert 'declare_parameter("model_source_y"' in text
+    assert 'actual_source=(' in text
+    assert 'self.get_parameter("model_source_x").value' in text
+    assert 'self.get_parameter("model_source_y").value' in text
+
+
 def test_mission_manager_consumes_tracking_mode_start_flag_after_initial_entry():
     text = (
         Path(__file__).resolve().parents[1]
