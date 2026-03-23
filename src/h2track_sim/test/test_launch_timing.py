@@ -52,6 +52,13 @@ def test_bringup_launch_exposes_sensor_gate_timeout_argument():
     assert 'DeclareLaunchArgument("gaden_sensor_gate_timeout"' in text
 
 
+def test_bringup_launch_disables_fastdds_shared_memory_transport():
+    text = _launch_text("bringup.launch.py")
+    assert 'SetEnvironmentVariable(' in text
+    assert '"FASTDDS_BUILTIN_TRANSPORTS"' in text or "'FASTDDS_BUILTIN_TRANSPORTS'" in text
+    assert '"UDPv4"' in text or "'UDPv4'" in text
+
+
 def test_bringup_launch_defers_test_env_lookup_until_gaden_is_enabled():
     text = _launch_text("bringup.launch.py")
     assert 'DeclareLaunchArgument("gaden_project_path", default_value="")' in text or "DeclareLaunchArgument('gaden_project_path', default_value='')" in text

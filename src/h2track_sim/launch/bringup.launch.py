@@ -6,7 +6,7 @@ from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, RegisterEventHandler, SetLaunchConfiguration, Shutdown, TimerAction
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, RegisterEventHandler, SetEnvironmentVariable, SetLaunchConfiguration, Shutdown, TimerAction
 from launch.conditions import IfCondition, UnlessCondition
 from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -243,6 +243,10 @@ def generate_launch_description():
         ]
 
     scene_defaults = OpaqueFunction(function=_scene_defaults)
+    disable_fastdds_shm = SetEnvironmentVariable(
+        name="FASTDDS_BUILTIN_TRANSPORTS",
+        value="UDPv4",
+    )
 
     sim = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(pkg_share, "launch", "sim.launch.py")),
@@ -513,6 +517,7 @@ def generate_launch_description():
             declare_gaden_map_roll,
             declare_gaden_map_pitch,
             declare_gaden_map_yaw,
+            disable_fastdds_shm,
             scene_defaults,
             sim,
             delayed_nav2,
