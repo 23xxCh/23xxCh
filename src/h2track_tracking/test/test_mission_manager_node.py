@@ -87,6 +87,18 @@ def test_mission_manager_supports_tracking_mode_startup():
     assert 'MissionMode.SEEK_TRACK' in text
 
 
+def test_mission_manager_supports_tracking_only_mode_to_prevent_patrol_fallback():
+    text = (
+        Path(__file__).resolve().parents[1]
+        / 'h2track_tracking'
+        / 'mission_manager_node.py'
+    ).read_text(encoding='utf-8')
+
+    assert 'declare_parameter("tracking_only_mode"' in text or "declare_parameter('tracking_only_mode'" in text
+    assert 'self._tracking_only_mode' in text
+    assert 'if self._tracking_only_mode and mode is MissionMode.PATROL' in text
+
+
 def test_mission_manager_consumes_tracking_mode_start_flag_after_initial_entry():
     text = (
         Path(__file__).resolve().parents[1]

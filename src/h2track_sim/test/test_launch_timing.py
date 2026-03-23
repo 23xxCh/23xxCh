@@ -364,6 +364,7 @@ def test_tracking_localization_launch_exists_and_uses_localization_bringup():
     assert "localization_launch.py" in text
     assert "mission_manager_node" in text
     assert '"start_in_tracking_mode": True' in text or "'start_in_tracking_mode': True" in text
+    assert '"tracking_only_mode": True' in text or "'tracking_only_mode': True" in text
     assert 'runtime_map' in text
 
 

@@ -161,6 +161,7 @@ def generate_launch_description():
             {"use_sim_time": use_sim_time},
             {
                 "start_in_tracking_mode": True,
+                "tracking_only_mode": True,
                 "initial_pose_x": initial_pose_x,
                 "initial_pose_y": initial_pose_y,
                 "initial_pose_yaw": initial_pose_yaw,

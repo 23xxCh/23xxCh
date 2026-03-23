@@ -90,6 +90,7 @@ class MissionManagerNode(Node):
     def __init__(self) -> None:
         super().__init__("mission_manager_node")
         self.declare_parameter("start_in_tracking_mode", False)
+        self.declare_parameter("tracking_only_mode", False)
         self.declare_parameter("initial_pose_x", 0.0)
         self.declare_parameter("initial_pose_y", 0.0)
         self.declare_parameter("initial_pose_yaw", 0.0)
@@ -137,6 +138,7 @@ class MissionManagerNode(Node):
         )
         self._navigator = BasicNavigator()
         self._start_in_tracking_mode = bool(self.get_parameter("start_in_tracking_mode").value)
+        self._tracking_only_mode = bool(self.get_parameter("tracking_only_mode").value)
         self._initial_pose = Pose2D(
             float(self.get_parameter("initial_pose_x").value),
             float(self.get_parameter("initial_pose_y").value),
@@ -231,6 +233,9 @@ class MissionManagerNode(Node):
             robot_position=(self._current_pose.x, self._current_pose.y),
             goal_reached=task_complete,
         )
+        if self._tracking_only_mode and mode is MissionMode.PATROL:
+            self._machine.mode = MissionMode.SEEK_TRACK
+            mode = MissionMode.SEEK_TRACK
 
         if mode is not self._active_mode:
             self._mode_pub.publish(String(data=mode.name))
