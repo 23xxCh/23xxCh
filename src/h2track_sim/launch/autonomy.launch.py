@@ -49,6 +49,8 @@ def _scene_defaults(context):
     tracking_track_exit_samples = LaunchConfiguration('tracking_track_exit_samples')
     tracking_source_radius = LaunchConfiguration('tracking_source_radius')
     tracking_source_hold_steps = LaunchConfiguration('tracking_source_hold_steps')
+    tracking_track_step = LaunchConfiguration('tracking_track_step')
+    tracking_source_seed_max_distance = LaunchConfiguration('tracking_source_seed_max_distance')
     gas_source_strength = LaunchConfiguration('gas_source_strength')
     gas_decay_rate = LaunchConfiguration('gas_decay_rate')
     gas_plume_stddev = LaunchConfiguration('gas_plume_stddev')
@@ -161,6 +163,8 @@ def _scene_defaults(context):
     )
     default_tracking_radius = tracking_handoff.get('source_radius', mission['source_radius'])
     default_tracking_hold_steps = tracking_handoff.get('source_hold_steps', mission['source_hold_steps'])
+    default_tracking_track_step = tracking_handoff.get('track_step', mission['track_step'])
+    default_tracking_seed_max_distance = tracking_handoff.get('source_seed_max_distance', 2.0)
     default_nav2_startup_gate_timeout = startup_gates.get('nav2_startup_gate_timeout', 60.0)
     default_gaden_sensor_gate_timeout = startup_gates.get('gaden_sensor_gate_timeout', 60.0)
     return [
@@ -207,6 +211,14 @@ def _scene_defaults(context):
         SetLaunchConfiguration(
             'tracking_source_hold_steps',
             tracking_source_hold_steps.perform(context).strip() or str(default_tracking_hold_steps),
+        ),
+        SetLaunchConfiguration(
+            'tracking_track_step',
+            tracking_track_step.perform(context).strip() or str(default_tracking_track_step),
+        ),
+        SetLaunchConfiguration(
+            'tracking_source_seed_max_distance',
+            tracking_source_seed_max_distance.perform(context).strip() or str(default_tracking_seed_max_distance),
         ),
         SetLaunchConfiguration('gas_source_strength', resolved_gas_source_strength),
         SetLaunchConfiguration('gas_decay_rate', resolved_gas_decay_rate),
@@ -287,6 +299,8 @@ def generate_launch_description():
     tracking_track_exit_samples = LaunchConfiguration('tracking_track_exit_samples')
     tracking_source_radius = LaunchConfiguration('tracking_source_radius')
     tracking_source_hold_steps = LaunchConfiguration('tracking_source_hold_steps')
+    tracking_track_step = LaunchConfiguration('tracking_track_step')
+    tracking_source_seed_max_distance = LaunchConfiguration('tracking_source_seed_max_distance')
     use_gaden = LaunchConfiguration('use_gaden')
     frontier_min_cluster_size = LaunchConfiguration('frontier_min_cluster_size')
     min_goal_distance = LaunchConfiguration('min_goal_distance')
@@ -344,6 +358,11 @@ def generate_launch_description():
     declare_tracking_track_exit_samples = DeclareLaunchArgument('tracking_track_exit_samples', default_value='')
     declare_tracking_source_radius = DeclareLaunchArgument('tracking_source_radius', default_value='')
     declare_tracking_source_hold_steps = DeclareLaunchArgument('tracking_source_hold_steps', default_value='')
+    declare_tracking_track_step = DeclareLaunchArgument('tracking_track_step', default_value='')
+    declare_tracking_source_seed_max_distance = DeclareLaunchArgument(
+        'tracking_source_seed_max_distance',
+        default_value='',
+    )
     declare_use_gaden = DeclareLaunchArgument('use_gaden', default_value='')
     declare_frontier_min_cluster_size = DeclareLaunchArgument('frontier_min_cluster_size', default_value='')
     declare_min_goal_distance = DeclareLaunchArgument('min_goal_distance', default_value='')
@@ -597,6 +616,8 @@ def generate_launch_description():
                 'tracking_track_exit_samples': tracking_track_exit_samples,
                 'tracking_source_radius': tracking_source_radius,
                 'tracking_source_hold_steps': tracking_source_hold_steps,
+                'tracking_track_step': tracking_track_step,
+                'tracking_source_seed_max_distance': tracking_source_seed_max_distance,
             },
         ],
     )
@@ -632,6 +653,8 @@ def generate_launch_description():
         declare_tracking_track_exit_samples,
         declare_tracking_source_radius,
         declare_tracking_source_hold_steps,
+        declare_tracking_track_step,
+        declare_tracking_source_seed_max_distance,
         declare_use_gaden,
         declare_frontier_min_cluster_size,
         declare_min_goal_distance,

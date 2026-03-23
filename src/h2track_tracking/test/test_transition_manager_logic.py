@@ -1,13 +1,16 @@
 import math
+from pathlib import Path
 
 from lifecycle_msgs.msg import State
 from nav_msgs.msg import OccupancyGrid
+import yaml
 
 from h2track_tracking.transition_manager_node import (
     clamp_tracking_source_seed,
     lifecycle_state_is_active,
     snap_tracking_source_to_free_space,
     tracking_handoff_tf_ready,
+    write_occupancy_grid_to_runtime_map,
 )
 
 
@@ -105,3 +108,37 @@ def test_tracking_handoff_tf_ready_requires_fresh_transform_stamp():
     assert not tracking_handoff_tf_ready(9.0, 10.0, staleness_tolerance_sec=0.5)
     assert tracking_handoff_tf_ready(9.6, 10.0, staleness_tolerance_sec=0.5)
     assert tracking_handoff_tf_ready(10.1, 10.0, staleness_tolerance_sec=0.5)
+
+
+def test_write_occupancy_grid_to_runtime_map_writes_yaml_and_pgm(tmp_path: Path):
+    grid = _make_grid(
+        width=2,
+        height=2,
+        resolution=0.5,
+        origin_x=-1.0,
+        origin_y=2.0,
+        data=[
+            0, 100,
+            -1, 50,
+        ],
+    )
+    map_yaml = tmp_path / "freeze_map.yaml"
+    assert write_occupancy_grid_to_runtime_map(grid, map_yaml) is True
+    assert map_yaml.exists()
+    map_pgm = tmp_path / "freeze_map.pgm"
+    assert map_pgm.exists()
+
+    meta = yaml.safe_load(map_yaml.read_text(encoding="utf-8"))
+    assert meta["image"] == "freeze_map.pgm"
+    assert meta["resolution"] == 0.5
+    assert meta["origin"][:2] == [-1.0, 2.0]
+
+    pixels = []
+    for line in map_pgm.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("P2") or stripped.startswith("#"):
+            continue
+        if stripped == "2 2" or stripped == "255":
+            continue
+        pixels.extend(int(x) for x in stripped.split())
+    assert pixels == [205, 205, 254, 0]

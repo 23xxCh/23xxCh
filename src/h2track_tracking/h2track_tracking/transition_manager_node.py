@@ -4,6 +4,7 @@ import math
 import os
 from pathlib import Path
 import subprocess
+import yaml
 
 from lifecycle_msgs.msg import State
 from lifecycle_msgs.srv import GetState
@@ -160,6 +161,66 @@ def snap_tracking_source_to_free_space(
     return source_xy
 
 
+def write_occupancy_grid_to_runtime_map(
+    occupancy_grid: OccupancyGrid,
+    map_yaml_path: Path,
+    *,
+    free_thresh: float = 0.25,
+    occupied_thresh: float = 0.65,
+) -> bool:
+    width = int(occupancy_grid.info.width)
+    height = int(occupancy_grid.info.height)
+    resolution = float(occupancy_grid.info.resolution)
+    data = occupancy_grid.data
+    if width <= 0 or height <= 0 or resolution <= 0.0:
+        return False
+    if len(data) != width * height:
+        return False
+
+    map_yaml_path = Path(map_yaml_path)
+    map_yaml_path.parent.mkdir(parents=True, exist_ok=True)
+    map_pgm_path = map_yaml_path.with_suffix(".pgm")
+
+    occ_threshold = occupied_thresh * 100.0
+    free_threshold = free_thresh * 100.0
+
+    def occupancy_to_gray(value: int) -> int:
+        if value < 0:
+            return 205
+        if value >= occ_threshold:
+            return 0
+        if value <= free_threshold:
+            return 254
+        return 205
+
+    pgm_lines = ["P2", "# CREATOR: h2track transition_manager", f"{width} {height}", "255"]
+    for gy in range(height - 1, -1, -1):
+        row = []
+        offset = gy * width
+        for gx in range(width):
+            row.append(str(occupancy_to_gray(int(data[offset + gx]))))
+        pgm_lines.append(" ".join(row))
+    map_pgm_path.write_text("\n".join(pgm_lines) + "\n", encoding="utf-8")
+
+    origin_pose = occupancy_grid.info.origin
+    orientation = origin_pose.orientation
+    yaw = math.atan2(
+        2.0 * (orientation.w * orientation.z + orientation.x * orientation.y),
+        1.0 - 2.0 * (orientation.y * orientation.y + orientation.z * orientation.z),
+    )
+    metadata = {
+        "image": map_pgm_path.name,
+        "mode": "trinary",
+        "resolution": resolution,
+        "origin": [float(origin_pose.position.x), float(origin_pose.position.y), float(yaw)],
+        "negate": 0,
+        "occupied_thresh": float(occupied_thresh),
+        "free_thresh": float(free_thresh),
+    }
+    map_yaml_path.write_text(yaml.safe_dump(metadata, sort_keys=False), encoding="utf-8")
+    return True
+
+
 class TransitionManagerNode(Node):
     def __init__(self) -> None:
         super().__init__("transition_manager_node")
@@ -174,6 +235,7 @@ class TransitionManagerNode(Node):
         self.declare_parameter("tracking_track_exit_samples", -1)
         self.declare_parameter("tracking_source_radius", -1.0)
         self.declare_parameter("tracking_source_hold_steps", -1)
+        self.declare_parameter("tracking_track_step", -1.0)
         self.declare_parameter("save_map_service", "/map_saver_server/save_map")
         self.declare_parameter(
             "lifecycle_manager_service",
@@ -191,6 +253,8 @@ class TransitionManagerNode(Node):
         self.declare_parameter("tracking_source_peak_min_concentration", 0.8)
         self.declare_parameter("freeze_ready_min_map_samples", 2)
         self.declare_parameter("freeze_ready_min_map_age_sec", 2.0)
+        self.declare_parameter("freeze_save_timeout_sec", 8.0)
+        self.declare_parameter("freeze_use_internal_map_writer_fallback", True)
 
         service_name = str(self.get_parameter("save_map_service").value)
         lifecycle_service_name = str(self.get_parameter("lifecycle_manager_service").value)
@@ -223,6 +287,12 @@ class TransitionManagerNode(Node):
         self._freeze_ready_min_map_age_sec = float(
             self.get_parameter("freeze_ready_min_map_age_sec").value
         )
+        self._freeze_save_timeout_sec = float(
+            self.get_parameter("freeze_save_timeout_sec").value
+        )
+        self._freeze_use_internal_map_writer_fallback = bool(
+            self.get_parameter("freeze_use_internal_map_writer_fallback").value
+        )
         self._save_map_client = self.create_client(SaveMap, service_name)
         self._lifecycle_manager_client = self.create_client(
             ManageLifecycleNodes,
@@ -241,6 +311,7 @@ class TransitionManagerNode(Node):
         self._save_requested = False
         self._freeze_pending = False
         self._save_future = None
+        self._save_requested_started_sec: float | None = None
         self._shutdown_future = None
         self._pending_tracking_pose: tuple[float, float, float] | None = None
         self._pending_tracking_source: tuple[float, float] | None = None
@@ -487,6 +558,7 @@ class TransitionManagerNode(Node):
         tracking_track_exit_samples = int(self.get_parameter("tracking_track_exit_samples").value)
         tracking_source_radius = float(self.get_parameter("tracking_source_radius").value)
         tracking_source_hold_steps = int(self.get_parameter("tracking_source_hold_steps").value)
+        tracking_track_step = float(self.get_parameter("tracking_track_step").value)
 
         if tracking_enter_threshold > 0.0:
             launch_cmd.append(f"enter_threshold:={tracking_enter_threshold}")
@@ -502,6 +574,8 @@ class TransitionManagerNode(Node):
             launch_cmd.append(f"source_radius:={tracking_source_radius}")
         if tracking_source_hold_steps > 0:
             launch_cmd.append(f"source_hold_steps:={tracking_source_hold_steps}")
+        if tracking_track_step > 0.0:
+            launch_cmd.append(f"track_step:={tracking_track_step}")
 
         env = os.environ.copy()
         if bool(self.get_parameter("tracking_disable_fastdds_shm").value):
@@ -623,57 +697,106 @@ class TransitionManagerNode(Node):
 
             self._current_map_path = Path(f"{request.map_url}.yaml")
             self._save_future = self._save_map_client.call_async(request)
+            self._save_requested_started_sec = self.get_clock().now().nanoseconds / 1e9
             self._save_requested = True
             self._freeze_pending = False
             self.get_logger().info(f"Saving frozen map to {request.map_url}")
+        if self._save_future is None:
+            return
 
-        if self._save_future is None or not self._save_future.done():
+        if not self._save_future.done():
+            now_sec = self.get_clock().now().nanoseconds / 1e9
+            if (
+                self._freeze_use_internal_map_writer_fallback
+                and self._save_requested_started_sec is not None
+                and (now_sec - self._save_requested_started_sec) >= max(0.0, self._freeze_save_timeout_sec)
+                and self._latest_map is not None
+                and self._current_map_path is not None
+            ):
+                if write_occupancy_grid_to_runtime_map(self._latest_map, self._current_map_path):
+                    self.get_logger().warn(
+                        "SaveMap response timed out; using internal runtime-map writer fallback"
+                    )
+                    self._save_future = None
+                    self._save_requested_started_sec = None
+                    self._on_frozen_map_ready()
+                    return
+                self.get_logger().error("Internal runtime-map writer fallback failed")
             return
 
         response = self._save_future.result()
+        self._save_future = None
+        self._save_requested_started_sec = None
         if response is not None and response.result:
-            pose = self._lookup_current_map_pose()
-            if pose is None:
-                self._save_future = None
-                return
-            tracking_source = self._resolve_tracking_source()
-            if tracking_source is None:
-                self._save_future = None
-                return
-            clamped_source = clamp_tracking_source_seed(
-                tracking_source,
-                (pose[0], pose[1]),
-                self._tracking_source_seed_max_distance,
-            )
-            if clamped_source != tracking_source:
-                self.get_logger().info(
-                    "Clamped projected source seed for tracking handoff from "
-                    f"({tracking_source[0]:.3f}, {tracking_source[1]:.3f}) to "
-                    f"({clamped_source[0]:.3f}, {clamped_source[1]:.3f})"
-                )
-            tracking_model_source = clamped_source
-            snapped_source = snap_tracking_source_to_free_space(
-                tracking_model_source,
-                self._latest_map,
-                self._tracking_source_snap_max_cells,
-            )
-            if snapped_source != tracking_model_source:
-                self.get_logger().info(
-                    "Snapped tracking source seed to nearest free map cell from "
-                    f"({tracking_model_source[0]:.3f}, {tracking_model_source[1]:.3f}) to "
-                    f"({snapped_source[0]:.3f}, {snapped_source[1]:.3f})"
-                )
-            tracking_model_source = snapped_source
-            self._pending_tracking_pose = pose
-            self._pending_tracking_source = tracking_source
-            self._pending_tracking_model_source = tracking_model_source
-            if not self._request_navigation_shutdown():
-                self._pending_tracking_pose = None
-                self._pending_tracking_source = None
-                self._pending_tracking_model_source = None
+            self._on_frozen_map_ready()
         else:
             self.get_logger().error("Failed to save frozen map")
-        self._save_future = None
+
+    def _on_frozen_map_ready(self) -> None:
+        pose = self._lookup_current_map_pose()
+        if pose is None:
+            return
+        tracking_source = self._resolve_tracking_source()
+        if tracking_source is None:
+            return
+        clamped_source = clamp_tracking_source_seed(
+            tracking_source,
+            (pose[0], pose[1]),
+            self._tracking_source_seed_max_distance,
+        )
+        if clamped_source != tracking_source:
+            self.get_logger().info(
+                "Clamped projected source seed for tracking handoff from "
+                f"({tracking_source[0]:.3f}, {tracking_source[1]:.3f}) to "
+                f"({clamped_source[0]:.3f}, {clamped_source[1]:.3f})"
+            )
+        tracking_model_source = clamped_source
+        snapped_source = snap_tracking_source_to_free_space(
+            tracking_model_source,
+            self._latest_map,
+            self._tracking_source_snap_max_cells,
+        )
+        if snapped_source != tracking_model_source:
+            self.get_logger().info(
+                "Snapped tracking source seed to nearest free map cell from "
+                f"({tracking_model_source[0]:.3f}, {tracking_model_source[1]:.3f}) to "
+                f"({snapped_source[0]:.3f}, {snapped_source[1]:.3f})"
+            )
+        tracking_model_source = snapped_source
+        self._pending_tracking_pose = pose
+        self._pending_tracking_source = tracking_source
+        self._pending_tracking_model_source = tracking_model_source
+        if not self._request_navigation_shutdown():
+            self._pending_tracking_pose = None
+            self._pending_tracking_source = None
+            self._pending_tracking_model_source = None
+
+    def _terminate_tracking_process(self) -> None:
+        if self._tracking_process is None:
+            return
+
+        process = self._tracking_process
+        self._tracking_process = None
+
+        if process.poll() is not None:
+            return
+
+        process.terminate()
+        try:
+            process.wait(timeout=3.0)
+            return
+        except subprocess.TimeoutExpired:
+            pass
+
+        process.kill()
+        try:
+            process.wait(timeout=2.0)
+        except subprocess.TimeoutExpired:
+            pass
+
+    def destroy_node(self) -> bool:
+        self._terminate_tracking_process()
+        return super().destroy_node()
 
 
 def main(args: list[str] | None = None) -> None:

@@ -415,6 +415,14 @@ def test_tracking_localization_launch_routes_track_exit_samples():
     assert '"track_exit_samples": track_exit_samples' in text
 
 
+def test_tracking_localization_launch_honors_explicit_tracking_param_overrides():
+    text = _launch_text("tracking_localization.launch.py")
+    assert 'LaunchConfiguration("enter_threshold").perform(context).strip()' in text
+    assert 'LaunchConfiguration("track_step").perform(context).strip()' in text
+    assert 'SetLaunchConfiguration("enter_threshold", resolved_enter_threshold)' in text
+    assert 'SetLaunchConfiguration("track_step", resolved_track_step)' in text
+
+
 def test_tracking_localization_launch_applies_scene_tracking_nav2_overrides():
     text = _launch_text("tracking_localization.launch.py")
     assert "tracking_nav2_overrides" in text

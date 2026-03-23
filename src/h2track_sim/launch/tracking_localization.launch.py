@@ -52,6 +52,37 @@ def _prepare_tracking_localization(context):
     resolved_model_source_y = (
         LaunchConfiguration("model_source_y").perform(context).strip() or resolved_source_y
     )
+    resolved_patrol_points = (
+        LaunchConfiguration("patrol_points").perform(context).strip() or str(mission["patrol_points"])
+    )
+    resolved_enter_threshold = (
+        LaunchConfiguration("enter_threshold").perform(context).strip() or str(mission["enter_threshold"])
+    )
+    resolved_exit_threshold = (
+        LaunchConfiguration("exit_threshold").perform(context).strip() or str(mission["exit_threshold"])
+    )
+    resolved_source_threshold = (
+        LaunchConfiguration("source_threshold").perform(context).strip() or str(mission["source_threshold"])
+    )
+    resolved_confirm_samples = (
+        LaunchConfiguration("confirm_samples").perform(context).strip() or str(mission["confirm_samples"])
+    )
+    resolved_track_exit_samples = (
+        LaunchConfiguration("track_exit_samples").perform(context).strip()
+        or str(mission.get("track_exit_samples", mission["confirm_samples"]))
+    )
+    resolved_source_radius = (
+        LaunchConfiguration("source_radius").perform(context).strip() or str(mission["source_radius"])
+    )
+    resolved_source_hold_steps = (
+        LaunchConfiguration("source_hold_steps").perform(context).strip() or str(mission["source_hold_steps"])
+    )
+    resolved_track_step = (
+        LaunchConfiguration("track_step").perform(context).strip() or str(mission["track_step"])
+    )
+    resolved_sweep_angle_deg = (
+        LaunchConfiguration("sweep_angle_deg").perform(context).strip() or str(mission["sweep_angle_deg"])
+    )
 
     runtime_map = LaunchConfiguration("runtime_map").perform(context).strip()
     if not runtime_map:
@@ -97,16 +128,16 @@ def _prepare_tracking_localization(context):
     return [
         SetLaunchConfiguration("runtime_map", runtime_map),
         SetLaunchConfiguration("params_file", str(runtime_params_path)),
-        SetLaunchConfiguration("patrol_points", str(mission["patrol_points"])),
-        SetLaunchConfiguration("enter_threshold", str(mission["enter_threshold"])),
-        SetLaunchConfiguration("exit_threshold", str(mission["exit_threshold"])),
-        SetLaunchConfiguration("source_threshold", str(mission["source_threshold"])),
-        SetLaunchConfiguration("confirm_samples", str(mission["confirm_samples"])),
-        SetLaunchConfiguration("track_exit_samples", str(mission.get("track_exit_samples", mission["confirm_samples"]))),
-        SetLaunchConfiguration("source_radius", str(mission["source_radius"])),
-        SetLaunchConfiguration("source_hold_steps", str(mission["source_hold_steps"])),
-        SetLaunchConfiguration("track_step", str(mission["track_step"])),
-        SetLaunchConfiguration("sweep_angle_deg", str(mission["sweep_angle_deg"])),
+        SetLaunchConfiguration("patrol_points", resolved_patrol_points),
+        SetLaunchConfiguration("enter_threshold", resolved_enter_threshold),
+        SetLaunchConfiguration("exit_threshold", resolved_exit_threshold),
+        SetLaunchConfiguration("source_threshold", resolved_source_threshold),
+        SetLaunchConfiguration("confirm_samples", resolved_confirm_samples),
+        SetLaunchConfiguration("track_exit_samples", resolved_track_exit_samples),
+        SetLaunchConfiguration("source_radius", resolved_source_radius),
+        SetLaunchConfiguration("source_hold_steps", resolved_source_hold_steps),
+        SetLaunchConfiguration("track_step", resolved_track_step),
+        SetLaunchConfiguration("sweep_angle_deg", resolved_sweep_angle_deg),
         SetLaunchConfiguration("source_x", resolved_source_x),
         SetLaunchConfiguration("source_y", resolved_source_y),
         SetLaunchConfiguration("model_source_x", resolved_model_source_x),

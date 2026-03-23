@@ -94,10 +94,12 @@ def test_transition_manager_forwards_tracking_handoff_overrides_to_tracking_laun
     assert "tracking_track_exit_samples" in source
     assert "tracking_source_radius" in source
     assert "tracking_source_hold_steps" in source
+    assert "tracking_track_step" in source
     assert "launch_cmd.append(f\"enter_threshold:={" in source
     assert "launch_cmd.append(f\"source_threshold:={" in source
     assert "launch_cmd.append(f\"track_exit_samples:={" in source
     assert "launch_cmd.append(f\"source_hold_steps:={" in source
+    assert "launch_cmd.append(f\"track_step:={" in source
     assert "model_source_x:=" in source
     assert "model_source_y:=" in source
 
@@ -197,3 +199,17 @@ def test_transition_manager_waits_for_amcl_active_and_fresh_tf_before_handoff_co
     assert "PRIMARY_STATE_ACTIVE" in source
     assert "tracking_handoff_tf_staleness_tolerance_sec" in source
     assert "tracking_handoff_tf_ready" in source
+
+
+def test_transition_manager_terminates_tracking_subprocess_on_shutdown():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "h2track_tracking"
+        / "transition_manager_node.py"
+    ).read_text(encoding="utf-8")
+
+    assert "def _terminate_tracking_process" in source
+    assert ".terminate()" in source
+    assert ".kill()" in source
+    assert "def destroy_node" in source
+    assert "self._terminate_tracking_process()" in source

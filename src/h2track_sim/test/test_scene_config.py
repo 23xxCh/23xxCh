@@ -223,8 +223,9 @@ def test_baseline_scene_tunes_mapping_detection_and_tracking_handoff_for_full_cl
     assert int(mapping['min_explore_samples']) >= 90
 
     handoff = baseline['autonomy']['tracking_handoff']
-    assert float(handoff['source_x']) >= 0.0
-    assert float(handoff['source_y']) <= -1.0
+    source = baseline['gas_source']
+    assert abs(float(handoff['source_x']) - float(source['x'])) <= 0.05
+    assert abs(float(handoff['source_y']) - float(source['y'])) <= 0.05
     assert float(handoff['source_threshold']) <= 1.1
     assert float(handoff['source_radius']) >= 2.0
     assert int(handoff['source_hold_steps']) == 1

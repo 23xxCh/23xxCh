@@ -68,8 +68,8 @@ autonomy:
     confirm_samples: 3
     min_explore_samples: 90
   tracking_handoff:
-    source_x: 0.9
-    source_y: -1.9
+    source_x: -4.0
+    source_y: 1.95
     enter_threshold: 1.0
     exit_threshold: 0.35
     source_threshold: 1.1
@@ -77,6 +77,8 @@ autonomy:
     track_exit_samples: 6
     source_radius: 2.0
     source_hold_steps: 1
+    track_step: 0.9
+    source_seed_max_distance: 8.0
   tracking_nav2_overrides:
     bt_loop_duration: 50
     required_movement_radius: 0.06
