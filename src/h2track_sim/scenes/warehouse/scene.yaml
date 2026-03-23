@@ -18,19 +18,19 @@ mission_manager:
     - 2.8
   - - 2.0
     - 2.8
-  - - 3.0
-    - 1.0
-  - - 3.4
-    - -2.2
-  - - 3.5
-    - -2.8
-  enter_threshold: 1.0
-  exit_threshold: 0.6
-  source_threshold: 4.5
+  - - 3.2
+    - 0.2
+  - - 3.55
+    - -1.8
+  - - 3.58
+    - -2.95
+  enter_threshold: 0.5
+  exit_threshold: 0.25
+  source_threshold: 1.6
   confirm_samples: 2
   source_radius: 1.0
   source_hold_steps: 2
-  track_step: 0.4
+  track_step: 0.35
   sweep_angle_deg: 30.0
 gas_source:
   x: 3.6

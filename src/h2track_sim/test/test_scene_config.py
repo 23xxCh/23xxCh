@@ -200,3 +200,31 @@ def test_warehouse_scene_declares_autonomy_startup_gates_for_launch_timing():
     assert startup['gaden_sensor_gate_timeout'] >= 30.0
     assert startup['gaden_sensor_gate_poll_period'] > 0.0
     assert startup['gaden_sensor_gate_stable_ready_count'] >= 2
+
+
+def test_warehouse_scene_patrol_path_and_thresholds_support_detection_then_tracking():
+    pkg_share = str(Path(__file__).resolve().parents[1])
+    loader = _scene_loader_module()
+    warehouse = loader.load_scene_profile(pkg_share, 'warehouse')
+    mission = warehouse['mission_manager']
+    source = warehouse['gas_source']
+
+    patrol_points = mission['patrol_points']
+    assert len(patrol_points) >= 5
+
+    def _distance(a, b):
+        dx = float(a[0]) - float(b[0])
+        dy = float(a[1]) - float(b[1])
+        return (dx * dx + dy * dy) ** 0.5
+
+    src_xy = (float(source['x']), float(source['y']))
+    assert _distance(patrol_points[0], src_xy) > 4.0
+    assert _distance(patrol_points[1], src_xy) > 3.5
+    assert _distance(patrol_points[-1], src_xy) < 0.4
+
+    enter_threshold = float(mission['enter_threshold'])
+    source_threshold = float(mission['source_threshold'])
+    exit_threshold = float(mission['exit_threshold'])
+    assert 0.3 <= enter_threshold <= 0.8
+    assert source_threshold > enter_threshold
+    assert exit_threshold < enter_threshold

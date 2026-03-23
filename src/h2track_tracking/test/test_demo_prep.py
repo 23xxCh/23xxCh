@@ -17,6 +17,7 @@ user       10004    1282  0 00:00 ?        00:00:00 /opt/ros/humble/lib/nav2_lif
 user       10005    1282  0 00:00 ?        00:00:00 /home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/nav2_startup_gate_node --ros-args -r __node:=nav2_startup_gate_node
 user       10006    1282  0 00:00 ?        00:00:00 /home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/gaden_sensor_gate_node --ros-args -r __node:=gaden_sensor_gate_node
 user       10007    1282  0 00:00 ?        00:00:00 /home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/mission_manager_node --ros-args -r __node:=mission_manager_node
+user       10008    1282  0 00:00 ?        00:00:00 /opt/ros/humble/lib/nav2_planner/planner_server --ros-args --log-level info --ros-args -r __node:=planner_server --params-file /tmp/launch_params_abc
 """
 
 
@@ -29,6 +30,7 @@ def test_matches_only_h2track_demo_processes():
         MatchedProcess(pid=10005, kind="nav2_startup_gate", command="/home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/nav2_startup_gate_node --ros-args -r __node:=nav2_startup_gate_node"),
         MatchedProcess(pid=10006, kind="gaden_sensor_gate", command="/home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/gaden_sensor_gate_node --ros-args -r __node:=gaden_sensor_gate_node"),
         MatchedProcess(pid=10007, kind="h2track_node", command="/home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/mission_manager_node --ros-args -r __node:=mission_manager_node"),
+        MatchedProcess(pid=10008, kind="nav2_runtime_node", command="/opt/ros/humble/lib/nav2_planner/planner_server --ros-args --log-level info --ros-args -r __node:=planner_server --params-file /tmp/launch_params_abc"),
     ]
 
 

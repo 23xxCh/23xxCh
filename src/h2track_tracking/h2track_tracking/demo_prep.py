@@ -66,6 +66,9 @@ def find_stale_processes(ps_output: str, demo_world_path: Path = BASELINE_WORLD_
         if _is_h2track_nav2_lifecycle_process(command):
             matches.append(MatchedProcess(pid=pid, kind="nav2_lifecycle_manager", command=command))
             continue
+        if _is_h2track_nav2_runtime_process(command):
+            matches.append(MatchedProcess(pid=pid, kind="nav2_runtime_node", command=command))
+            continue
         if _is_h2track_nav2_startup_gate_process(command):
             matches.append(MatchedProcess(pid=pid, kind="nav2_startup_gate", command=command))
             continue
@@ -258,6 +261,20 @@ def _is_h2track_gazebo_process(command: str, demo_world_path: Path) -> bool:
 
 def _is_h2track_nav2_lifecycle_process(command: str) -> bool:
     return "nav2_lifecycle_manager/lifecycle_manager" in command and "__node:=lifecycle_manager_navigation" in command
+
+
+def _is_h2track_nav2_runtime_process(command: str) -> bool:
+    nav2_nodes = (
+        ("nav2_amcl/amcl", "__node:=amcl"),
+        ("nav2_controller/controller_server", "__node:=controller_server"),
+        ("nav2_planner/planner_server", "__node:=planner_server"),
+        ("nav2_bt_navigator/bt_navigator", "__node:=bt_navigator"),
+        ("nav2_behaviors/behavior_server", "__node:=behavior_server"),
+        ("nav2_smoother/smoother_server", "__node:=smoother_server"),
+        ("nav2_map_server/map_server", "__node:=map_server"),
+        ("nav2_waypoint_follower/waypoint_follower", "__node:=waypoint_follower"),
+    )
+    return any(binary in command and node_name in command for binary, node_name in nav2_nodes)
 
 
 def _is_h2track_nav2_startup_gate_process(command: str) -> bool:
