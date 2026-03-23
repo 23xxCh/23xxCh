@@ -21,11 +21,11 @@ mission_manager:
     - 2.45
   enter_threshold: 1.5
   exit_threshold: 0.6
-  source_threshold: 4.5
+  source_threshold: 2.0
   confirm_samples: 2
   track_exit_samples: 3
-  source_radius: 1.0
-  source_hold_steps: 2
+  source_radius: 1.2
+  source_hold_steps: 1
   track_step: 0.4
   sweep_angle_deg: 30.0
 gas_source:
@@ -39,7 +39,7 @@ gaden:
   sensor_topic: /gaden/sensor_reading
   sensor_frame: base_link
   fixed_frame: gaden_map
-  map_offset_x: 2.5
+  map_offset_x: 5.0
   map_offset_y: 5.3
   map_offset_z: 0.0
   map_roll: 0.0
@@ -63,25 +63,25 @@ autonomy:
     gaden_sensor_gate_poll_period: 0.5
     gaden_sensor_gate_stable_ready_count: 3
   mapping_detection:
-    enter_threshold: 0.45
-    exit_threshold: 0.2
-    confirm_samples: 2
-    min_explore_samples: 70
+    enter_threshold: 0.75
+    exit_threshold: 0.3
+    confirm_samples: 3
+    min_explore_samples: 90
   tracking_handoff:
-    source_x: -1.55
-    source_y: 3.1
+    source_x: 0.9
+    source_y: -1.9
     enter_threshold: 1.0
-    exit_threshold: 0.4
-    source_threshold: 1.8
+    exit_threshold: 0.35
+    source_threshold: 1.1
     confirm_samples: 2
-    track_exit_samples: 5
-    source_radius: 1.0
-    source_hold_steps: 2
+    track_exit_samples: 6
+    source_radius: 2.0
+    source_hold_steps: 1
   tracking_nav2_overrides:
     bt_loop_duration: 50
-    required_movement_radius: 0.1
-    movement_time_allowance: 30.0
-    desired_linear_vel: 0.16
+    required_movement_radius: 0.06
+    movement_time_allowance: 60.0
+    desired_linear_vel: 0.13
   exploration:
     frontier_min_cluster_size: 6
     min_goal_distance: 0.8

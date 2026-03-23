@@ -179,12 +179,12 @@ def test_demo_profile_balances_background_rejection_with_source_entry():
 
     assert 1.4 <= float(mission["enter_threshold"]) <= 2.0
     assert int(mission["confirm_samples"]) == 2
-    assert float(mission["source_threshold"]) >= 4.5
+    assert float(mission["source_threshold"]) <= 2.2
     assert float(mission["source_threshold"]) > float(mission["enter_threshold"])
     assert 0.6 <= float(mission["exit_threshold"]) < float(mission["enter_threshold"])
     assert float(mission["track_step"]) <= 0.5
     assert float(mission["source_radius"]) >= 1.0
-    assert int(mission["source_hold_steps"]) == 2
+    assert int(mission["source_hold_steps"]) == 1
 
 
 

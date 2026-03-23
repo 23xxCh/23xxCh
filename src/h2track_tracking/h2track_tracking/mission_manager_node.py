@@ -53,6 +53,10 @@ def select_tracking_target(
         )
 
     if history:
+        latest_concentration = history[-1][1]
+        if latest_concentration >= source_threshold:
+            return step_toward_model_source()
+
         strongest_index, (strongest_pose, strongest_concentration) = max(
             enumerate(history),
             key=lambda sample: sample[1][1],

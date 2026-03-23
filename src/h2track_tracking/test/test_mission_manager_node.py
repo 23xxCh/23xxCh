@@ -298,7 +298,28 @@ def test_select_tracking_target_continues_search_when_current_pose_is_already_th
     )
 
     assert target != current_pose
-    assert target.y < current_pose.y - 0.2
+    assert target.x < current_pose.x - 0.2
+    assert target.y > current_pose.y + 0.05
+
+
+def test_select_tracking_target_biases_directly_toward_source_when_latest_sample_crosses_threshold():
+    current_pose = Pose2D(-0.80, 2.20)
+    target = select_tracking_target(
+        gas_model=_make_tracking_model(),
+        current_pose=current_pose,
+        current_yaw=0.0,
+        history=[
+            (Pose2D(-0.65, 2.15), 3.2),
+            (current_pose, 5.1),
+        ],
+        step_size=0.4,
+        sweep_angle=math.pi / 6.0,
+        source_threshold=4.5,
+    )
+
+    assert target != current_pose
+    assert target.x < current_pose.x
+    assert target.y < current_pose.y
 
 
 def test_select_tracking_target_continues_search_below_source_threshold():

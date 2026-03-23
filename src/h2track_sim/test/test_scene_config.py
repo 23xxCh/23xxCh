@@ -200,6 +200,67 @@ def test_baseline_scene_declares_tracking_nav2_overrides_for_handoff_stability()
     assert float(overrides['desired_linear_vel']) <= 0.2
 
 
+def test_baseline_scene_uses_conservative_tracking_nav2_progress_checker():
+    pkg_share = str(Path(__file__).resolve().parents[1])
+    loader = _scene_loader_module()
+    baseline = loader.load_scene_profile(pkg_share, 'baseline')
+
+    overrides = baseline['autonomy']['tracking_nav2_overrides']
+    assert float(overrides['required_movement_radius']) <= 0.08
+    assert float(overrides['movement_time_allowance']) >= 45.0
+    assert float(overrides['desired_linear_vel']) <= 0.14
+
+
+def test_baseline_scene_tunes_mapping_detection_and_tracking_handoff_for_full_closure():
+    pkg_share = str(Path(__file__).resolve().parents[1])
+    loader = _scene_loader_module()
+    baseline = loader.load_scene_profile(pkg_share, 'baseline')
+
+    mapping = baseline['autonomy']['mapping_detection']
+    assert float(mapping['enter_threshold']) >= 0.7
+    assert float(mapping['exit_threshold']) <= 0.35
+    assert int(mapping['confirm_samples']) >= 3
+    assert int(mapping['min_explore_samples']) >= 90
+
+    handoff = baseline['autonomy']['tracking_handoff']
+    assert float(handoff['source_x']) >= 0.0
+    assert float(handoff['source_y']) <= -1.0
+    assert float(handoff['source_threshold']) <= 1.1
+    assert float(handoff['source_radius']) >= 2.0
+    assert int(handoff['source_hold_steps']) == 1
+    assert int(handoff['track_exit_samples']) >= int(handoff['confirm_samples']) + 2
+
+
+def test_baseline_scene_mission_thresholds_allow_source_convergence_in_simple_field():
+    pkg_share = str(Path(__file__).resolve().parents[1])
+    loader = _scene_loader_module()
+    baseline = loader.load_scene_profile(pkg_share, 'baseline')
+
+    mission = baseline['mission_manager']
+    assert float(mission['enter_threshold']) <= 1.5
+    assert float(mission['source_threshold']) <= 2.2
+    assert float(mission['source_radius']) >= 1.0
+    assert int(mission['source_hold_steps']) == 1
+
+
+def test_baseline_scene_gaden_offset_keeps_patrol_points_inside_environment():
+    pkg_share = str(Path(__file__).resolve().parents[1])
+    loader = _scene_loader_module()
+    baseline = loader.load_scene_profile(pkg_share, 'baseline')
+
+    mission = baseline['mission_manager']
+    gaden = baseline['gaden']
+
+    # Exp_C occupancy is defined in [0, 10] x [0, 10].
+    offset_x = float(gaden['map_offset_x'])
+    offset_y = float(gaden['map_offset_y'])
+    for x, y in mission['patrol_points']:
+        gx = float(x) + offset_x
+        gy = float(y) + offset_y
+        assert 0.0 <= gx <= 10.0
+        assert 0.0 <= gy <= 10.0
+
+
 def test_warehouse_scene_declares_autonomy_startup_gates_for_launch_timing():
     pkg_share = str(Path(__file__).resolve().parents[1])
     loader = _scene_loader_module()
