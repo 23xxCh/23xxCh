@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 import subprocess
 
+from lifecycle_msgs.msg import State
+from lifecycle_msgs.srv import GetState
 from nav_msgs.msg import OccupancyGrid
 import rclpy
 from nav2_msgs.srv import ManageLifecycleNodes, SaveMap
@@ -45,6 +47,20 @@ def freeze_gate_ready(
     if first_valid_map_time_sec is None:
         return False
     return (now_sec - first_valid_map_time_sec) >= min_map_age_sec
+
+
+def lifecycle_state_is_active(state_id: int) -> bool:
+    return int(state_id) == int(State.PRIMARY_STATE_ACTIVE)
+
+
+def tracking_handoff_tf_ready(
+    transform_stamp_sec: float | None,
+    launch_started_sec: float | None,
+    staleness_tolerance_sec: float,
+) -> bool:
+    if transform_stamp_sec is None or launch_started_sec is None:
+        return False
+    return transform_stamp_sec >= (launch_started_sec - max(0.0, staleness_tolerance_sec))
 
 
 def resolve_tracking_source_point(
@@ -167,6 +183,8 @@ class TransitionManagerNode(Node):
         self.declare_parameter("tracking_launch_file", "tracking_localization.launch.py")
         self.declare_parameter("tracking_disable_fastdds_shm", True)
         self.declare_parameter("tracking_launch_healthcheck_sec", 5.0)
+        self.declare_parameter("tracking_handoff_wait_log_interval_sec", 2.0)
+        self.declare_parameter("tracking_handoff_tf_staleness_tolerance_sec", 0.5)
         self.declare_parameter("tracking_source_seed_max_distance", 2.0)
         self.declare_parameter("tracking_source_snap_max_cells", 25)
         self.declare_parameter("tracking_source_from_peak", False)
@@ -180,6 +198,12 @@ class TransitionManagerNode(Node):
         self._tracking_launch_file = str(self.get_parameter("tracking_launch_file").value)
         self._tracking_launch_healthcheck_sec = float(
             self.get_parameter("tracking_launch_healthcheck_sec").value
+        )
+        self._tracking_handoff_wait_log_interval_sec = float(
+            self.get_parameter("tracking_handoff_wait_log_interval_sec").value
+        )
+        self._tracking_handoff_tf_staleness_tolerance_sec = float(
+            self.get_parameter("tracking_handoff_tf_staleness_tolerance_sec").value
         )
         self._tracking_source_seed_max_distance = float(
             self.get_parameter("tracking_source_seed_max_distance").value
@@ -204,6 +228,7 @@ class TransitionManagerNode(Node):
             ManageLifecycleNodes,
             lifecycle_service_name,
         )
+        self._tracking_amcl_state_client = self.create_client(GetState, "/amcl/get_state")
         self._map_frozen_pub = self.create_publisher(Bool, "/map_frozen", 10)
         self._tracking_handoff_complete_pub = self.create_publisher(
             Bool, "/tracking_handoff_complete", 10
@@ -223,8 +248,10 @@ class TransitionManagerNode(Node):
         self._current_map_path: Path | None = None
         self._tracking_process: subprocess.Popen[str] | None = None
         self._tracking_launch_started_sec: float | None = None
+        self._tracking_amcl_state_future = None
         self._tracking_handoff_announced = False
         self._tracking_handoff_failed = False
+        self._last_handoff_wait_log_sec = 0.0
         self._valid_map_samples = 0
         self._first_valid_map_time_sec: float | None = None
         self._last_freeze_wait_log_sec = 0.0
@@ -481,8 +508,10 @@ class TransitionManagerNode(Node):
             env["FASTDDS_BUILTIN_TRANSPORTS"] = "UDPv4"
         self._tracking_process = subprocess.Popen(launch_cmd, env=env)
         self._tracking_launch_started_sec = self.get_clock().now().nanoseconds / 1e9
+        self._tracking_amcl_state_future = None
         self._tracking_handoff_announced = False
         self._tracking_handoff_failed = False
+        self._last_handoff_wait_log_sec = 0.0
         self._tracking_handoff_complete_pub.publish(Bool(data=False))
         self._tracking_handoff_failed_pub.publish(Bool(data=False))
         self.get_logger().info(
@@ -490,6 +519,44 @@ class TransitionManagerNode(Node):
             f"{self._current_map_path} and source target ({actual_source_xy[0]:.3f}, {actual_source_xy[1]:.3f}) "
             f"with tracking model seed ({model_source_xy[0]:.3f}, {model_source_xy[1]:.3f})"
         )
+
+    def _log_handoff_wait(self, now_sec: float, reason: str) -> None:
+        if (now_sec - self._last_handoff_wait_log_sec) < self._tracking_handoff_wait_log_interval_sec:
+            return
+        self.get_logger().info(f"Tracking handoff waiting: {reason}")
+        self._last_handoff_wait_log_sec = now_sec
+
+    def _poll_tracking_amcl_active(self) -> bool:
+        if self._tracking_amcl_state_future is None:
+            self._tracking_amcl_state_future = self._tracking_amcl_state_client.call_async(GetState.Request())
+            return False
+        if not self._tracking_amcl_state_future.done():
+            return False
+
+        try:
+            response = self._tracking_amcl_state_future.result()
+        except Exception:
+            self._tracking_amcl_state_future = None
+            return False
+
+        self._tracking_amcl_state_future = None
+        if response is None:
+            return False
+        return lifecycle_state_is_active(response.current_state.id)
+
+    def _lookup_map_to_base_link_stamp_sec(self) -> float | None:
+        try:
+            transform = self._tf_buffer.lookup_transform(
+                "map",
+                "base_link",
+                Time(),
+                timeout=Duration(seconds=0.2),
+            )
+        except TransformException:
+            return None
+
+        stamp = transform.header.stamp
+        return float(stamp.sec) + float(stamp.nanosec) / 1e9
 
     def _poll_tracking_handoff(self) -> None:
         if self._tracking_process is None or self._tracking_launch_started_sec is None:
@@ -511,6 +578,23 @@ class TransitionManagerNode(Node):
 
         now_sec = self.get_clock().now().nanoseconds / 1e9
         if (now_sec - self._tracking_launch_started_sec) < self._tracking_launch_healthcheck_sec:
+            return
+
+        if not self._tracking_amcl_state_client.wait_for_service(timeout_sec=0.0):
+            self._log_handoff_wait(now_sec, "amcl/get_state service unavailable")
+            return
+
+        if not self._poll_tracking_amcl_active():
+            self._log_handoff_wait(now_sec, "amcl lifecycle state is not ACTIVE yet")
+            return
+
+        transform_stamp_sec = self._lookup_map_to_base_link_stamp_sec()
+        if not tracking_handoff_tf_ready(
+            transform_stamp_sec,
+            self._tracking_launch_started_sec,
+            self._tracking_handoff_tf_staleness_tolerance_sec,
+        ):
+            self._log_handoff_wait(now_sec, "fresh map->base_link TF not ready yet")
             return
 
         self._tracking_handoff_announced = True

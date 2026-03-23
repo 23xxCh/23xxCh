@@ -1,10 +1,13 @@
 import math
 
+from lifecycle_msgs.msg import State
 from nav_msgs.msg import OccupancyGrid
 
 from h2track_tracking.transition_manager_node import (
     clamp_tracking_source_seed,
+    lifecycle_state_is_active,
     snap_tracking_source_to_free_space,
+    tracking_handoff_tf_ready,
 )
 
 
@@ -90,3 +93,15 @@ def test_snap_tracking_source_to_free_space_falls_back_to_original_when_no_free_
     source = (2.5, 2.5)
     snapped = snap_tracking_source_to_free_space(source, grid, max_search_cells=3)
     assert snapped == source
+
+
+def test_lifecycle_state_is_active_matches_ros_active_state_id():
+    assert lifecycle_state_is_active(State.PRIMARY_STATE_ACTIVE)
+    assert not lifecycle_state_is_active(State.PRIMARY_STATE_INACTIVE)
+
+
+def test_tracking_handoff_tf_ready_requires_fresh_transform_stamp():
+    assert not tracking_handoff_tf_ready(None, 10.0, staleness_tolerance_sec=0.5)
+    assert not tracking_handoff_tf_ready(9.0, 10.0, staleness_tolerance_sec=0.5)
+    assert tracking_handoff_tf_ready(9.6, 10.0, staleness_tolerance_sec=0.5)
+    assert tracking_handoff_tf_ready(10.1, 10.0, staleness_tolerance_sec=0.5)

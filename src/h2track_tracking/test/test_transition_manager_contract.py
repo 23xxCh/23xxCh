@@ -182,3 +182,18 @@ def test_transition_manager_publishes_tracking_handoff_completion_and_failure_si
     assert "/tracking_handoff_failed" in source
     assert "Tracking handoff complete" in source
     assert "Tracking handoff failed" in source
+
+
+def test_transition_manager_waits_for_amcl_active_and_fresh_tf_before_handoff_complete():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "h2track_tracking"
+        / "transition_manager_node.py"
+    ).read_text(encoding="utf-8")
+
+    assert "GetState" in source
+    assert "/amcl/get_state" in source
+    assert "lifecycle_state_is_active" in source
+    assert "PRIMARY_STATE_ACTIVE" in source
+    assert "tracking_handoff_tf_staleness_tolerance_sec" in source
+    assert "tracking_handoff_tf_ready" in source
