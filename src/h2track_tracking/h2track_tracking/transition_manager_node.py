@@ -179,6 +179,25 @@ class TransitionManagerNode(Node):
             stderr=subprocess.DEVNULL,
         )
 
+    def _stop_primary_navigation_processes(self) -> None:
+        process_patterns = (
+            "/nav2_controller/controller_server",
+            "/nav2_smoother/smoother_server",
+            "/nav2_planner/planner_server",
+            "/nav2_behaviors/behavior_server",
+            "/nav2_bt_navigator/bt_navigator",
+            "/nav2_waypoint_follower/waypoint_follower",
+            "/nav2_velocity_smoother/velocity_smoother",
+            "__node:=lifecycle_manager_navigation",
+        )
+        for pattern in process_patterns:
+            subprocess.run(
+                ["pkill", "-f", pattern],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
     def _lookup_map_to_odom_transform(self) -> tuple[tuple[float, float], float] | None:
         try:
             transform = self._tf_buffer.lookup_transform(
@@ -234,6 +253,7 @@ class TransitionManagerNode(Node):
             if self._pending_tracking_pose is None or self._pending_tracking_source is None:
                 self.get_logger().error("Tracking handoff data missing after navigation shutdown")
             else:
+                self._stop_primary_navigation_processes()
                 self._stop_slam_toolbox()
                 self._launch_tracking_localization(
                     self._pending_tracking_pose,

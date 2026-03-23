@@ -56,6 +56,30 @@ def test_transition_manager_shuts_down_navigation_stack_before_tracking_handoff(
     assert "SHUTDOWN" in source
 
 
+def test_transition_manager_terminates_primary_navigation_processes_before_tracking_handoff():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "h2track_tracking"
+        / "transition_manager_node.py"
+    ).read_text(encoding="utf-8")
+
+    assert "_stop_primary_navigation_processes" in source
+    assert "controller_server" in source
+    assert "planner_server" in source
+    assert "behavior_server" in source
+    assert "bt_navigator" in source
+    assert "waypoint_follower" in source
+    assert "velocity_smoother" in source
+    assert "lifecycle_manager_navigation" in source
+    assert "/nav2_controller/controller_server" in source
+    assert "/nav2_smoother/smoother_server" in source
+    assert "/nav2_planner/planner_server" in source
+    assert "/nav2_behaviors/behavior_server" in source
+    assert "/nav2_bt_navigator/bt_navigator" in source
+    assert "/nav2_waypoint_follower/waypoint_follower" in source
+    assert "/nav2_velocity_smoother/velocity_smoother" in source
+
+
 def test_transition_manager_forwards_tracking_handoff_overrides_to_tracking_launch():
     source = (
         Path(__file__).resolve().parents[1]

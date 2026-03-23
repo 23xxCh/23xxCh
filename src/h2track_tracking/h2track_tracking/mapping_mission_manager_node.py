@@ -13,11 +13,13 @@ class MappingMissionManagerNode(Node):
         self.declare_parameter("enter_threshold", 1.5)
         self.declare_parameter("exit_threshold", 0.6)
         self.declare_parameter("confirm_samples", 2)
+        self.declare_parameter("min_explore_samples", 0)
 
         config = ExplorationMissionConfig(
             enter_threshold=float(self.get_parameter("enter_threshold").value),
             exit_threshold=float(self.get_parameter("exit_threshold").value),
             confirm_samples=int(self.get_parameter("confirm_samples").value),
+            min_explore_samples=int(self.get_parameter("min_explore_samples").value),
         )
         self._machine = ExplorationMissionStateMachine(config)
         self._freeze_requested = False

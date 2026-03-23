@@ -73,6 +73,7 @@ def _scene_defaults(context):
     enter_threshold = LaunchConfiguration('enter_threshold')
     exit_threshold = LaunchConfiguration('exit_threshold')
     confirm_samples = LaunchConfiguration('confirm_samples')
+    min_explore_samples = LaunchConfiguration('min_explore_samples')
 
     scene_name = scene.perform(context)
     scene_profile = load_scene_profile(pkg_share, scene_name)
@@ -136,6 +137,7 @@ def _scene_defaults(context):
     default_enter_threshold = mapping_detection.get('enter_threshold', mission['enter_threshold'])
     default_exit_threshold = mapping_detection.get('exit_threshold', mission['exit_threshold'])
     default_confirm_samples = mapping_detection.get('confirm_samples', mission['confirm_samples'])
+    default_min_explore_samples = mapping_detection.get('min_explore_samples', 0)
     default_tracking_source_x = tracking_handoff.get('source_x', gas_source.get('x', -4.0))
     default_tracking_source_y = tracking_handoff.get('source_y', gas_source.get('y', 1.95))
     default_tracking_enter = tracking_handoff.get('enter_threshold', mission['enter_threshold'])
@@ -210,6 +212,10 @@ def _scene_defaults(context):
         SetLaunchConfiguration('enter_threshold', enter_threshold.perform(context).strip() or str(default_enter_threshold)),
         SetLaunchConfiguration('exit_threshold', exit_threshold.perform(context).strip() or str(default_exit_threshold)),
         SetLaunchConfiguration('confirm_samples', confirm_samples.perform(context).strip() or str(default_confirm_samples)),
+        SetLaunchConfiguration(
+            'min_explore_samples',
+            min_explore_samples.perform(context).strip() or str(default_min_explore_samples),
+        ),
     ]
 
 
@@ -242,6 +248,7 @@ def generate_launch_description():
     enter_threshold = LaunchConfiguration('enter_threshold')
     exit_threshold = LaunchConfiguration('exit_threshold')
     confirm_samples = LaunchConfiguration('confirm_samples')
+    min_explore_samples = LaunchConfiguration('min_explore_samples')
     gas_source_strength = LaunchConfiguration('gas_source_strength')
     gas_decay_rate = LaunchConfiguration('gas_decay_rate')
     gas_plume_stddev = LaunchConfiguration('gas_plume_stddev')
@@ -288,6 +295,7 @@ def generate_launch_description():
     declare_enter_threshold = DeclareLaunchArgument('enter_threshold', default_value='')
     declare_exit_threshold = DeclareLaunchArgument('exit_threshold', default_value='')
     declare_confirm_samples = DeclareLaunchArgument('confirm_samples', default_value='')
+    declare_min_explore_samples = DeclareLaunchArgument('min_explore_samples', default_value='')
     declare_gas_source_strength = DeclareLaunchArgument('gas_source_strength', default_value='')
     declare_gas_decay_rate = DeclareLaunchArgument('gas_decay_rate', default_value='')
     declare_gas_plume_stddev = DeclareLaunchArgument('gas_plume_stddev', default_value='')
@@ -485,6 +493,7 @@ def generate_launch_description():
                 'enter_threshold': enter_threshold,
                 'exit_threshold': exit_threshold,
                 'confirm_samples': confirm_samples,
+                'min_explore_samples': min_explore_samples,
             },
         ],
     )
@@ -547,6 +556,7 @@ def generate_launch_description():
         declare_enter_threshold,
         declare_exit_threshold,
         declare_confirm_samples,
+        declare_min_explore_samples,
         declare_gas_source_strength,
         declare_gas_decay_rate,
         declare_gas_plume_stddev,

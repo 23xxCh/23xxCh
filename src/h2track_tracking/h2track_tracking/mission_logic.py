@@ -35,6 +35,7 @@ class ExplorationMissionConfig:
     enter_threshold: float
     exit_threshold: float
     confirm_samples: int
+    min_explore_samples: int = 0
 
 
 class ExplorationMissionStateMachine:
@@ -42,14 +43,18 @@ class ExplorationMissionStateMachine:
         self.config = config
         self.mode = MissionMode.EXPLORE_MAPPING
         self._recent_concentrations: deque[float] = deque(maxlen=max(1, config.confirm_samples))
+        self._total_samples = 0
 
     def update(self, concentration: float) -> MissionMode:
+        self._total_samples += 1
         self._recent_concentrations.append(concentration)
         recent_count = len(self._recent_concentrations)
         recent_values = list(self._recent_concentrations)
 
         if self.mode is MissionMode.EXPLORE_MAPPING:
             if (
+                self._total_samples >= max(0, self.config.min_explore_samples)
+                and
                 recent_count == self.config.confirm_samples
                 and min(recent_values) >= self.config.enter_threshold
             ):

@@ -288,6 +288,13 @@ def test_autonomy_launch_honors_explicit_gas_confirm_threshold_overrides():
     assert "confirm_samples.perform(context).strip() or str(" in text
 
 
+def test_autonomy_launch_routes_min_explore_samples_to_mapping_mission_manager():
+    text = _launch_text("autonomy.launch.py")
+    assert "DeclareLaunchArgument('min_explore_samples'" in text or 'DeclareLaunchArgument("min_explore_samples"' in text
+    assert "mapping_detection.get('min_explore_samples'" in text or 'mapping_detection.get("min_explore_samples"' in text
+    assert "'min_explore_samples': min_explore_samples" in text or '"min_explore_samples": min_explore_samples' in text
+
+
 def test_autonomy_launch_declares_tracking_handoff_overrides_once():
     text = _launch_text("autonomy.launch.py")
     assert text.count("LaunchConfiguration('tracking_source_x')") == 2

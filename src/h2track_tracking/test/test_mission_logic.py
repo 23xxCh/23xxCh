@@ -269,6 +269,25 @@ def test_explore_mapping_switches_to_confirm_after_sustained_detection():
     assert machine.mode is MissionMode.GAS_CONFIRM
 
 
+def test_explore_mapping_respects_min_explore_samples_before_confirming_gas():
+    machine = ExplorationMissionStateMachine(
+        ExplorationMissionConfig(
+            enter_threshold=1.2,
+            exit_threshold=0.5,
+            confirm_samples=2,
+            min_explore_samples=4,
+        )
+    )
+
+    machine.update(1.3)
+    machine.update(1.4)
+    machine.update(1.5)
+    assert machine.mode is MissionMode.EXPLORE_MAPPING
+
+    machine.update(1.6)
+    assert machine.mode is MissionMode.GAS_CONFIRM
+
+
 def test_gas_confirm_returns_to_explore_after_sustained_collapse():
     machine = ExplorationMissionStateMachine(
         ExplorationMissionConfig(

@@ -173,5 +173,7 @@ def test_baseline_scene_declares_autonomy_config_for_slam_exploration():
     assert 'autonomy' in baseline
     assert baseline['autonomy']['slam_nav2_params'].endswith('config/nav2_slam_baseline_params.yaml')
     assert 'exploration' in baseline['autonomy']
+    assert 'mapping_detection' in baseline['autonomy']
+    assert baseline['autonomy']['mapping_detection']['min_explore_samples'] > 0
     assert baseline['autonomy']['exploration']['frontier_min_cluster_size'] >= 4
     assert baseline['autonomy']['exploration']['min_goal_distance'] > 0.0
