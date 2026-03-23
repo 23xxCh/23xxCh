@@ -46,6 +46,7 @@ def _scene_defaults(context):
     tracking_exit_threshold = LaunchConfiguration('tracking_exit_threshold')
     tracking_source_threshold = LaunchConfiguration('tracking_source_threshold')
     tracking_confirm_samples = LaunchConfiguration('tracking_confirm_samples')
+    tracking_track_exit_samples = LaunchConfiguration('tracking_track_exit_samples')
     tracking_source_radius = LaunchConfiguration('tracking_source_radius')
     tracking_source_hold_steps = LaunchConfiguration('tracking_source_hold_steps')
     gas_source_strength = LaunchConfiguration('gas_source_strength')
@@ -144,6 +145,10 @@ def _scene_defaults(context):
     default_tracking_exit = tracking_handoff.get('exit_threshold', mission['exit_threshold'])
     default_tracking_source = tracking_handoff.get('source_threshold', mission['source_threshold'])
     default_tracking_confirm = tracking_handoff.get('confirm_samples', mission['confirm_samples'])
+    default_tracking_track_exit = tracking_handoff.get(
+        'track_exit_samples',
+        mission.get('track_exit_samples', mission['confirm_samples']),
+    )
     default_tracking_radius = tracking_handoff.get('source_radius', mission['source_radius'])
     default_tracking_hold_steps = tracking_handoff.get('source_hold_steps', mission['source_hold_steps'])
     return [
@@ -178,6 +183,10 @@ def _scene_defaults(context):
         SetLaunchConfiguration(
             'tracking_confirm_samples',
             tracking_confirm_samples.perform(context).strip() or str(default_tracking_confirm),
+        ),
+        SetLaunchConfiguration(
+            'tracking_track_exit_samples',
+            tracking_track_exit_samples.perform(context).strip() or str(default_tracking_track_exit),
         ),
         SetLaunchConfiguration(
             'tracking_source_radius',
@@ -239,6 +248,7 @@ def generate_launch_description():
     tracking_exit_threshold = LaunchConfiguration('tracking_exit_threshold')
     tracking_source_threshold = LaunchConfiguration('tracking_source_threshold')
     tracking_confirm_samples = LaunchConfiguration('tracking_confirm_samples')
+    tracking_track_exit_samples = LaunchConfiguration('tracking_track_exit_samples')
     tracking_source_radius = LaunchConfiguration('tracking_source_radius')
     tracking_source_hold_steps = LaunchConfiguration('tracking_source_hold_steps')
     use_gaden = LaunchConfiguration('use_gaden')
@@ -286,6 +296,7 @@ def generate_launch_description():
     declare_tracking_exit_threshold = DeclareLaunchArgument('tracking_exit_threshold', default_value='')
     declare_tracking_source_threshold = DeclareLaunchArgument('tracking_source_threshold', default_value='')
     declare_tracking_confirm_samples = DeclareLaunchArgument('tracking_confirm_samples', default_value='')
+    declare_tracking_track_exit_samples = DeclareLaunchArgument('tracking_track_exit_samples', default_value='')
     declare_tracking_source_radius = DeclareLaunchArgument('tracking_source_radius', default_value='')
     declare_tracking_source_hold_steps = DeclareLaunchArgument('tracking_source_hold_steps', default_value='')
     declare_use_gaden = DeclareLaunchArgument('use_gaden', default_value='')
@@ -513,6 +524,7 @@ def generate_launch_description():
                 'tracking_exit_threshold': tracking_exit_threshold,
                 'tracking_source_threshold': tracking_source_threshold,
                 'tracking_confirm_samples': tracking_confirm_samples,
+                'tracking_track_exit_samples': tracking_track_exit_samples,
                 'tracking_source_radius': tracking_source_radius,
                 'tracking_source_hold_steps': tracking_source_hold_steps,
             },
@@ -547,6 +559,7 @@ def generate_launch_description():
         declare_tracking_exit_threshold,
         declare_tracking_source_threshold,
         declare_tracking_confirm_samples,
+        declare_tracking_track_exit_samples,
         declare_tracking_source_radius,
         declare_tracking_source_hold_steps,
         declare_use_gaden,

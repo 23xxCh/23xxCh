@@ -71,6 +71,7 @@ class TransitionManagerNode(Node):
         self.declare_parameter("tracking_exit_threshold", -1.0)
         self.declare_parameter("tracking_source_threshold", -1.0)
         self.declare_parameter("tracking_confirm_samples", -1)
+        self.declare_parameter("tracking_track_exit_samples", -1)
         self.declare_parameter("tracking_source_radius", -1.0)
         self.declare_parameter("tracking_source_hold_steps", -1)
         self.declare_parameter("save_map_service", "/map_saver_server/save_map")
@@ -302,6 +303,7 @@ class TransitionManagerNode(Node):
         tracking_exit_threshold = float(self.get_parameter("tracking_exit_threshold").value)
         tracking_source_threshold = float(self.get_parameter("tracking_source_threshold").value)
         tracking_confirm_samples = int(self.get_parameter("tracking_confirm_samples").value)
+        tracking_track_exit_samples = int(self.get_parameter("tracking_track_exit_samples").value)
         tracking_source_radius = float(self.get_parameter("tracking_source_radius").value)
         tracking_source_hold_steps = int(self.get_parameter("tracking_source_hold_steps").value)
 
@@ -313,6 +315,8 @@ class TransitionManagerNode(Node):
             launch_cmd.append(f"source_threshold:={tracking_source_threshold}")
         if tracking_confirm_samples > 0:
             launch_cmd.append(f"confirm_samples:={tracking_confirm_samples}")
+        if tracking_track_exit_samples > 0:
+            launch_cmd.append(f"track_exit_samples:={tracking_track_exit_samples}")
         if tracking_source_radius > 0.0:
             launch_cmd.append(f"source_radius:={tracking_source_radius}")
         if tracking_source_hold_steps > 0:

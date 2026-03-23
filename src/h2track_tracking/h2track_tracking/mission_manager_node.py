@@ -98,6 +98,7 @@ class MissionManagerNode(Node):
         self.declare_parameter("exit_threshold", 1.5)
         self.declare_parameter("source_threshold", 8.0)
         self.declare_parameter("confirm_samples", 3)
+        self.declare_parameter("track_exit_samples", 3)
         self.declare_parameter("source_radius", 0.6)
         self.declare_parameter("source_hold_steps", 3)
         self.declare_parameter("track_step", 0.7)
@@ -112,6 +113,7 @@ class MissionManagerNode(Node):
             exit_threshold=float(self.get_parameter("exit_threshold").value),
             source_threshold=float(self.get_parameter("source_threshold").value),
             confirm_samples=int(self.get_parameter("confirm_samples").value),
+            track_exit_samples=int(self.get_parameter("track_exit_samples").value),
             source_radius=float(self.get_parameter("source_radius").value),
             source_hold_steps=int(self.get_parameter("source_hold_steps").value),
             actual_source=(

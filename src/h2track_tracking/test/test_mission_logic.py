@@ -104,6 +104,34 @@ def test_tracking_requires_sustained_collapse_before_returning_to_patrol():
     assert machine.mode is MissionMode.PATROL
 
 
+def test_tracking_uses_track_exit_samples_for_patrol_fallback():
+    machine = MissionStateMachine(
+        MissionConfig(
+            patrol_points=[(1.0, 1.0)],
+            enter_threshold=3.0,
+            exit_threshold=1.5,
+            source_threshold=8.0,
+            confirm_samples=2,
+            track_exit_samples=4,
+            source_radius=0.5,
+            source_hold_steps=3,
+        )
+    )
+
+    machine.update(3.2, (0.0, 0.0), False)
+    machine.update(3.5, (0.0, 0.0), False)
+    machine.update(5.0, (0.3, 0.3), False)
+    assert machine.mode is MissionMode.SEEK_TRACK
+
+    machine.update(1.0, (0.3, 0.3), False)
+    machine.update(0.9, (0.3, 0.3), False)
+    machine.update(0.8, (0.3, 0.3), False)
+    assert machine.mode is MissionMode.SEEK_TRACK
+
+    machine.update(0.7, (0.3, 0.3), False)
+    assert machine.mode is MissionMode.PATROL
+
+
 def test_source_found_requires_positions_to_stay_within_radius():
     machine = MissionStateMachine(
         MissionConfig(

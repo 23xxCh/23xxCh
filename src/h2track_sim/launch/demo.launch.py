@@ -66,6 +66,7 @@ def _scene_actions(context, *, pkg_share: str, bringup_path: str, default_use_ga
         SetLaunchConfiguration('exit_threshold', str(mission['exit_threshold'])),
         SetLaunchConfiguration('source_threshold', str(mission['source_threshold'])),
         SetLaunchConfiguration('confirm_samples', str(mission['confirm_samples'])),
+        SetLaunchConfiguration('track_exit_samples', str(mission.get('track_exit_samples', mission['confirm_samples']))),
         SetLaunchConfiguration('source_radius', str(mission['source_radius'])),
         SetLaunchConfiguration('source_hold_steps', str(mission['source_hold_steps'])),
         SetLaunchConfiguration('track_step', str(mission['track_step'])),

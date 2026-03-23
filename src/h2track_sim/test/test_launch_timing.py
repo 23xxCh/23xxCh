@@ -155,6 +155,12 @@ def test_bringup_launch_exposes_nav2_startup_retry_limit_argument():
     assert '"startup_retry_limit": nav2_startup_gate_retry_limit' in text
 
 
+def test_bringup_launch_exposes_track_exit_samples_argument():
+    text = _launch_text("bringup.launch.py")
+    assert 'DeclareLaunchArgument("track_exit_samples"' in text
+    assert '"track_exit_samples": track_exit_samples' in text
+
+
 def test_bringup_launch_uses_nav2_startup_gate_node_when_autostart_is_disabled():
     text = _launch_text("bringup.launch.py")
     assert 'executable="nav2_startup_gate_node"' in text
@@ -309,6 +315,7 @@ def test_autonomy_launch_declares_tracking_handoff_overrides_once():
     assert text.count("LaunchConfiguration('tracking_exit_threshold')") == 2
     assert text.count("LaunchConfiguration('tracking_source_threshold')") == 2
     assert text.count("LaunchConfiguration('tracking_confirm_samples')") == 2
+    assert text.count("LaunchConfiguration('tracking_track_exit_samples')") == 2
     assert text.count("LaunchConfiguration('tracking_source_radius')") == 2
     assert text.count("LaunchConfiguration('tracking_source_hold_steps')") == 2
 
@@ -321,6 +328,7 @@ def test_autonomy_launch_applies_tracking_handoff_defaults_from_scene():
     assert "SetLaunchConfiguration(\n            'tracking_enter_threshold'" in text
     assert "SetLaunchConfiguration(\n            'tracking_exit_threshold'" in text
     assert "SetLaunchConfiguration(\n            'tracking_source_threshold'" in text
+    assert "SetLaunchConfiguration(\n            'tracking_track_exit_samples'" in text
 
 
 def test_slam_nav2_launch_exists_and_enables_slam_mode():
@@ -358,3 +366,9 @@ def test_tracking_localization_launch_honors_explicit_source_override_before_sce
     assert 'resolved_source_y' in text
     assert 'SetLaunchConfiguration("source_x", resolved_source_x)' in text
     assert 'SetLaunchConfiguration("source_y", resolved_source_y)' in text
+
+
+def test_tracking_localization_launch_routes_track_exit_samples():
+    text = _launch_text("tracking_localization.launch.py")
+    assert 'DeclareLaunchArgument("track_exit_samples"' in text
+    assert '"track_exit_samples": track_exit_samples' in text

@@ -177,3 +177,5 @@ def test_baseline_scene_declares_autonomy_config_for_slam_exploration():
     assert baseline['autonomy']['mapping_detection']['min_explore_samples'] > 0
     assert baseline['autonomy']['exploration']['frontier_min_cluster_size'] >= 4
     assert baseline['autonomy']['exploration']['min_goal_distance'] > 0.0
+    assert baseline['mission_manager']['track_exit_samples'] >= baseline['mission_manager']['confirm_samples']
+    assert baseline['autonomy']['tracking_handoff']['track_exit_samples'] >= baseline['autonomy']['tracking_handoff']['confirm_samples']

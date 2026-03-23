@@ -60,6 +60,7 @@ def generate_launch_description():
     exit_threshold = LaunchConfiguration("exit_threshold")
     source_threshold = LaunchConfiguration("source_threshold")
     confirm_samples = LaunchConfiguration("confirm_samples")
+    track_exit_samples = LaunchConfiguration("track_exit_samples")
     source_radius = LaunchConfiguration("source_radius")
     source_hold_steps = LaunchConfiguration("source_hold_steps")
     track_step = LaunchConfiguration("track_step")
@@ -111,6 +112,7 @@ def generate_launch_description():
     declare_exit_threshold = DeclareLaunchArgument("exit_threshold", default_value="1.5")
     declare_source_threshold = DeclareLaunchArgument("source_threshold", default_value="8.0")
     declare_confirm_samples = DeclareLaunchArgument("confirm_samples", default_value="3")
+    declare_track_exit_samples = DeclareLaunchArgument("track_exit_samples", default_value="3")
     declare_source_radius = DeclareLaunchArgument("source_radius", default_value="0.6")
     declare_source_hold_steps = DeclareLaunchArgument("source_hold_steps", default_value="3")
     declare_track_step = DeclareLaunchArgument("track_step", default_value="0.7")
@@ -385,6 +387,7 @@ def generate_launch_description():
                 "exit_threshold": exit_threshold,
                 "source_threshold": source_threshold,
                 "confirm_samples": confirm_samples,
+                "track_exit_samples": track_exit_samples,
                 "source_radius": source_radius,
                 "source_hold_steps": source_hold_steps,
                 "track_step": track_step,
@@ -451,6 +454,7 @@ def generate_launch_description():
             declare_exit_threshold,
             declare_source_threshold,
             declare_confirm_samples,
+            declare_track_exit_samples,
             declare_source_radius,
             declare_source_hold_steps,
             declare_track_step,

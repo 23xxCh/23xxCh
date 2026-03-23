@@ -91,10 +91,12 @@ def test_transition_manager_forwards_tracking_handoff_overrides_to_tracking_laun
     assert "tracking_exit_threshold" in source
     assert "tracking_source_threshold" in source
     assert "tracking_confirm_samples" in source
+    assert "tracking_track_exit_samples" in source
     assert "tracking_source_radius" in source
     assert "tracking_source_hold_steps" in source
     assert "launch_cmd.append(f\"enter_threshold:={" in source
     assert "launch_cmd.append(f\"source_threshold:={" in source
+    assert "launch_cmd.append(f\"track_exit_samples:={" in source
     assert "launch_cmd.append(f\"source_hold_steps:={" in source
 
 
