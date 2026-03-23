@@ -77,6 +77,11 @@ autonomy:
     track_exit_samples: 5
     source_radius: 1.0
     source_hold_steps: 2
+  tracking_nav2_overrides:
+    bt_loop_duration: 50
+    required_movement_radius: 0.1
+    movement_time_allowance: 30.0
+    desired_linear_vel: 0.16
   exploration:
     frontier_min_cluster_size: 6
     min_goal_distance: 0.8

@@ -413,3 +413,12 @@ def test_tracking_localization_launch_routes_track_exit_samples():
     text = _launch_text("tracking_localization.launch.py")
     assert 'DeclareLaunchArgument("track_exit_samples"' in text
     assert '"track_exit_samples": track_exit_samples' in text
+
+
+def test_tracking_localization_launch_applies_scene_tracking_nav2_overrides():
+    text = _launch_text("tracking_localization.launch.py")
+    assert "tracking_nav2_overrides" in text
+    assert "bt_loop_duration" in text
+    assert "required_movement_radius" in text
+    assert "movement_time_allowance" in text
+    assert "desired_linear_vel" in text

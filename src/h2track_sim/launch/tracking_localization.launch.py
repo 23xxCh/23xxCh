@@ -37,6 +37,8 @@ def _prepare_tracking_localization(context):
     scene_name = LaunchConfiguration("scene").perform(context)
     scene_profile = load_scene_profile(pkg_share, scene_name)
     mission = scene_profile["mission_manager"]
+    autonomy = scene_profile.get("autonomy", {})
+    tracking_nav2_overrides = autonomy.get("tracking_nav2_overrides", {})
     gas_source = scene_profile.get("gas_source", {})
     resolved_source_x = (
         LaunchConfiguration("source_x").perform(context).strip() or str(gas_source.get("x", -4.0))
@@ -70,6 +72,25 @@ def _prepare_tracking_localization(context):
     amcl_params["initial_pose.yaw"] = float(
         LaunchConfiguration("initial_pose_yaw").perform(context).strip() or mission["initial_pose"]["yaw"]
     )
+
+    bt_params = params_config.setdefault("bt_navigator", {}).setdefault("ros__parameters", {})
+    controller_params = params_config.setdefault("controller_server", {}).setdefault("ros__parameters", {})
+    progress_checker = controller_params.setdefault("progress_checker", {})
+    follow_path = controller_params.setdefault("FollowPath", {})
+
+    if "bt_loop_duration" in tracking_nav2_overrides:
+        bt_params["bt_loop_duration"] = int(tracking_nav2_overrides["bt_loop_duration"])
+    if "required_movement_radius" in tracking_nav2_overrides:
+        progress_checker["required_movement_radius"] = float(
+            tracking_nav2_overrides["required_movement_radius"]
+        )
+    if "movement_time_allowance" in tracking_nav2_overrides:
+        progress_checker["movement_time_allowance"] = float(
+            tracking_nav2_overrides["movement_time_allowance"]
+        )
+    if "desired_linear_vel" in tracking_nav2_overrides:
+        follow_path["desired_linear_vel"] = float(tracking_nav2_overrides["desired_linear_vel"])
+
     runtime_params_path = runtime_dir / f"{scene_name}_tracking_nav2_params.yaml"
     runtime_params_path.write_text(yaml.safe_dump(params_config, sort_keys=False), encoding="utf-8")
 

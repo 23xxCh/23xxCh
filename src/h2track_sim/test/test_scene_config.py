@@ -187,6 +187,19 @@ def test_baseline_scene_declares_autonomy_config_for_slam_exploration():
     assert baseline['autonomy']['tracking_handoff']['track_exit_samples'] >= baseline['autonomy']['tracking_handoff']['confirm_samples']
 
 
+def test_baseline_scene_declares_tracking_nav2_overrides_for_handoff_stability():
+    pkg_share = str(Path(__file__).resolve().parents[1])
+    loader = _scene_loader_module()
+    baseline = loader.load_scene_profile(pkg_share, 'baseline')
+
+    overrides = baseline['autonomy'].get('tracking_nav2_overrides')
+    assert overrides is not None
+    assert int(overrides['bt_loop_duration']) >= 30
+    assert float(overrides['required_movement_radius']) <= 0.2
+    assert float(overrides['movement_time_allowance']) >= 20.0
+    assert float(overrides['desired_linear_vel']) <= 0.2
+
+
 def test_warehouse_scene_declares_autonomy_startup_gates_for_launch_timing():
     pkg_share = str(Path(__file__).resolve().parents[1])
     loader = _scene_loader_module()
