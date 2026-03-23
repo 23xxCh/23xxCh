@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import os
 from pathlib import Path
 import subprocess
 
@@ -81,6 +82,7 @@ class TransitionManagerNode(Node):
         )
         self.declare_parameter("runtime_map_dir", "/tmp/h2track_runtime_maps")
         self.declare_parameter("tracking_launch_file", "tracking_localization.launch.py")
+        self.declare_parameter("tracking_disable_fastdds_shm", True)
         self.declare_parameter("freeze_ready_min_map_samples", 2)
         self.declare_parameter("freeze_ready_min_map_age_sec", 2.0)
 
@@ -322,7 +324,10 @@ class TransitionManagerNode(Node):
         if tracking_source_hold_steps > 0:
             launch_cmd.append(f"source_hold_steps:={tracking_source_hold_steps}")
 
-        self._tracking_process = subprocess.Popen(launch_cmd)
+        env = os.environ.copy()
+        if bool(self.get_parameter("tracking_disable_fastdds_shm").value):
+            env["FASTDDS_BUILTIN_TRANSPORTS"] = "UDPv4"
+        self._tracking_process = subprocess.Popen(launch_cmd, env=env)
         self.get_logger().info(
             "Launching tracking localization with runtime map "
             f"{self._current_map_path} and projected source ({source_xy[0]:.3f}, {source_xy[1]:.3f})"

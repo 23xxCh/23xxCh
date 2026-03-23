@@ -100,6 +100,18 @@ def test_transition_manager_forwards_tracking_handoff_overrides_to_tracking_laun
     assert "launch_cmd.append(f\"source_hold_steps:={" in source
 
 
+def test_transition_manager_can_disable_fastdds_shm_for_tracking_sublaunch():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "h2track_tracking"
+        / "transition_manager_node.py"
+    ).read_text(encoding="utf-8")
+
+    assert "tracking_disable_fastdds_shm" in source
+    assert "FASTDDS_BUILTIN_TRANSPORTS" in source
+    assert "subprocess.Popen(launch_cmd, env=env)" in source
+
+
 def test_transition_manager_transforms_source_from_odom_into_frozen_map_frame():
     source = (
         Path(__file__).resolve().parents[1]
