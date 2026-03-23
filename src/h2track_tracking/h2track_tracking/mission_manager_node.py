@@ -95,6 +95,19 @@ def should_force_exploration_target(
     ) <= repeat_pose_radius
 
 
+def step_toward_pose(current_pose: Pose2D, target_pose: Pose2D, max_step: float) -> Pose2D:
+    dx = target_pose.x - current_pose.x
+    dy = target_pose.y - current_pose.y
+    distance = math.hypot(dx, dy)
+    if distance <= 1e-9 or max_step <= 0.0:
+        return current_pose
+    scale = min(1.0, max_step / distance)
+    return Pose2D(
+        current_pose.x + dx * scale,
+        current_pose.y + dy * scale,
+    )
+
+
 def _coerce_patrol_points(raw_value: object) -> list[tuple[float, float]]:
     if isinstance(raw_value, str):
         parsed = ast.literal_eval(raw_value)
@@ -132,6 +145,8 @@ class MissionManagerNode(Node):
         self.declare_parameter("tracking_repeat_goal_radius", 0.08)
         self.declare_parameter("tracking_repeat_pose_radius", 0.25)
         self.declare_parameter("tracking_repeat_streak_threshold", 3)
+        self.declare_parameter("tracking_source_pull_after_streak", 5)
+        self.declare_parameter("tracking_source_pull_step_scale", 1.25)
         self.declare_parameter("source_x", -3.5)
         self.declare_parameter("source_y", -3.5)
 
@@ -182,6 +197,8 @@ class MissionManagerNode(Node):
         self._current_goal_kind = None
         self._last_tracking_goal: Pose2D | None = None
         self._tracking_repeat_streak = 0
+        self._tracking_source_non_improving_streak = 0
+        self._last_tracking_source_distance: float | None = None
         self._source_announced = False
         self._tracking_mode_start_consumed = False
 
@@ -217,6 +234,8 @@ class MissionManagerNode(Node):
         self._current_goal_kind = "patrol"
         self._last_tracking_goal = None
         self._tracking_repeat_streak = 0
+        self._tracking_source_non_improving_streak = 0
+        self._last_tracking_source_distance = None
 
     def _send_tracking_goal(self) -> None:
         track_step = float(self.get_parameter("track_step").value)
@@ -261,9 +280,32 @@ class MissionManagerNode(Node):
             self.get_logger().info(
                 "Tracking target repeated near robot pose; forcing exploratory offset goal"
             )
+
+        source_pose = Pose2D(self._gas_model.params.source_x, self._gas_model.params.source_y)
+        source_distance = math.hypot(next_target.x - source_pose.x, next_target.y - source_pose.y)
+        if self._last_tracking_source_distance is not None:
+            if source_distance >= (self._last_tracking_source_distance - 0.02):
+                self._tracking_source_non_improving_streak += 1
+            else:
+                self._tracking_source_non_improving_streak = 0
+        else:
+            self._tracking_source_non_improving_streak = 0
+
+        if self._tracking_source_non_improving_streak >= int(
+            self.get_parameter("tracking_source_pull_after_streak").value
+        ):
+            pull_step = track_step * float(self.get_parameter("tracking_source_pull_step_scale").value)
+            next_target = step_toward_pose(self._current_pose, source_pose, max_step=pull_step)
+            self._tracking_source_non_improving_streak = 0
+            source_distance = math.hypot(next_target.x - source_pose.x, next_target.y - source_pose.y)
+            self.get_logger().info(
+                "Tracking source pull engaged after non-improving streak"
+            )
+
         self._navigator.goToPose(self._make_goal(next_target.x, next_target.y))
         self._current_goal_kind = "track"
         self._last_tracking_goal = next_target
+        self._last_tracking_source_distance = source_distance
 
     def _publish_source_estimate(self) -> None:
         if self._machine.source_estimate is None:

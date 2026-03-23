@@ -10,6 +10,7 @@ from h2track_tracking.mission_manager_node import (
     map_pose_from_amcl,
     select_tracking_target,
     should_force_exploration_target,
+    step_toward_pose,
 )
 
 
@@ -120,6 +121,20 @@ def test_should_force_exploration_when_repeat_streak_exceeds_threshold():
     )
 
 
+def test_step_toward_pose_clamps_step_without_overshoot():
+    current = Pose2D(0.0, 0.0)
+    target = Pose2D(0.3, 0.4)
+    stepped = step_toward_pose(current, target, max_step=1.0)
+    assert stepped == target
+
+
+def test_step_toward_pose_moves_by_max_step_for_far_targets():
+    current = Pose2D(0.0, 0.0)
+    target = Pose2D(3.0, 4.0)
+    stepped = step_toward_pose(current, target, max_step=1.0)
+    assert math.isclose(math.hypot(stepped.x, stepped.y), 1.0, abs_tol=1e-9)
+
+
 def test_mission_manager_supports_tracking_mode_startup():
     text = (
         Path(__file__).resolve().parents[1]
@@ -155,6 +170,18 @@ def test_mission_manager_supports_duplicate_tracking_goal_escape():
     assert 'tracking_repeat_streak_threshold' in text
     assert 'should_force_exploration_target' in text
     assert 'Tracking target repeated near robot pose; forcing exploratory offset goal' in text
+
+
+def test_mission_manager_supports_non_improving_tracking_source_pull():
+    text = (
+        Path(__file__).resolve().parents[1]
+        / 'h2track_tracking'
+        / 'mission_manager_node.py'
+    ).read_text(encoding='utf-8')
+
+    assert 'tracking_source_pull_after_streak' in text
+    assert 'tracking_source_pull_step_scale' in text
+    assert 'Tracking source pull engaged after non-improving streak' in text
 
 
 def test_mission_manager_consumes_tracking_mode_start_flag_after_initial_entry():
