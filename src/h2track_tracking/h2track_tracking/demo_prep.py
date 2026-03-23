@@ -70,6 +70,9 @@ def find_stale_processes(ps_output: str, demo_world_path: Path = BASELINE_WORLD_
             continue
         if _is_h2track_gaden_sensor_gate_process(command):
             matches.append(MatchedProcess(pid=pid, kind="gaden_sensor_gate", command=command))
+            continue
+        if _is_h2track_runtime_node_process(command):
+            matches.append(MatchedProcess(pid=pid, kind="h2track_node", command=command))
     return matches
 
 
@@ -267,6 +270,16 @@ def _is_h2track_gaden_sensor_gate_process(command: str) -> bool:
         "h2track_tracking/gaden_sensor_gate_node" in command
         and "__node:=gaden_sensor_gate_node" in command
     )
+
+
+def _is_h2track_runtime_node_process(command: str) -> bool:
+    managed_nodes = (
+        "h2track_tracking/mission_manager_node",
+        "h2track_tracking/mapping_mission_manager_node",
+        "h2track_tracking/transition_manager_node",
+        "h2track_tracking/exploration_manager_node",
+    )
+    return any(token in command for token in managed_nodes)
 
 
 def _read_process_table() -> str:
