@@ -67,6 +67,12 @@ class TransitionManagerNode(Node):
         self.declare_parameter("source_x", -4.0)
         self.declare_parameter("source_y", 1.95)
         self.declare_parameter("source_frame", "map")
+        self.declare_parameter("tracking_enter_threshold", -1.0)
+        self.declare_parameter("tracking_exit_threshold", -1.0)
+        self.declare_parameter("tracking_source_threshold", -1.0)
+        self.declare_parameter("tracking_confirm_samples", -1)
+        self.declare_parameter("tracking_source_radius", -1.0)
+        self.declare_parameter("tracking_source_hold_steps", -1)
         self.declare_parameter("save_map_service", "/map_saver_server/save_map")
         self.declare_parameter(
             "lifecycle_manager_service",
@@ -271,6 +277,27 @@ class TransitionManagerNode(Node):
             f"source_x:={source_xy[0]}",
             f"source_y:={source_xy[1]}",
         ]
+
+        tracking_enter_threshold = float(self.get_parameter("tracking_enter_threshold").value)
+        tracking_exit_threshold = float(self.get_parameter("tracking_exit_threshold").value)
+        tracking_source_threshold = float(self.get_parameter("tracking_source_threshold").value)
+        tracking_confirm_samples = int(self.get_parameter("tracking_confirm_samples").value)
+        tracking_source_radius = float(self.get_parameter("tracking_source_radius").value)
+        tracking_source_hold_steps = int(self.get_parameter("tracking_source_hold_steps").value)
+
+        if tracking_enter_threshold > 0.0:
+            launch_cmd.append(f"enter_threshold:={tracking_enter_threshold}")
+        if tracking_exit_threshold > 0.0:
+            launch_cmd.append(f"exit_threshold:={tracking_exit_threshold}")
+        if tracking_source_threshold > 0.0:
+            launch_cmd.append(f"source_threshold:={tracking_source_threshold}")
+        if tracking_confirm_samples > 0:
+            launch_cmd.append(f"confirm_samples:={tracking_confirm_samples}")
+        if tracking_source_radius > 0.0:
+            launch_cmd.append(f"source_radius:={tracking_source_radius}")
+        if tracking_source_hold_steps > 0:
+            launch_cmd.append(f"source_hold_steps:={tracking_source_hold_steps}")
+
         self._tracking_process = subprocess.Popen(launch_cmd)
         self.get_logger().info(
             "Launching tracking localization with runtime map "

@@ -134,6 +134,11 @@ def test_cli_dry_run_does_not_kill_processes(capsys):
         ps_output=PS_OUTPUT,
         kill_process=lambda pid: killed.append(pid),
         package_resolver=lambda name: f"/prefix/{name}",
+        scene_profile_loader=lambda scene_name: {
+            'world': '/home/user/h2track-xian/install/h2track_sim/share/h2track_sim/worlds/h2track_lab.world',
+            'use_gaden': True,
+        },
+        package_share_resolver=lambda package_name: '/tmp/h2track',
     )
 
     captured = capsys.readouterr().out

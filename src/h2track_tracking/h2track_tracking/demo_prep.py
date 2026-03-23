@@ -167,14 +167,6 @@ def main(
         scene_profile = scene_loader(args.scene)
     except PackageNotFoundError:
         scene_profile = default_scene_profile(args.scene)
-
-    scene_loader = scene_profile_loader or (
-        lambda scene_name: load_scene_profile(scene_name, package_share_resolver=share_resolver)
-    )
-    try:
-        scene_profile = scene_loader(args.scene)
-    except PackageNotFoundError:
-        scene_profile = default_scene_profile(args.scene)
     use_gaden = resolve_use_gaden(args.use_gaden, scene_profile)
     demo_world_path = resolve_scene_world_path(scene_profile, package_share)
     required_packages = required_packages_for_scene(use_gaden=use_gaden)

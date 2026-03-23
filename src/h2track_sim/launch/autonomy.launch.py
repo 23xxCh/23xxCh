@@ -40,6 +40,14 @@ def _scene_defaults(context):
     initial_pose_yaw = LaunchConfiguration('initial_pose_yaw')
     source_x = LaunchConfiguration('source_x')
     source_y = LaunchConfiguration('source_y')
+    tracking_source_x = LaunchConfiguration('tracking_source_x')
+    tracking_source_y = LaunchConfiguration('tracking_source_y')
+    tracking_enter_threshold = LaunchConfiguration('tracking_enter_threshold')
+    tracking_exit_threshold = LaunchConfiguration('tracking_exit_threshold')
+    tracking_source_threshold = LaunchConfiguration('tracking_source_threshold')
+    tracking_confirm_samples = LaunchConfiguration('tracking_confirm_samples')
+    tracking_source_radius = LaunchConfiguration('tracking_source_radius')
+    tracking_source_hold_steps = LaunchConfiguration('tracking_source_hold_steps')
     gas_source_strength = LaunchConfiguration('gas_source_strength')
     gas_decay_rate = LaunchConfiguration('gas_decay_rate')
     gas_plume_stddev = LaunchConfiguration('gas_plume_stddev')
@@ -124,9 +132,18 @@ def _scene_defaults(context):
 
     explore = autonomy.get('exploration', {})
     mapping_detection = autonomy.get('mapping_detection', {})
+    tracking_handoff = autonomy.get('tracking_handoff', {})
     default_enter_threshold = mapping_detection.get('enter_threshold', mission['enter_threshold'])
     default_exit_threshold = mapping_detection.get('exit_threshold', mission['exit_threshold'])
     default_confirm_samples = mapping_detection.get('confirm_samples', mission['confirm_samples'])
+    default_tracking_source_x = tracking_handoff.get('source_x', gas_source.get('x', -4.0))
+    default_tracking_source_y = tracking_handoff.get('source_y', gas_source.get('y', 1.95))
+    default_tracking_enter = tracking_handoff.get('enter_threshold', mission['enter_threshold'])
+    default_tracking_exit = tracking_handoff.get('exit_threshold', mission['exit_threshold'])
+    default_tracking_source = tracking_handoff.get('source_threshold', mission['source_threshold'])
+    default_tracking_confirm = tracking_handoff.get('confirm_samples', mission['confirm_samples'])
+    default_tracking_radius = tracking_handoff.get('source_radius', mission['source_radius'])
+    default_tracking_hold_steps = tracking_handoff.get('source_hold_steps', mission['source_hold_steps'])
     return [
         SetLaunchConfiguration('world', resolved_world),
         SetLaunchConfiguration('gazebo_model_path', resolved_model_path),
@@ -136,6 +153,38 @@ def _scene_defaults(context):
         SetLaunchConfiguration('initial_pose_yaw', str(mission['initial_pose']['yaw'])),
         SetLaunchConfiguration('source_x', resolved_source_x),
         SetLaunchConfiguration('source_y', resolved_source_y),
+        SetLaunchConfiguration(
+            'tracking_source_x',
+            tracking_source_x.perform(context).strip() or str(default_tracking_source_x),
+        ),
+        SetLaunchConfiguration(
+            'tracking_source_y',
+            tracking_source_y.perform(context).strip() or str(default_tracking_source_y),
+        ),
+        SetLaunchConfiguration(
+            'tracking_enter_threshold',
+            tracking_enter_threshold.perform(context).strip() or str(default_tracking_enter),
+        ),
+        SetLaunchConfiguration(
+            'tracking_exit_threshold',
+            tracking_exit_threshold.perform(context).strip() or str(default_tracking_exit),
+        ),
+        SetLaunchConfiguration(
+            'tracking_source_threshold',
+            tracking_source_threshold.perform(context).strip() or str(default_tracking_source),
+        ),
+        SetLaunchConfiguration(
+            'tracking_confirm_samples',
+            tracking_confirm_samples.perform(context).strip() or str(default_tracking_confirm),
+        ),
+        SetLaunchConfiguration(
+            'tracking_source_radius',
+            tracking_source_radius.perform(context).strip() or str(default_tracking_radius),
+        ),
+        SetLaunchConfiguration(
+            'tracking_source_hold_steps',
+            tracking_source_hold_steps.perform(context).strip() or str(default_tracking_hold_steps),
+        ),
         SetLaunchConfiguration('gas_source_strength', resolved_gas_source_strength),
         SetLaunchConfiguration('gas_decay_rate', resolved_gas_decay_rate),
         SetLaunchConfiguration('gas_plume_stddev', resolved_gas_plume_stddev),
@@ -216,6 +265,14 @@ def generate_launch_description():
     declare_initial_pose_yaw = DeclareLaunchArgument('initial_pose_yaw', default_value='0.0')
     declare_source_x = DeclareLaunchArgument('source_x', default_value='')
     declare_source_y = DeclareLaunchArgument('source_y', default_value='')
+    declare_tracking_source_x = DeclareLaunchArgument('tracking_source_x', default_value='')
+    declare_tracking_source_y = DeclareLaunchArgument('tracking_source_y', default_value='')
+    declare_tracking_enter_threshold = DeclareLaunchArgument('tracking_enter_threshold', default_value='')
+    declare_tracking_exit_threshold = DeclareLaunchArgument('tracking_exit_threshold', default_value='')
+    declare_tracking_source_threshold = DeclareLaunchArgument('tracking_source_threshold', default_value='')
+    declare_tracking_confirm_samples = DeclareLaunchArgument('tracking_confirm_samples', default_value='')
+    declare_tracking_source_radius = DeclareLaunchArgument('tracking_source_radius', default_value='')
+    declare_tracking_source_hold_steps = DeclareLaunchArgument('tracking_source_hold_steps', default_value='')
     declare_use_gaden = DeclareLaunchArgument('use_gaden', default_value='')
     declare_frontier_min_cluster_size = DeclareLaunchArgument('frontier_min_cluster_size', default_value='')
     declare_min_goal_distance = DeclareLaunchArgument('min_goal_distance', default_value='')
@@ -433,8 +490,14 @@ def generate_launch_description():
             {'use_sim_time': use_sim_time},
             {
                 'scene_name': scene,
-                'source_x': source_x,
-                'source_y': source_y,
+                'source_x': tracking_source_x,
+                'source_y': tracking_source_y,
+                'tracking_enter_threshold': tracking_enter_threshold,
+                'tracking_exit_threshold': tracking_exit_threshold,
+                'tracking_source_threshold': tracking_source_threshold,
+                'tracking_confirm_samples': tracking_confirm_samples,
+                'tracking_source_radius': tracking_source_radius,
+                'tracking_source_hold_steps': tracking_source_hold_steps,
             },
         ],
     )
@@ -461,6 +524,14 @@ def generate_launch_description():
         declare_initial_pose_yaw,
         declare_source_x,
         declare_source_y,
+        declare_tracking_source_x,
+        declare_tracking_source_y,
+        declare_tracking_enter_threshold,
+        declare_tracking_exit_threshold,
+        declare_tracking_source_threshold,
+        declare_tracking_confirm_samples,
+        declare_tracking_source_radius,
+        declare_tracking_source_hold_steps,
         declare_use_gaden,
         declare_frontier_min_cluster_size,
         declare_min_goal_distance,

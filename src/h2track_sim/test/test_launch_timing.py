@@ -281,6 +281,28 @@ def test_autonomy_launch_honors_explicit_gas_confirm_threshold_overrides():
     assert "confirm_samples.perform(context).strip() or str(" in text
 
 
+def test_autonomy_launch_declares_tracking_handoff_overrides_once():
+    text = _launch_text("autonomy.launch.py")
+    assert text.count("LaunchConfiguration('tracking_source_x')") == 1
+    assert text.count("LaunchConfiguration('tracking_source_y')") == 1
+    assert text.count("LaunchConfiguration('tracking_enter_threshold')") == 1
+    assert text.count("LaunchConfiguration('tracking_exit_threshold')") == 1
+    assert text.count("LaunchConfiguration('tracking_source_threshold')") == 1
+    assert text.count("LaunchConfiguration('tracking_confirm_samples')") == 1
+    assert text.count("LaunchConfiguration('tracking_source_radius')") == 1
+    assert text.count("LaunchConfiguration('tracking_source_hold_steps')") == 1
+
+
+def test_autonomy_launch_applies_tracking_handoff_defaults_from_scene():
+    text = _launch_text("autonomy.launch.py")
+    assert "autonomy.get('tracking_handoff'" in text or 'autonomy.get("tracking_handoff"' in text
+    assert "SetLaunchConfiguration(\n            'tracking_source_x'" in text
+    assert "SetLaunchConfiguration(\n            'tracking_source_y'" in text
+    assert "SetLaunchConfiguration(\n            'tracking_enter_threshold'" in text
+    assert "SetLaunchConfiguration(\n            'tracking_exit_threshold'" in text
+    assert "SetLaunchConfiguration(\n            'tracking_source_threshold'" in text
+
+
 def test_slam_nav2_launch_exists_and_enables_slam_mode():
     text = _launch_text("slam_nav2.launch.py")
     assert "online_async_launch.py" in text
