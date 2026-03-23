@@ -26,6 +26,7 @@ class Nav2StartupGateNode(Node):
         self.declare_parameter("timeout_sec", 30.0)
         self.declare_parameter("poll_period_sec", 0.5)
         self.declare_parameter("stable_ready_count", 2)
+        self.declare_parameter("startup_retry_limit", 2)
 
         self._target_frame = str(self.get_parameter("target_frame").value)
         self._source_frame = str(self.get_parameter("source_frame").value)
@@ -35,6 +36,7 @@ class Nav2StartupGateNode(Node):
             Nav2StartupGateConfig(
                 timeout_sec=float(self.get_parameter("timeout_sec").value),
                 stable_ready_count=int(self.get_parameter("stable_ready_count").value),
+                max_startup_retries=int(self.get_parameter("startup_retry_limit").value),
             )
         )
         self._started_at = time.monotonic()
@@ -83,6 +85,11 @@ class Nav2StartupGateNode(Node):
         )
 
         if action in (GateAction.WAIT, GateAction.MONITOR):
+            if startup_result is False and self._startup_future is not None and self._startup_future.done():
+                self.get_logger().warn(
+                    "Nav2 STARTUP request failed; retrying while gate timeout budget remains"
+                )
+                self._startup_future = None
             return
         if action is GateAction.STARTUP:
             self._send_startup_request()

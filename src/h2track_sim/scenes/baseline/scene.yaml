@@ -55,9 +55,9 @@ gas_field:
 autonomy:
   slam_nav2_params: config/nav2_slam_baseline_params.yaml
   mapping_detection:
-    enter_threshold: 0.7
+    enter_threshold: 0.65
     exit_threshold: 0.3
-    confirm_samples: 3
+    confirm_samples: 2
     min_explore_samples: 260
   tracking_handoff:
     source_x: 0.95

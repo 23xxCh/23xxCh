@@ -18,6 +18,7 @@ class GateAction(Enum):
 class Nav2StartupGateConfig:
     timeout_sec: float = 30.0
     stable_ready_count: int = 1
+    max_startup_retries: int = 0
 
 
 class Nav2StartupGateState:
@@ -27,6 +28,7 @@ class Nav2StartupGateState:
         self._startup_requested = False
         self._completed = False
         self._failed = False
+        self._startup_failures = 0
 
     def step(
         self,
@@ -46,8 +48,16 @@ class Nav2StartupGateState:
             if startup_result:
                 self._completed = True
                 return GateAction.COMPLETE
-            self._failed = True
-            return GateAction.FAIL
+            self._startup_failures += 1
+            if self._startup_failures > self._config.max_startup_retries:
+                self._failed = True
+                return GateAction.FAIL
+            self._startup_requested = False
+            self._ready_count = 0
+            if elapsed_sec >= self._config.timeout_sec:
+                self._failed = True
+                return GateAction.FAIL
+            return GateAction.WAIT
 
         if tf_ready and service_ready:
             self._ready_count += 1

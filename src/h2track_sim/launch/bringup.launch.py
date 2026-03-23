@@ -48,6 +48,7 @@ def generate_launch_description():
     nav2_startup_gate_timeout = LaunchConfiguration("nav2_startup_gate_timeout")
     nav2_startup_gate_poll_period = LaunchConfiguration("nav2_startup_gate_poll_period")
     nav2_startup_gate_stable_ready_count = LaunchConfiguration("nav2_startup_gate_stable_ready_count")
+    nav2_startup_gate_retry_limit = LaunchConfiguration("nav2_startup_gate_retry_limit")
     gaden_sensor_gate_timeout = LaunchConfiguration("gaden_sensor_gate_timeout")
     gaden_sensor_gate_poll_period = LaunchConfiguration("gaden_sensor_gate_poll_period")
     gaden_sensor_gate_stable_ready_count = LaunchConfiguration("gaden_sensor_gate_stable_ready_count")
@@ -98,6 +99,7 @@ def generate_launch_description():
     declare_nav2_startup_gate_timeout = DeclareLaunchArgument("nav2_startup_gate_timeout", default_value="30.0")
     declare_nav2_startup_gate_poll_period = DeclareLaunchArgument("nav2_startup_gate_poll_period", default_value="0.5")
     declare_nav2_startup_gate_stable_ready_count = DeclareLaunchArgument("nav2_startup_gate_stable_ready_count", default_value="2")
+    declare_nav2_startup_gate_retry_limit = DeclareLaunchArgument("nav2_startup_gate_retry_limit", default_value="2")
     declare_gaden_sensor_gate_timeout = DeclareLaunchArgument("gaden_sensor_gate_timeout", default_value="30.0")
     declare_gaden_sensor_gate_poll_period = DeclareLaunchArgument("gaden_sensor_gate_poll_period", default_value="0.5")
     declare_gaden_sensor_gate_stable_ready_count = DeclareLaunchArgument("gaden_sensor_gate_stable_ready_count", default_value="3")
@@ -247,6 +249,7 @@ def generate_launch_description():
                 "timeout_sec": nav2_startup_gate_timeout,
                 "poll_period_sec": nav2_startup_gate_poll_period,
                 "stable_ready_count": nav2_startup_gate_stable_ready_count,
+                "startup_retry_limit": nav2_startup_gate_retry_limit,
             },
         ],
     )
@@ -436,6 +439,7 @@ def generate_launch_description():
             declare_nav2_startup_gate_timeout,
             declare_nav2_startup_gate_poll_period,
             declare_nav2_startup_gate_stable_ready_count,
+            declare_nav2_startup_gate_retry_limit,
             declare_gaden_sensor_gate_timeout,
             declare_gaden_sensor_gate_poll_period,
             declare_gaden_sensor_gate_stable_ready_count,

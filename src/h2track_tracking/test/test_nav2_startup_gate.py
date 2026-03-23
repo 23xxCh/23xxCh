@@ -43,6 +43,19 @@ def test_gate_fails_when_startup_service_returns_failure():
     assert state.step(tf_ready=True, service_ready=True, startup_result=False, elapsed_sec=1.0) is GateAction.FAIL
 
 
+def test_gate_retries_startup_before_failing_when_retry_budget_exists():
+    state = Nav2StartupGateState(
+        Nav2StartupGateConfig(timeout_sec=5.0, stable_ready_count=1, max_startup_retries=1)
+    )
+
+    assert state.step(tf_ready=True, service_ready=True, startup_result=None, elapsed_sec=0.5) is GateAction.STARTUP
+    # first startup failure should not fail immediately; gate should retry
+    assert state.step(tf_ready=True, service_ready=True, startup_result=False, elapsed_sec=1.0) is GateAction.WAIT
+    assert state.step(tf_ready=True, service_ready=True, startup_result=None, elapsed_sec=1.5) is GateAction.STARTUP
+    # second failure exhausts retry budget
+    assert state.step(tf_ready=True, service_ready=True, startup_result=False, elapsed_sec=2.0) is GateAction.FAIL
+
+
 def test_gate_fails_when_timeout_is_reached_before_ready():
     state = Nav2StartupGateState(Nav2StartupGateConfig(timeout_sec=1.0, stable_ready_count=1))
 

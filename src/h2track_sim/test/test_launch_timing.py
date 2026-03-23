@@ -149,6 +149,12 @@ def test_bringup_launch_exposes_nav2_autostart_argument():
     assert '"autostart": nav2_autostart' in text
 
 
+def test_bringup_launch_exposes_nav2_startup_retry_limit_argument():
+    text = _launch_text("bringup.launch.py")
+    assert 'DeclareLaunchArgument("nav2_startup_gate_retry_limit"' in text
+    assert '"startup_retry_limit": nav2_startup_gate_retry_limit' in text
+
+
 def test_bringup_launch_uses_nav2_startup_gate_node_when_autostart_is_disabled():
     text = _launch_text("bringup.launch.py")
     assert 'executable="nav2_startup_gate_node"' in text
