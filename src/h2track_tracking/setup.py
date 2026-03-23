@@ -27,6 +27,7 @@ setup(
             "mapping_mission_manager_node = h2track_tracking.mapping_mission_manager_node:main",
             "exploration_manager_node = h2track_tracking.exploration_manager_node:main",
             "transition_manager_node = h2track_tracking.transition_manager_node:main",
+            "autonomy_eval = h2track_tracking.autonomy_eval:main",
             "demo_prep = h2track_tracking.demo_prep:main",
             "demo_selfcheck = h2track_tracking.demo_selfcheck:main",
         ],
