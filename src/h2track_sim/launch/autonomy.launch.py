@@ -70,7 +70,12 @@ def _scene_defaults(context):
     gaden_map_yaw = LaunchConfiguration('gaden_map_yaw')
     frontier_min_cluster_size = LaunchConfiguration('frontier_min_cluster_size')
     min_goal_distance = LaunchConfiguration('min_goal_distance')
+    no_frontier_relaxed_after_cycles = LaunchConfiguration('no_frontier_relaxed_after_cycles')
+    no_frontier_relaxed_cluster_size = LaunchConfiguration('no_frontier_relaxed_cluster_size')
+    no_frontier_relaxed_min_goal_distance = LaunchConfiguration('no_frontier_relaxed_min_goal_distance')
     control_period_sec = LaunchConfiguration('control_period_sec')
+    nav2_startup_gate_timeout = LaunchConfiguration('nav2_startup_gate_timeout')
+    gaden_sensor_gate_timeout = LaunchConfiguration('gaden_sensor_gate_timeout')
     enter_threshold = LaunchConfiguration('enter_threshold')
     exit_threshold = LaunchConfiguration('exit_threshold')
     confirm_samples = LaunchConfiguration('confirm_samples')
@@ -133,6 +138,7 @@ def _scene_defaults(context):
         resolved_gaden_map_yaw = ''
 
     explore = autonomy.get('exploration', {})
+    startup_gates = autonomy.get('startup_gates', {})
     mapping_detection = autonomy.get('mapping_detection', {})
     tracking_handoff = autonomy.get('tracking_handoff', {})
     default_enter_threshold = mapping_detection.get('enter_threshold', mission['enter_threshold'])
@@ -151,6 +157,8 @@ def _scene_defaults(context):
     )
     default_tracking_radius = tracking_handoff.get('source_radius', mission['source_radius'])
     default_tracking_hold_steps = tracking_handoff.get('source_hold_steps', mission['source_hold_steps'])
+    default_nav2_startup_gate_timeout = startup_gates.get('nav2_startup_gate_timeout', 60.0)
+    default_gaden_sensor_gate_timeout = startup_gates.get('gaden_sensor_gate_timeout', 60.0)
     return [
         SetLaunchConfiguration('world', resolved_world),
         SetLaunchConfiguration('gazebo_model_path', resolved_model_path),
@@ -217,7 +225,27 @@ def _scene_defaults(context):
         SetLaunchConfiguration('gaden_map_yaw', resolved_gaden_map_yaw),
         SetLaunchConfiguration('frontier_min_cluster_size', str(explore.get('frontier_min_cluster_size', 6))),
         SetLaunchConfiguration('min_goal_distance', str(explore.get('min_goal_distance', 0.8))),
+        SetLaunchConfiguration(
+            'no_frontier_relaxed_after_cycles',
+            str(explore.get('no_frontier_relaxed_after_cycles', 8)),
+        ),
+        SetLaunchConfiguration(
+            'no_frontier_relaxed_cluster_size',
+            str(explore.get('no_frontier_relaxed_cluster_size', 1)),
+        ),
+        SetLaunchConfiguration(
+            'no_frontier_relaxed_min_goal_distance',
+            str(explore.get('no_frontier_relaxed_min_goal_distance', 0.35)),
+        ),
         SetLaunchConfiguration('control_period_sec', str(explore.get('control_period_sec', 1.0))),
+        SetLaunchConfiguration(
+            'nav2_startup_gate_timeout',
+            nav2_startup_gate_timeout.perform(context).strip() or str(default_nav2_startup_gate_timeout),
+        ),
+        SetLaunchConfiguration(
+            'gaden_sensor_gate_timeout',
+            gaden_sensor_gate_timeout.perform(context).strip() or str(default_gaden_sensor_gate_timeout),
+        ),
         SetLaunchConfiguration('enter_threshold', enter_threshold.perform(context).strip() or str(default_enter_threshold)),
         SetLaunchConfiguration('exit_threshold', exit_threshold.perform(context).strip() or str(default_exit_threshold)),
         SetLaunchConfiguration('confirm_samples', confirm_samples.perform(context).strip() or str(default_confirm_samples)),
@@ -254,7 +282,12 @@ def generate_launch_description():
     use_gaden = LaunchConfiguration('use_gaden')
     frontier_min_cluster_size = LaunchConfiguration('frontier_min_cluster_size')
     min_goal_distance = LaunchConfiguration('min_goal_distance')
+    no_frontier_relaxed_after_cycles = LaunchConfiguration('no_frontier_relaxed_after_cycles')
+    no_frontier_relaxed_cluster_size = LaunchConfiguration('no_frontier_relaxed_cluster_size')
+    no_frontier_relaxed_min_goal_distance = LaunchConfiguration('no_frontier_relaxed_min_goal_distance')
     control_period_sec = LaunchConfiguration('control_period_sec')
+    nav2_startup_gate_timeout = LaunchConfiguration('nav2_startup_gate_timeout')
+    gaden_sensor_gate_timeout = LaunchConfiguration('gaden_sensor_gate_timeout')
     enter_threshold = LaunchConfiguration('enter_threshold')
     exit_threshold = LaunchConfiguration('exit_threshold')
     confirm_samples = LaunchConfiguration('confirm_samples')
@@ -302,7 +335,21 @@ def generate_launch_description():
     declare_use_gaden = DeclareLaunchArgument('use_gaden', default_value='')
     declare_frontier_min_cluster_size = DeclareLaunchArgument('frontier_min_cluster_size', default_value='')
     declare_min_goal_distance = DeclareLaunchArgument('min_goal_distance', default_value='')
+    declare_no_frontier_relaxed_after_cycles = DeclareLaunchArgument(
+        'no_frontier_relaxed_after_cycles',
+        default_value='',
+    )
+    declare_no_frontier_relaxed_cluster_size = DeclareLaunchArgument(
+        'no_frontier_relaxed_cluster_size',
+        default_value='',
+    )
+    declare_no_frontier_relaxed_min_goal_distance = DeclareLaunchArgument(
+        'no_frontier_relaxed_min_goal_distance',
+        default_value='',
+    )
     declare_control_period_sec = DeclareLaunchArgument('control_period_sec', default_value='')
+    declare_nav2_startup_gate_timeout = DeclareLaunchArgument('nav2_startup_gate_timeout', default_value='')
+    declare_gaden_sensor_gate_timeout = DeclareLaunchArgument('gaden_sensor_gate_timeout', default_value='')
     declare_enter_threshold = DeclareLaunchArgument('enter_threshold', default_value='')
     declare_exit_threshold = DeclareLaunchArgument('exit_threshold', default_value='')
     declare_confirm_samples = DeclareLaunchArgument('confirm_samples', default_value='')
@@ -364,7 +411,7 @@ def generate_launch_description():
                 'target_frame': 'odom',
                 'source_frame': 'base_link',
                 'lifecycle_manager_service': '/lifecycle_manager_navigation/manage_nodes',
-                'timeout_sec': 30.0,
+                'timeout_sec': nav2_startup_gate_timeout,
                 'poll_period_sec': 0.5,
                 'stable_ready_count': 2,
             },
@@ -446,7 +493,7 @@ def generate_launch_description():
             {
                 'fixed_frame': gaden_fixed_frame,
                 'sensor_frame': gaden_sensor_frame,
-                'timeout_sec': 30.0,
+                'timeout_sec': gaden_sensor_gate_timeout,
                 'poll_period_sec': 0.5,
                 'stable_ready_count': 3,
                 'sensor_node_name': 'gaden_pid_sensor',
@@ -488,6 +535,9 @@ def generate_launch_description():
             {
                 'frontier_min_cluster_size': frontier_min_cluster_size,
                 'min_goal_distance': min_goal_distance,
+                'no_frontier_relaxed_after_cycles': no_frontier_relaxed_after_cycles,
+                'no_frontier_relaxed_cluster_size': no_frontier_relaxed_cluster_size,
+                'no_frontier_relaxed_min_goal_distance': no_frontier_relaxed_min_goal_distance,
                 'control_period_sec': control_period_sec,
             },
         ],
@@ -565,7 +615,12 @@ def generate_launch_description():
         declare_use_gaden,
         declare_frontier_min_cluster_size,
         declare_min_goal_distance,
+        declare_no_frontier_relaxed_after_cycles,
+        declare_no_frontier_relaxed_cluster_size,
+        declare_no_frontier_relaxed_min_goal_distance,
         declare_control_period_sec,
+        declare_nav2_startup_gate_timeout,
+        declare_gaden_sensor_gate_timeout,
         declare_enter_threshold,
         declare_exit_threshold,
         declare_confirm_samples,

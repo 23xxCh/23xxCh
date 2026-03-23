@@ -14,6 +14,8 @@ user       10001    1282  0 00:00 ?        00:00:01 gzserver --verbose -s libgaz
 user       10002    1282  0 00:00 ?        00:00:00 gazebo --verbose -s libgazebo_ros_init.so -s libgazebo_ros_factory.so /tmp/other.world
 user       10003    1282  0 00:00 ?        00:00:00 /opt/ros/humble/lib/nav2_lifecycle_manager/lifecycle_manager --ros-args -r __node:=lifecycle_manager_navigation
 user       10004    1282  0 00:00 ?        00:00:00 /opt/ros/humble/lib/nav2_lifecycle_manager/lifecycle_manager --ros-args -r __node:=other_lifecycle_manager
+user       10005    1282  0 00:00 ?        00:00:00 /home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/nav2_startup_gate_node --ros-args -r __node:=nav2_startup_gate_node
+user       10006    1282  0 00:00 ?        00:00:00 /home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/gaden_sensor_gate_node --ros-args -r __node:=gaden_sensor_gate_node
 """
 
 
@@ -23,6 +25,8 @@ def test_matches_only_h2track_demo_processes():
     assert processes == [
         MatchedProcess(pid=10001, kind="gazebo", command="gzserver --verbose -s libgazebo_ros_init.so -s libgazebo_ros_factory.so /home/user/h2track-xian/install/h2track_sim/share/h2track_sim/worlds/h2track_lab.world"),
         MatchedProcess(pid=10003, kind="nav2_lifecycle_manager", command="/opt/ros/humble/lib/nav2_lifecycle_manager/lifecycle_manager --ros-args -r __node:=lifecycle_manager_navigation"),
+        MatchedProcess(pid=10005, kind="nav2_startup_gate", command="/home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/nav2_startup_gate_node --ros-args -r __node:=nav2_startup_gate_node"),
+        MatchedProcess(pid=10006, kind="gaden_sensor_gate", command="/home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/gaden_sensor_gate_node --ros-args -r __node:=gaden_sensor_gate_node"),
     ]
 
 

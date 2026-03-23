@@ -39,8 +39,8 @@ gaden:
   sensor_topic: /gaden/sensor_reading
   sensor_frame: base_link
   fixed_frame: gaden_map
-  map_offset_x: 1.5
-  map_offset_y: 5.6
+  map_offset_x: 2.5
+  map_offset_y: 5.3
   map_offset_z: 0.0
   map_roll: 0.0
   map_pitch: 0.0
@@ -55,14 +55,17 @@ gas_field:
   publish_rate_hz: 5.0
 autonomy:
   slam_nav2_params: config/nav2_slam_baseline_params.yaml
+  startup_gates:
+    nav2_startup_gate_timeout: 60.0
+    gaden_sensor_gate_timeout: 60.0
   mapping_detection:
-    enter_threshold: 0.65
-    exit_threshold: 0.3
+    enter_threshold: 0.45
+    exit_threshold: 0.2
     confirm_samples: 2
-    min_explore_samples: 260
+    min_explore_samples: 120
   tracking_handoff:
-    source_x: -0.55
-    source_y: 2.8
+    source_x: -1.55
+    source_y: 3.1
     enter_threshold: 1.0
     exit_threshold: 0.4
     source_threshold: 1.8
@@ -73,4 +76,7 @@ autonomy:
   exploration:
     frontier_min_cluster_size: 6
     min_goal_distance: 0.8
+    no_frontier_relaxed_after_cycles: 8
+    no_frontier_relaxed_cluster_size: 1
+    no_frontier_relaxed_min_goal_distance: 0.35
     control_period_sec: 1.0

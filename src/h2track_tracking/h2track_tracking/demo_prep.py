@@ -64,6 +64,12 @@ def find_stale_processes(ps_output: str, demo_world_path: Path = BASELINE_WORLD_
             continue
         if _is_h2track_nav2_lifecycle_process(command):
             matches.append(MatchedProcess(pid=pid, kind="nav2_lifecycle_manager", command=command))
+            continue
+        if _is_h2track_nav2_startup_gate_process(command):
+            matches.append(MatchedProcess(pid=pid, kind="nav2_startup_gate", command=command))
+            continue
+        if _is_h2track_gaden_sensor_gate_process(command):
+            matches.append(MatchedProcess(pid=pid, kind="gaden_sensor_gate", command=command))
     return matches
 
 
@@ -247,6 +253,20 @@ def _is_h2track_gazebo_process(command: str, demo_world_path: Path) -> bool:
 
 def _is_h2track_nav2_lifecycle_process(command: str) -> bool:
     return "nav2_lifecycle_manager/lifecycle_manager" in command and "__node:=lifecycle_manager_navigation" in command
+
+
+def _is_h2track_nav2_startup_gate_process(command: str) -> bool:
+    return (
+        "h2track_tracking/nav2_startup_gate_node" in command
+        and "__node:=nav2_startup_gate_node" in command
+    )
+
+
+def _is_h2track_gaden_sensor_gate_process(command: str) -> bool:
+    return (
+        "h2track_tracking/gaden_sensor_gate_node" in command
+        and "__node:=gaden_sensor_gate_node" in command
+    )
 
 
 def _read_process_table() -> str:

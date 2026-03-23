@@ -25,6 +25,9 @@ class ExplorationManagerNode(Node):
         self.declare_parameter("control_period_sec", 1.0)
         self.declare_parameter("frontier_min_cluster_size", 6)
         self.declare_parameter("min_goal_distance", 0.8)
+        self.declare_parameter("no_frontier_relaxed_after_cycles", 8)
+        self.declare_parameter("no_frontier_relaxed_cluster_size", 1)
+        self.declare_parameter("no_frontier_relaxed_min_goal_distance", 0.35)
         self.declare_parameter("target_frame", "map")
         self.declare_parameter("robot_frame", "base_link")
         self.declare_parameter("exploration_enabled_topic", "/exploration_enabled")
@@ -35,6 +38,7 @@ class ExplorationManagerNode(Node):
         self._grid: GridSnapshot | None = None
         self._nav_ready = False
         self._exploration_enabled = True
+        self._no_frontier_cycles = 0
 
         map_qos = QoSProfile(
             history=QoSHistoryPolicy.KEEP_LAST,
@@ -104,6 +108,7 @@ class ExplorationManagerNode(Node):
             return
 
         if not self._exploration_enabled:
+            self._no_frontier_cycles = 0
             return
 
         robot_xy = self._lookup_robot_xy()
@@ -123,9 +128,39 @@ class ExplorationManagerNode(Node):
             min_goal_distance=float(self.get_parameter("min_goal_distance").value),
         )
         if goal is None:
-            self.get_logger().info("No frontier available; waiting for more map growth")
-            return
+            self._no_frontier_cycles += 1
+            relaxed_after_cycles = int(
+                self.get_parameter("no_frontier_relaxed_after_cycles").value
+            )
+            relaxed_cluster_size = int(
+                self.get_parameter("no_frontier_relaxed_cluster_size").value
+            )
+            relaxed_min_goal_distance = float(
+                self.get_parameter("no_frontier_relaxed_min_goal_distance").value
+            )
 
+            if self._no_frontier_cycles >= relaxed_after_cycles:
+                goal = select_frontier_goal(
+                    self._grid,
+                    robot_xy=robot_xy,
+                    min_frontier_cluster_size=relaxed_cluster_size,
+                    min_goal_distance=relaxed_min_goal_distance,
+                )
+                if goal is not None:
+                    self.get_logger().info(
+                        "No strict frontier after "
+                        f"{self._no_frontier_cycles} cycles; using relaxed frontier at "
+                        f"({goal.x:.2f}, {goal.y:.2f})"
+                    )
+                    self._no_frontier_cycles = 0
+                else:
+                    self.get_logger().info("No frontier available; waiting for more map growth")
+                    return
+            else:
+                self.get_logger().info("No frontier available; waiting for more map growth")
+                return
+
+        self._no_frontier_cycles = 0
         self.get_logger().info(f"Exploring frontier at ({goal.x:.2f}, {goal.y:.2f})")
         self._navigator.goToPose(self._make_goal(goal.x, goal.y))
 

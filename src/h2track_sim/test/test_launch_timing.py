@@ -331,6 +331,21 @@ def test_autonomy_launch_applies_tracking_handoff_defaults_from_scene():
     assert "SetLaunchConfiguration(\n            'tracking_track_exit_samples'" in text
 
 
+def test_autonomy_launch_declares_startup_gate_timeout_overrides():
+    text = _launch_text("autonomy.launch.py")
+    assert "DeclareLaunchArgument('nav2_startup_gate_timeout'" in text or 'DeclareLaunchArgument("nav2_startup_gate_timeout"' in text
+    assert "DeclareLaunchArgument('gaden_sensor_gate_timeout'" in text or 'DeclareLaunchArgument("gaden_sensor_gate_timeout"' in text
+
+
+def test_autonomy_launch_applies_startup_gate_timeout_defaults_from_scene():
+    text = _launch_text("autonomy.launch.py")
+    assert "autonomy.get('startup_gates'" in text or 'autonomy.get("startup_gates"' in text
+    assert "SetLaunchConfiguration(\n            'nav2_startup_gate_timeout'" in text
+    assert "SetLaunchConfiguration(\n            'gaden_sensor_gate_timeout'" in text
+    assert "'timeout_sec': nav2_startup_gate_timeout" in text or '"timeout_sec": nav2_startup_gate_timeout' in text
+    assert "'timeout_sec': gaden_sensor_gate_timeout" in text or '"timeout_sec": gaden_sensor_gate_timeout' in text
+
+
 def test_slam_nav2_launch_exists_and_enables_slam_mode():
     text = _launch_text("slam_nav2.launch.py")
     assert "online_async_launch.py" in text
