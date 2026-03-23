@@ -134,6 +134,13 @@ def load_scene_profile(scene_name: str, package_share_resolver: Callable[[str], 
     return yaml.safe_load(scene_path.read_text(encoding="utf-8"))
 
 
+def find_fastdds_lock_paths(shm_root: Path = Path("/dev/shm")) -> list[Path]:
+    try:
+        return sorted(shm_root.glob("fastrtps_port*"))
+    except OSError:
+        return []
+
+
 def main(
     argv: list[str] | None = None,
     *,
@@ -142,6 +149,8 @@ def main(
     package_resolver: Callable[[str], str | None] | None = None,
     scene_profile_loader: Callable[[str], dict] | None = None,
     package_share_resolver: Callable[[str], str] | None = None,
+    fastdds_lock_paths: list[Path] | None = None,
+    remove_path: Callable[[Path], None] | None = None,
 ) -> int:
     parser = argparse.ArgumentParser(description="Prepare the H2track demo environment.")
     parser.add_argument("--dry-run", action="store_true", help="Report what would be cleaned without killing processes.")
@@ -178,6 +187,7 @@ def main(
     resolver = package_resolver or _resolve_package
     package_status = check_required_packages(resolver, required_packages)
     kill = kill_process or _kill_process
+    remove = remove_path or _remove_path
     kill_failures: list[str] = []
 
     for process in processes:
@@ -190,6 +200,21 @@ def main(
             print(f"killed pid={process.pid}")
         except OSError as exc:
             kill_failures.append(f"Failed to kill pid {process.pid}: {exc}")
+
+    lock_paths = fastdds_lock_paths if fastdds_lock_paths is not None else find_fastdds_lock_paths()
+    for lock_path in lock_paths:
+        lock_str = str(lock_path)
+        print(f"stale fastdds lock: {lock_str}")
+        if args.dry_run:
+            print(f"would remove lock: {lock_str}")
+            continue
+        try:
+            remove(lock_path)
+            print(f"removed lock: {lock_str}")
+        except OSError as exc:
+            kill_failures.append(f"Failed to remove lock {lock_str}: {exc}")
+    if args.dry_run and lock_paths:
+        kill_failures.append("dry-run found fastdds locks")
 
     for package_name, ok in package_status.items():
         if ok:
@@ -230,6 +255,10 @@ def _read_process_table() -> str:
 
 def _kill_process(pid: int) -> None:
     os.kill(pid, signal.SIGKILL)
+
+
+def _remove_path(path: Path) -> None:
+    path.unlink(missing_ok=True)
 
 
 def _resolve_package(package_name: str) -> str | None:

@@ -147,3 +147,49 @@ def test_cli_dry_run_does_not_kill_processes(capsys):
     assert "would kill pid=10001" in captured
     assert "would kill pid=10003" in captured
     assert "DEMO PREP FAILED" in captured
+
+
+def test_cli_dry_run_reports_fastdds_locks_without_removing(capsys):
+    removed = []
+
+    exit_code = main(
+        ["--dry-run"],
+        ps_output="",
+        package_resolver=lambda name: f"/prefix/{name}",
+        scene_profile_loader=lambda scene_name: {
+            'world': '/home/user/h2track-xian/install/h2track_sim/share/h2track_sim/worlds/h2track_lab.world',
+            'use_gaden': True,
+        },
+        package_share_resolver=lambda package_name: '/tmp/h2track',
+        fastdds_lock_paths=[Path('/dev/shm/fastrtps_port7443')],
+        remove_path=lambda path: removed.append(str(path)),
+    )
+
+    captured = capsys.readouterr().out
+    assert exit_code == 1
+    assert removed == []
+    assert "stale fastdds lock: /dev/shm/fastrtps_port7443" in captured
+    assert "would remove lock: /dev/shm/fastrtps_port7443" in captured
+
+
+def test_cli_removes_fastdds_locks_when_not_dry_run(capsys):
+    removed = []
+
+    exit_code = main(
+        [],
+        ps_output="",
+        package_resolver=lambda name: f"/prefix/{name}",
+        scene_profile_loader=lambda scene_name: {
+            'world': '/home/user/h2track-xian/install/h2track_sim/share/h2track_sim/worlds/h2track_lab.world',
+            'use_gaden': True,
+        },
+        package_share_resolver=lambda package_name: '/tmp/h2track',
+        fastdds_lock_paths=[Path('/dev/shm/fastrtps_port7443')],
+        remove_path=lambda path: removed.append(str(path)),
+    )
+
+    captured = capsys.readouterr().out
+    assert exit_code == 0
+    assert removed == ['/dev/shm/fastrtps_port7443']
+    assert "removed lock: /dev/shm/fastrtps_port7443" in captured
+    assert "DEMO PREP OK" in captured
