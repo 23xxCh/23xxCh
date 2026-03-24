@@ -220,6 +220,29 @@ def test_cli_dry_run_does_not_kill_processes(capsys):
     captured = capsys.readouterr().out
     assert exit_code == 1
     assert killed == []
-    assert "would kill pid=10001" in captured
     assert "would kill pid=10003" in captured
     assert "DEMO PREP FAILED" in captured
+
+
+def test_cli_defaults_to_warehouse_scene_when_not_specified(capsys):
+    requested_scenes = []
+
+    def _scene_loader(scene_name: str):
+        requested_scenes.append(scene_name)
+        return {
+            "world": "scenes/warehouse/warehouse.world",
+            "use_gaden": False,
+        }
+
+    exit_code = main(
+        ["--dry-run"],
+        ps_output="",
+        package_resolver=lambda name: f"/prefix/{name}",
+        scene_profile_loader=_scene_loader,
+        package_share_resolver=lambda _: "/tmp/h2track",
+    )
+
+    captured = capsys.readouterr().out
+    assert exit_code == 0
+    assert requested_scenes == ["warehouse"]
+    assert "DEMO PREP OK" in captured

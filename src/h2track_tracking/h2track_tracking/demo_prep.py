@@ -21,6 +21,9 @@ import yaml
 BASELINE_WORLD_PATH = Path(
     "/home/user/h2track-xian/install/h2track_sim/share/h2track_sim/worlds/h2track_lab.world"
 )
+WAREHOUSE_WORLD_PATH = Path(
+    "/home/user/h2track-xian/install/h2track_sim/share/h2track_sim/scenes/warehouse/warehouse.world"
+)
 CORE_REQUIRED_PACKAGES = (
     "h2track_sim",
     "h2track_tracking",
@@ -174,6 +177,12 @@ def default_scene_profile(scene_name: str) -> dict:
             "world": str(BASELINE_WORLD_PATH),
             "use_gaden": True,
         }
+    if scene_name == "warehouse":
+        return {
+            "scene_name": "warehouse",
+            "world": str(WAREHOUSE_WORLD_PATH),
+            "use_gaden": True,
+        }
     raise PackageNotFoundError(f"scene '{scene_name}' requires an installed h2track_sim package")
 
 
@@ -195,7 +204,7 @@ def main(
 ) -> int:
     parser = argparse.ArgumentParser(description="Prepare the H2track demo environment.")
     parser.add_argument("--dry-run", action="store_true", help="Report what would be cleaned without killing processes.")
-    parser.add_argument("--scene", default="baseline", help="Scene name to validate and clean for.")
+    parser.add_argument("--scene", default="warehouse", help="Scene name to validate and clean for.")
     parser.add_argument(
         "--use-gaden",
         choices=("auto", "true", "false"),
