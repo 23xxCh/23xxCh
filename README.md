@@ -88,6 +88,18 @@ ros2 launch h2track_sim demo.launch.py use_rviz:=true headless:=false
 ros2 run h2track_tracking demo_selfcheck --timeout 5.0
 ```
 
+## Demo regression
+
+Run multi-round stability checks for the current scene profile and report source-finding success rate.
+
+```bash
+cd /home/user/h2track-xian
+source /opt/ros/humble/setup.bash
+source /home/user/gaden_ws/install/setup.bash
+source install/setup.bash
+ros2 run h2track_tracking demo_regression --scene warehouse --use-gaden true --rounds 3 --run-timeout-sec 110
+```
+
 If any step fails, do not start the formal demo. Return to step 1 and fix the issue first.
 
 ```bash

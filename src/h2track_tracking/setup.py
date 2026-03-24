@@ -26,6 +26,7 @@ setup(
             "mission_manager_node = h2track_tracking.mission_manager_node:main",
             "demo_prep = h2track_tracking.demo_prep:main",
             "demo_selfcheck = h2track_tracking.demo_selfcheck:main",
+            "demo_regression = h2track_tracking.demo_regression:main",
         ],
     },
 )
