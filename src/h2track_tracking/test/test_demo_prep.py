@@ -3,7 +3,9 @@ from pathlib import Path
 from h2track_tracking.demo_prep import (
     MatchedProcess,
     check_required_packages,
+    cleanup_fastdds_lock_files,
     evaluate_prep_result,
+    find_fastdds_lock_files,
     find_stale_processes,
     main,
 )
@@ -57,6 +59,42 @@ def test_package_check_marks_missing_packages():
     assert status["h2track_tracking"] is True
     assert status["simulated_gas_sensor"] is True
     assert status["gaden_player"] is False
+
+
+def test_find_fastdds_lock_files_matches_known_patterns(tmp_path):
+    candidates = [
+        tmp_path / "fastrtps_port7457",
+        tmp_path / "fastrtps_port7457_el",
+        tmp_path / "sem.fastrtps_port7457_mutex",
+        tmp_path / "fastrtps_abc123",
+        tmp_path / "random.txt",
+    ]
+    for path in candidates:
+        path.write_text("x", encoding="utf-8")
+
+    matched = find_fastdds_lock_files(tmp_path)
+    matched_names = sorted(path.name for path in matched)
+
+    assert matched_names == [
+        "fastrtps_port7457",
+        "fastrtps_port7457_el",
+        "sem.fastrtps_port7457_mutex",
+    ]
+
+
+def test_cleanup_fastdds_lock_files_removes_selected_paths(tmp_path):
+    lock_file = tmp_path / "fastrtps_port7457"
+    lock_el = tmp_path / "fastrtps_port7457_el"
+    lock_sem = tmp_path / "sem.fastrtps_port7457_mutex"
+    for path in (lock_file, lock_el, lock_sem):
+        path.write_text("x", encoding="utf-8")
+
+    failures = cleanup_fastdds_lock_files([lock_file, lock_el, lock_sem], dry_run=False)
+
+    assert failures == []
+    assert not lock_file.exists()
+    assert not lock_el.exists()
+    assert not lock_sem.exists()
 
 
 

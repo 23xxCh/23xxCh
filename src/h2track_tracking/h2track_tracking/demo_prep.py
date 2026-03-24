@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import signal
 import subprocess
-from typing import Callable
+from typing import Callable, Iterable
 
 from ament_index_python.packages import (
     PackageNotFoundError,
@@ -30,6 +30,10 @@ GADEN_REQUIRED_PACKAGES = (
     "gaden_player",
 )
 REQUIRED_PACKAGES = CORE_REQUIRED_PACKAGES + GADEN_REQUIRED_PACKAGES
+FASTDDS_LOCK_GLOBS = (
+    "fastrtps_port*",
+    "sem.fastrtps_port*_mutex",
+)
 
 
 @dataclass(frozen=True)
@@ -80,6 +84,37 @@ def find_stale_processes(ps_output: str, demo_world_path: Path = BASELINE_WORLD_
         if _is_mission_manager_process(command):
             matches.append(MatchedProcess(pid=pid, kind="mission_manager", command=command))
     return matches
+
+
+def find_fastdds_lock_files(shm_dir: Path = Path("/dev/shm")) -> list[Path]:
+    if not shm_dir.exists():
+        return []
+    matched: dict[Path, None] = {}
+    for pattern in FASTDDS_LOCK_GLOBS:
+        for path in shm_dir.glob(pattern):
+            if path.is_file():
+                matched[path] = None
+    return sorted(matched.keys(), key=lambda p: p.name)
+
+
+def cleanup_fastdds_lock_files(
+    lock_files: Iterable[Path],
+    *,
+    dry_run: bool,
+    unlink_func: Callable[[Path], None] | None = None,
+) -> list[str]:
+    if dry_run:
+        return []
+    unlink = unlink_func or (lambda p: p.unlink())
+    failures: list[str] = []
+    for path in lock_files:
+        try:
+            unlink(path)
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            failures.append(f"Failed to remove lock {path}: {exc}")
+    return failures
 
 
 def check_required_packages(
@@ -205,6 +240,18 @@ def main(
             print(f"killed pid={process.pid}")
         except OSError as exc:
             kill_failures.append(f"Failed to kill pid {process.pid}: {exc}")
+
+    lock_files = find_fastdds_lock_files()
+    for lock_file in lock_files:
+        print(f"stale FastDDS lock: {lock_file}")
+        if args.dry_run:
+            print(f"would remove lock: {lock_file}")
+    lock_failures = cleanup_fastdds_lock_files(lock_files, dry_run=args.dry_run)
+    if not args.dry_run:
+        for lock_file in lock_files:
+            if not lock_file.exists():
+                print(f"removed lock: {lock_file}")
+    kill_failures.extend(lock_failures)
 
     for package_name, ok in package_status.items():
         if ok:

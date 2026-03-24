@@ -3,6 +3,8 @@ world: scenes/warehouse/warehouse.world
 map: scenes/warehouse/maps/warehouse_map.yaml
 nav2_params: scenes/warehouse/nav2_params.yaml
 use_gaden: true
+use_slam: true
+localizer_node: none
 model_path: scenes/warehouse/models
 upstream:
   name: aws-robomaker-small-warehouse-world
@@ -13,19 +15,23 @@ mission_manager:
     x: 0.5
     y: 1.0
     yaw: 0.0
+  patrol_goal_timeout_sec: 45.0
   patrol_points:
   - - 0.5
-    - 2.8
-  - - 2.0
-    - 2.8
-  - - 3.4
-    - -2.2
+    - 2.5
+  - - 1.8
+    - 2.1
+  - - 2.8
+    - -0.4
+  - - 3.3
+    - -2.4
   - - 3.5
-    - -2.8
+    - -2.9
   enter_threshold: 0.7
   exit_threshold: 0.45
-  source_threshold: 3.8
+  source_threshold: 3.4
   confirm_samples: 1
+  track_exit_samples: 3
   source_radius: 1.0
   source_hold_steps: 1
   track_step: 0.4

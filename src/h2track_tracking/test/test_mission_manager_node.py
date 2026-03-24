@@ -65,6 +65,35 @@ def test_mission_manager_uses_amcl_pose_subscription_for_tracking_reference():
     assert '"/amcl_pose"' in text
 
 
+def test_mission_manager_supports_slam_mode_localizer_behavior():
+    text = (
+        Path(__file__).resolve().parents[1]
+        / 'h2track_tracking'
+        / 'mission_manager_node.py'
+    ).read_text(encoding='utf-8')
+
+    assert 'declare_parameter("localizer_node"' in text
+    assert 'declare_parameter("publish_initial_pose"' in text
+    assert "tf_ready = self._refresh_pose_from_tf()" in text
+    assert "if not tf_ready:" in text
+    assert "nav_to_pose_client.wait_for_server(timeout_sec=0.2)" in text
+    assert 'lookup_transform("map", "base_link"' in text or "lookup_transform('map', 'base_link'" in text
+
+
+def test_mission_manager_supports_patrol_goal_timeout_and_skip():
+    text = (
+        Path(__file__).resolve().parents[1]
+        / 'h2track_tracking'
+        / 'mission_manager_node.py'
+    ).read_text(encoding='utf-8')
+
+    assert 'declare_parameter("patrol_goal_timeout_sec"' in text
+    assert '_patrol_goal_timeout_sec' in text
+    assert 'self._navigator.cancelTask()' in text
+    assert 'self._machine.advance_patrol()' in text
+    assert 'self._send_patrol_goal()' in text
+
+
 def test_select_tracking_target_continues_search_when_current_pose_is_already_the_strongest_peak():
     current_pose = Pose2D(3.13, -2.08)
     target = select_tracking_target(

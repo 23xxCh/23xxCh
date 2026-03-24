@@ -1,5 +1,7 @@
 from importlib.util import module_from_spec, spec_from_file_location
+import math
 from pathlib import Path
+import yaml
 
 
 def _baseline_scene_path() -> Path:
@@ -56,6 +58,18 @@ def test_warehouse_scene_defaults_to_gaden_enabled():
     warehouse = loader.load_scene_profile(pkg_share, 'warehouse')
     assert warehouse['use_gaden'] is True
     assert '10x6_empty_room' not in warehouse['gaden']['project_path']
+
+
+def test_scene_profiles_declare_use_slam_and_localizer_defaults():
+    pkg_share = str(Path(__file__).resolve().parents[1])
+    loader = _scene_loader_module()
+    baseline = loader.load_scene_profile(pkg_share, 'baseline')
+    warehouse = loader.load_scene_profile(pkg_share, 'warehouse')
+
+    assert baseline['use_slam'] is False
+    assert baseline['localizer_node'] == 'amcl'
+    assert warehouse['use_slam'] is True
+    assert warehouse['localizer_node'] == 'none'
 
 
 def _scene_loader_module():
@@ -163,3 +177,36 @@ def test_scene_loader_resolves_map_paths_from_selected_scene():
 
     assert baseline_map.endswith('maps/h2track_map.yaml')
     assert warehouse_map.endswith('scenes/warehouse/maps/warehouse_map.yaml')
+
+
+def test_warehouse_patrol_points_use_progressive_step_lengths_for_slam_mapping():
+    pkg_share = str(Path(__file__).resolve().parents[1])
+    loader = _scene_loader_module()
+    warehouse = loader.load_scene_profile(pkg_share, 'warehouse')
+    patrol_points = warehouse['mission_manager']['patrol_points']
+
+    # Keep consecutive waypoint jumps moderate in SLAM mode to avoid planning
+    # across large unmapped regions early in the run.
+    max_step = 3.0
+    for i in range(len(patrol_points) - 1):
+        x1, y1 = patrol_points[i]
+        x2, y2 = patrol_points[i + 1]
+        step = math.hypot(x2 - x1, y2 - y1)
+        assert step <= max_step, f'patrol step {i}->{i+1} too large: {step:.2f}m'
+
+
+def test_warehouse_scene_declares_patrol_goal_timeout_for_skip_logic():
+    pkg_share = str(Path(__file__).resolve().parents[1])
+    loader = _scene_loader_module()
+    warehouse = loader.load_scene_profile(pkg_share, 'warehouse')
+    timeout_sec = float(warehouse['mission_manager']['patrol_goal_timeout_sec'])
+    assert timeout_sec >= 30.0
+
+
+def test_warehouse_nav2_progress_checker_is_tuned_for_slow_cluttered_aisles():
+    nav2_path = Path(__file__).resolve().parents[1] / 'scenes' / 'warehouse' / 'nav2_params.yaml'
+    nav2 = yaml.safe_load(nav2_path.read_text(encoding='utf-8'))
+    checker = nav2['controller_server']['ros__parameters']['progress_checker']
+
+    assert float(checker['required_movement_radius']) <= 0.06
+    assert float(checker['movement_time_allowance']) >= 35.0

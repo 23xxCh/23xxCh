@@ -48,6 +48,7 @@ def _source_point(profile: dict) -> dict:
 def test_demo_profile_contains_fixed_demo_defaults():
     text = (Path(__file__).resolve().parents[1] / 'config' / 'demo.yaml').read_text(encoding='utf-8')
     assert 'use_gaden: true' in text
+    assert 'use_slam: true' in text
     assert 'scene_config: scenes/warehouse/scene.yaml' in text
     assert 'mission_manager:' not in text
     assert 'gas_source:' not in text
@@ -122,8 +123,11 @@ def test_demo_profile_has_staged_patrol_path_for_live_demo():
     assert len(patrol_points) >= 4
 
     # First legs are pure patrol in upper aisle.
-    assert _distance(initial_pose, patrol_points[0]) >= 1.5
-    assert patrol_points[0]["y"] > 2.0 and patrol_points[1]["y"] > 2.0
+    first_leg = _distance(initial_pose, patrol_points[0])
+    assert first_leg >= 1.5
+    assert first_leg <= 1.6
+    assert patrol_points[0]["y"] > 2.0
+    assert patrol_points[1]["y"] > 2.0
     assert _distance(patrol_points[0], source) > 4.0
 
     # Later points should descend toward the source shelf.
@@ -144,6 +148,7 @@ def test_demo_profile_source_stays_off_patrol_points_but_near_early_route():
     for point in early_points:
         assert _distance(point, source) > 3.5
     assert _distance(patrol_points[-1], source) < 0.4
+    assert _distance(patrol_points[-2], source) < 0.8
 
 
 
@@ -167,6 +172,7 @@ def test_demo_profile_approaches_source_from_above_obstacle_one():
 
     assert fourth_point["y"] < 0.0
     assert final_point["y"] < fourth_point["y"]
+    assert final_point["x"] <= 3.5
     assert _distance(final_point, source) < _distance(fourth_point, source)
     assert _distance(final_point, source) < 0.4
 
@@ -176,9 +182,10 @@ def test_demo_profile_balances_background_rejection_with_source_entry():
 
     assert 0.6 <= float(mission["enter_threshold"]) <= 1.2
     assert int(mission["confirm_samples"]) == 1
-    assert float(mission["source_threshold"]) >= 3.8
+    assert 3.0 <= float(mission["source_threshold"]) <= 3.6
     assert float(mission["source_threshold"]) > float(mission["enter_threshold"])
     assert 0.35 <= float(mission["exit_threshold"]) < float(mission["enter_threshold"])
+    assert int(mission["track_exit_samples"]) >= int(mission["confirm_samples"])
     assert float(mission["track_step"]) <= 0.5
     assert float(mission["source_radius"]) >= 1.0
     assert int(mission["source_hold_steps"]) == 1
@@ -189,6 +196,7 @@ def test_demo_launch_includes_bringup_with_demo_defaults():
     text = _launch_text("demo.launch.py")
     assert "IncludeLaunchDescription" in text
     assert "use_gaden" in text
+    assert "use_slam" in text
     assert "demo.yaml" in text
 
 
@@ -215,6 +223,13 @@ def test_demo_launch_resolves_scene_specific_use_gaden_default():
     assert "scene_profile.get('use_gaden'" in text or 'scene_profile.get("use_gaden"' in text
     assert "use_gaden.perform(context)" in text or 'LaunchConfiguration("use_gaden").perform(context)' in text
     assert "SetLaunchConfiguration('use_gaden'" in text or 'SetLaunchConfiguration("use_gaden"' in text
+
+
+def test_demo_launch_resolves_scene_specific_use_slam_default():
+    text = _launch_text("demo.launch.py")
+    assert "scene_profile.get('use_slam'" in text or 'scene_profile.get("use_slam"' in text
+    assert "use_slam.perform(context)" in text or 'LaunchConfiguration("use_slam").perform(context)' in text
+    assert "SetLaunchConfiguration('use_slam'" in text or 'SetLaunchConfiguration("use_slam"' in text
 
 def test_demo_launch_prefers_scene_gaden_defaults_for_warehouse():
     text = _launch_text("demo.launch.py")
@@ -247,3 +262,18 @@ def test_demo_launch_sets_mission_values_as_launch_configurations():
     text = _launch_text("demo.launch.py")
     assert "SetLaunchConfiguration('mission_manager_delay'" in text
     assert "SetLaunchConfiguration('patrol_points'" in text
+    assert "SetLaunchConfiguration('patrol_goal_timeout_sec'" in text
+    assert "SetLaunchConfiguration('track_exit_samples'" in text
+
+
+def test_demo_launch_forwards_optional_nav2_map_override():
+    text = _launch_text("demo.launch.py")
+    assert "DeclareLaunchArgument('nav2_map_file'" in text or 'DeclareLaunchArgument("nav2_map_file"' in text
+    assert "'nav2_map_file': nav2_map_file" in text or '"nav2_map_file": nav2_map_file' in text
+
+
+def test_slam_demo_launch_forces_use_slam_true():
+    text = _launch_text("slam_demo.launch.py")
+    assert '"use_slam": "true"' in text
+    assert '"nav2_map_file": nav2_map_file' in text
+    assert "IncludeLaunchDescription" in text
