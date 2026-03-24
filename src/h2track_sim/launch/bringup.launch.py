@@ -44,6 +44,7 @@ def generate_launch_description():
     use_gaden = LaunchConfiguration("use_gaden")
     nav2_params_file = LaunchConfiguration("nav2_params_file")
     nav2_autostart = LaunchConfiguration("nav2_autostart")
+    nav2_launch_delay = LaunchConfiguration("nav2_launch_delay")
     mission_manager_delay = LaunchConfiguration("mission_manager_delay")
     nav2_startup_gate_timeout = LaunchConfiguration("nav2_startup_gate_timeout")
     nav2_startup_gate_poll_period = LaunchConfiguration("nav2_startup_gate_poll_period")
@@ -94,6 +95,7 @@ def generate_launch_description():
     declare_use_gaden = DeclareLaunchArgument("use_gaden", default_value="false")
     declare_nav2_params_file = DeclareLaunchArgument("nav2_params_file", default_value="")
     declare_nav2_autostart = DeclareLaunchArgument("nav2_autostart", default_value="true")
+    declare_nav2_launch_delay = DeclareLaunchArgument("nav2_launch_delay", default_value="8.0")
     declare_mission_manager_delay = DeclareLaunchArgument("mission_manager_delay", default_value="10.0")
     declare_nav2_startup_gate_timeout = DeclareLaunchArgument("nav2_startup_gate_timeout", default_value="30.0")
     declare_nav2_startup_gate_poll_period = DeclareLaunchArgument("nav2_startup_gate_poll_period", default_value="0.5")
@@ -227,9 +229,13 @@ def generate_launch_description():
         }.items(),
     )
 
-    nav2 = IncludeLaunchDescription(
+    nav2_include = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(pkg_share, "launch", "nav2.launch.py")),
         launch_arguments={"scene": scene, "use_sim_time": use_sim_time, "params_file": nav2_params_file, "autostart": nav2_autostart}.items(),
+    )
+    nav2 = TimerAction(
+        period=nav2_launch_delay,
+        actions=[nav2_include],
     )
 
     nav2_startup_gate = Node(
@@ -432,6 +438,7 @@ def generate_launch_description():
             declare_use_gaden,
             declare_nav2_params_file,
             declare_nav2_autostart,
+            declare_nav2_launch_delay,
             declare_mission_manager_delay,
             declare_nav2_startup_gate_timeout,
             declare_nav2_startup_gate_poll_period,

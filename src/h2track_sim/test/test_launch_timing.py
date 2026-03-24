@@ -149,6 +149,13 @@ def test_bringup_launch_exposes_nav2_autostart_argument():
     assert '"autostart": nav2_autostart' in text
 
 
+def test_bringup_launch_delays_nav2_start_until_sim_is_up():
+    text = _launch_text("bringup.launch.py")
+    assert 'DeclareLaunchArgument("nav2_launch_delay"' in text
+    assert "period=nav2_launch_delay" in text
+    assert "actions=[nav2_include]" in text
+
+
 def test_bringup_launch_uses_nav2_startup_gate_node_when_autostart_is_disabled():
     text = _launch_text("bringup.launch.py")
     assert 'executable="nav2_startup_gate_node"' in text
