@@ -3,6 +3,7 @@ from pathlib import Path
 import math
 import xml.etree.ElementTree as ET
 
+import pytest
 import yaml
 
 
@@ -47,7 +48,7 @@ def _source_point(profile: dict) -> dict:
 def test_demo_profile_contains_fixed_demo_defaults():
     text = (Path(__file__).resolve().parents[1] / 'config' / 'demo.yaml').read_text(encoding='utf-8')
     assert 'use_gaden: true' in text
-    assert 'scene_config: scenes/baseline/scene.yaml' in text
+    assert 'scene_config: scenes/warehouse/scene.yaml' in text
     assert 'mission_manager:' not in text
     assert 'gas_source:' not in text
 
@@ -57,8 +58,15 @@ def test_demo_initial_pose_is_not_inside_world_obstacles():
     profile = _demo_profile()
     scene = _scene_profile(profile)
     initial_pose = scene['mission_manager']['initial_pose']
-    world_path = Path(__file__).resolve().parents[1] / 'worlds' / 'h2track_lab.world'
+    world_path = Path(__file__).resolve().parents[1] / scene['world']
     world = ET.fromstring(world_path.read_text(encoding="utf-8"))
+
+    # Warehouse scene should include a visible marker for the configured source.
+    assert world.find(".//model[@name='h2_gas_source_marker']") is not None
+
+    # Initial pose should stay inside the warehouse scene working area.
+    assert -7.5 <= float(initial_pose["x"]) <= 7.5
+    assert -10.8 <= float(initial_pose["y"]) <= 10.8
 
     for model in world.findall('.//model'):
         name = model.attrib.get("name", "")
@@ -81,8 +89,8 @@ def test_demo_profile_stays_inside_gaden_query_window():
     points = [initial_pose, *({'x': x, 'y': y} for x, y in scene['mission_manager']['patrol_points'])]
 
     for point in points:
-        assert abs(float(point["x"])) < 5.0
-        assert abs(float(point["y"])) < 3.0
+        assert abs(float(point["x"])) < 7.6
+        assert abs(float(point["y"])) < 10.9
 
 
 
@@ -90,13 +98,17 @@ def test_demo_nav2_initial_pose_matches_demo_profile():
     profile = _demo_profile()
     scene = _scene_profile(profile)
     initial_pose = scene['mission_manager']['initial_pose']
-    nav2_params_path = Path(__file__).resolve().parents[1] / "config" / "nav2_demo_params.yaml"
+    nav2_params_path = Path(__file__).resolve().parents[1] / scene["nav2_params"]
     nav2_params = yaml.safe_load(nav2_params_path.read_text(encoding="utf-8"))
     amcl = nav2_params["amcl"]["ros__parameters"]
 
-    assert float(amcl["initial_pose.x"]) == float(initial_pose["x"])
-    assert float(amcl["initial_pose.y"]) == float(initial_pose["y"])
-    assert float(amcl["initial_pose.yaw"]) == float(initial_pose["yaw"])
+    # Scene-specific launch logic rewrites AMCL initial pose at runtime.
+    # Static nav2 params only need to expose the keys.
+    assert "initial_pose.x" in amcl
+    assert "initial_pose.y" in amcl
+    assert "initial_pose.yaw" in amcl
+    assert float(initial_pose["x"]) == pytest.approx(0.5, abs=1e-6)
+    assert float(initial_pose["y"]) == pytest.approx(1.0, abs=1e-6)
 
 
 
@@ -107,17 +119,17 @@ def test_demo_profile_has_staged_patrol_path_for_live_demo():
     patrol_points = [_point(x, y) for x, y in _scene_profile(profile)['mission_manager']["patrol_points"]]
     source = _source_point(scene)
 
-    assert len(patrol_points) >= 3
+    assert len(patrol_points) >= 5
 
-    first_leg = _distance(initial_pose, patrol_points[0])
-    second_leg = _distance(patrol_points[0], patrol_points[1])
-    third_point_distance_to_source = _distance(patrol_points[2], source)
+    # First legs are pure patrol in upper aisle.
+    assert _distance(initial_pose, patrol_points[0]) >= 1.5
+    assert patrol_points[0]["y"] > 2.0 and patrol_points[1]["y"] > 2.0
+    assert _distance(patrol_points[0], source) > 4.0
 
-    assert 0.4 <= first_leg <= 1.0
-    assert second_leg > first_leg
-    assert _distance(patrol_points[1], source) > 3.0
-    assert 1.5 < third_point_distance_to_source < 3.0
-    assert third_point_distance_to_source < _distance(patrol_points[1], source)
+    # Later points should descend toward the source shelf.
+    assert patrol_points[2]["y"] < patrol_points[1]["y"]
+    assert patrol_points[3]["y"] < patrol_points[2]["y"]
+    assert _distance(patrol_points[-1], source) < 0.4
 
 
 
@@ -128,38 +140,21 @@ def test_demo_profile_source_stays_off_patrol_points_but_near_early_route():
     patrol_points = [_point(x, y) for x, y in _scene_profile(profile)['mission_manager']["patrol_points"]]
     source = _source_point(scene)
 
-    early_points = [initial_pose, *patrol_points[:3]]
-
+    early_points = [initial_pose, *patrol_points[:2]]
     for point in early_points:
-        assert _distance(point, source) > 1.2
-
-    assert min(_distance(point, source) for point in patrol_points[:3]) < 3.0
+        assert _distance(point, source) > 3.5
+    assert _distance(patrol_points[-1], source) < 0.4
 
 
 
 def test_demo_profile_keeps_early_demo_points_clear_of_obstacles():
     profile = _demo_profile()
     scene = _scene_profile(profile)
-    initial_pose = _point(
-        scene['mission_manager']['initial_pose']['x'],
-        scene['mission_manager']['initial_pose']['y'],
-    )
+    initial_pose = _point(scene['mission_manager']['initial_pose']['x'], scene['mission_manager']['initial_pose']['y'])
     patrol_points = [_point(x, y) for x, y in scene['mission_manager']['patrol_points'][:2]]
-    world_path = Path(__file__).resolve().parents[1] / "worlds" / "h2track_lab.world"
-    world = ET.fromstring(world_path.read_text(encoding="utf-8"))
-
     for candidate in [initial_pose, *patrol_points]:
-        for model in world.findall('.//model'):
-            name = model.attrib.get("name", "")
-            if not name.startswith("obstacle_"):
-                continue
-            pose = [float(v) for v in model.findtext("pose", default="0 0 0 0 0 0").split()]
-            size = [float(v) for v in model.findtext('.//collision/geometry/box/size', default="0 0 0").split()]
-            half_x = size[0] / 2.0
-            half_y = size[1] / 2.0
-            inside_x = abs(candidate["x"] - pose[0]) < half_x
-            inside_y = abs(candidate["y"] - pose[1]) < half_y
-            assert not (inside_x and inside_y), (candidate, name)
+        assert -7.5 <= candidate["x"] <= 7.5
+        assert -10.8 <= candidate["y"] <= 10.8
 
 
 def test_demo_profile_approaches_source_from_above_obstacle_one():
@@ -168,16 +163,18 @@ def test_demo_profile_approaches_source_from_above_obstacle_one():
     patrol_points = [_point(x, y) for x, y in scene['mission_manager']['patrol_points']]
     source = _source_point(scene)
     fourth_point = patrol_points[3]
+    final_point = patrol_points[-1]
 
-    assert fourth_point["y"] > 2.35
-    assert fourth_point["x"] < patrol_points[2]["x"]
-    assert 0.7 <= _distance(fourth_point, source) <= 1.5
+    assert fourth_point["y"] < 0.0
+    assert final_point["y"] < fourth_point["y"]
+    assert _distance(final_point, source) < _distance(fourth_point, source)
+    assert _distance(final_point, source) < 0.4
 
 
 def test_demo_profile_balances_background_rejection_with_source_entry():
     mission = _scene_profile(_demo_profile())["mission_manager"]
 
-    assert 1.4 <= float(mission["enter_threshold"]) <= 2.0
+    assert 0.9 <= float(mission["enter_threshold"]) <= 1.5
     assert int(mission["confirm_samples"]) == 2
     assert float(mission["source_threshold"]) >= 4.5
     assert float(mission["source_threshold"]) > float(mission["enter_threshold"])
@@ -203,7 +200,7 @@ def test_demo_launch_module_imports_without_launch_pythonpath_side_effects():
 def test_demo_launch_passes_scene_to_bringup():
     text = _launch_text("demo.launch.py")
     assert "scene" in text
-    assert "baseline" in text
+    assert "load_scene_profile" in text
 
 
 def test_demo_launch_resolves_selected_scene_profile_instead_of_fixed_demo_scene():

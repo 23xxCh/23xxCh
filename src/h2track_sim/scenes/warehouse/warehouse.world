@@ -217,6 +217,27 @@
         <pose frame=''>-0.276098 -9.481944 0.023266 0 0 0</pose>
 	</model>
 
+      <model name="h2_gas_source_marker">
+        <static>true</static>
+        <pose frame="">3.6 -3.038551 0.8 0 0 0</pose>
+        <link name="marker_link">
+          <visual name="marker_visual">
+            <geometry>
+              <cylinder>
+                <radius>0.08</radius>
+                <length>1.6</length>
+              </cylinder>
+            </geometry>
+            <material>
+              <ambient>0.95 0.08 0.08 1.0</ambient>
+              <diffuse>0.95 0.08 0.08 1.0</diffuse>
+              <specular>0.8 0.2 0.2 1.0</specular>
+              <emissive>0.95 0.05 0.05 1.0</emissive>
+            </material>
+          </visual>
+        </link>
+      </model>
+
     	
     <light name="Warehouse_CeilingLight_003" type="point">
       <pose frame="">0 0 9 0 0 0</pose>

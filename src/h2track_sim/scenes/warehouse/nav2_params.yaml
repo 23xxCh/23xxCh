@@ -95,7 +95,7 @@ controller_server:
     controller_frequency: 10.0
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.0
-    min_theta_velocity_threshold: 0.001
+    min_theta_velocity_threshold: 0.05
     progress_checker_plugin: progress_checker
     goal_checker_plugins:
     - goal_checker
@@ -109,15 +109,16 @@ controller_server:
       plugin: nav2_controller::SimpleGoalChecker
       stateful: true
       xy_goal_tolerance: 0.25
-      yaw_goal_tolerance: 0.25
+      yaw_goal_tolerance: 0.6
     FollowPath:
       plugin: nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController
-      desired_linear_vel: 0.18
+      desired_linear_vel: 0.15
       lookahead_dist: 0.35
       min_lookahead_dist: 0.2
       max_lookahead_dist: 0.6
       transform_tolerance: 0.2
-      rotate_to_heading_angular_vel: 1.2
+      rotate_to_heading_angular_vel: 0.6
+      use_rotate_to_heading: false
 local_costmap:
   local_costmap:
     ros__parameters:
