@@ -67,6 +67,14 @@ user       11002    1282  0 00:00 ?        00:00:01 gzserver --verbose -s libgaz
 user       11003    1282  0 00:00 ?        00:00:00 /opt/ros/humble/lib/nav2_lifecycle_manager/lifecycle_manager --ros-args -r __node:=lifecycle_manager_navigation
 """
 
+GADEN_PS_OUTPUT = """
+user       12001    1282  0 00:00 ?        00:00:00 /home/user/gaden_ws/install/gaden_environment/lib/gaden_environment/environment --ros-args -r __node:=gaden_environment
+user       12002    1282  0 00:00 ?        00:00:00 /home/user/gaden_ws/install/gaden_player/lib/gaden_player/player --ros-args -r __node:=gaden_player
+user       12003    1282  0 00:00 ?        00:00:00 /usr/bin/python3 /home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/gaden_sensor_gate_node --ros-args -r __node:=gaden_sensor_gate_node
+user       12004    1282  0 00:00 ?        00:00:00 /usr/bin/python3 /home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/gaden_adapter_node --ros-args -r __node:=gaden_adapter_node
+user       12005    1282  0 00:00 ?        00:00:00 /usr/bin/python3 /home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/mission_manager_node --ros-args -r __node:=mission_manager_node
+"""
+
 
 def test_matches_only_selected_scene_world_processes():
     processes = find_stale_processes(
@@ -84,6 +92,41 @@ def test_matches_only_selected_scene_world_processes():
             pid=11003,
             kind='nav2_lifecycle_manager',
             command='/opt/ros/humble/lib/nav2_lifecycle_manager/lifecycle_manager --ros-args -r __node:=lifecycle_manager_navigation',
+        ),
+    ]
+
+
+def test_matches_gaden_and_mission_processes_for_cleanup():
+    processes = find_stale_processes(
+        GADEN_PS_OUTPUT,
+        Path('/tmp/h2track/scenes/warehouse/warehouse.world'),
+    )
+
+    assert processes == [
+        MatchedProcess(
+            pid=12001,
+            kind='gaden_environment',
+            command='/home/user/gaden_ws/install/gaden_environment/lib/gaden_environment/environment --ros-args -r __node:=gaden_environment',
+        ),
+        MatchedProcess(
+            pid=12002,
+            kind='gaden_player',
+            command='/home/user/gaden_ws/install/gaden_player/lib/gaden_player/player --ros-args -r __node:=gaden_player',
+        ),
+        MatchedProcess(
+            pid=12003,
+            kind='gaden_sensor_gate',
+            command='/usr/bin/python3 /home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/gaden_sensor_gate_node --ros-args -r __node:=gaden_sensor_gate_node',
+        ),
+        MatchedProcess(
+            pid=12004,
+            kind='gaden_adapter',
+            command='/usr/bin/python3 /home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/gaden_adapter_node --ros-args -r __node:=gaden_adapter_node',
+        ),
+        MatchedProcess(
+            pid=12005,
+            kind='mission_manager',
+            command='/usr/bin/python3 /home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/mission_manager_node --ros-args -r __node:=mission_manager_node',
         ),
     ]
 

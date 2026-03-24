@@ -10,7 +10,7 @@ from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, Opaq
 from launch.conditions import IfCondition, UnlessCondition
 from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
@@ -95,12 +95,12 @@ def generate_launch_description():
     declare_use_gaden = DeclareLaunchArgument("use_gaden", default_value="false")
     declare_nav2_params_file = DeclareLaunchArgument("nav2_params_file", default_value="")
     declare_nav2_autostart = DeclareLaunchArgument("nav2_autostart", default_value="true")
-    declare_nav2_launch_delay = DeclareLaunchArgument("nav2_launch_delay", default_value="8.0")
+    declare_nav2_launch_delay = DeclareLaunchArgument("nav2_launch_delay", default_value="12.0")
     declare_mission_manager_delay = DeclareLaunchArgument("mission_manager_delay", default_value="10.0")
     declare_nav2_startup_gate_timeout = DeclareLaunchArgument("nav2_startup_gate_timeout", default_value="30.0")
     declare_nav2_startup_gate_poll_period = DeclareLaunchArgument("nav2_startup_gate_poll_period", default_value="0.5")
     declare_nav2_startup_gate_stable_ready_count = DeclareLaunchArgument("nav2_startup_gate_stable_ready_count", default_value="2")
-    declare_gaden_sensor_gate_timeout = DeclareLaunchArgument("gaden_sensor_gate_timeout", default_value="30.0")
+    declare_gaden_sensor_gate_timeout = DeclareLaunchArgument("gaden_sensor_gate_timeout", default_value="60.0")
     declare_gaden_sensor_gate_poll_period = DeclareLaunchArgument("gaden_sensor_gate_poll_period", default_value="0.5")
     declare_gaden_sensor_gate_stable_ready_count = DeclareLaunchArgument("gaden_sensor_gate_stable_ready_count", default_value="3")
     declare_initial_pose_x = DeclareLaunchArgument("initial_pose_x", default_value="0.0")
@@ -405,7 +405,7 @@ def generate_launch_description():
 
     mission_manager = TimerAction(
         condition=IfCondition(nav2_autostart),
-        period=mission_manager_delay,
+        period=PythonExpression([nav2_launch_delay, " + ", mission_manager_delay]),
         actions=[mission_manager_node],
     )
 

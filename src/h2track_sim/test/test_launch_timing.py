@@ -28,7 +28,7 @@ def _default_value(text: str, argument_name: str) -> str:
 def test_bringup_launch_exposes_mission_manager_delay_argument():
     text = _launch_text("bringup.launch.py")
     assert 'DeclareLaunchArgument("mission_manager_delay"' in text
-    assert 'period=mission_manager_delay' in text
+    assert 'period=PythonExpression([nav2_launch_delay, " + ", mission_manager_delay])' in text
 
 
 def test_bringup_declares_scene_launch_argument():

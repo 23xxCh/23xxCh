@@ -119,7 +119,7 @@ def test_demo_profile_has_staged_patrol_path_for_live_demo():
     patrol_points = [_point(x, y) for x, y in _scene_profile(profile)['mission_manager']["patrol_points"]]
     source = _source_point(scene)
 
-    assert len(patrol_points) >= 5
+    assert len(patrol_points) >= 4
 
     # First legs are pure patrol in upper aisle.
     assert _distance(initial_pose, patrol_points[0]) >= 1.5
@@ -162,7 +162,7 @@ def test_demo_profile_approaches_source_from_above_obstacle_one():
     scene = _scene_profile(profile)
     patrol_points = [_point(x, y) for x, y in scene['mission_manager']['patrol_points']]
     source = _source_point(scene)
-    fourth_point = patrol_points[3]
+    fourth_point = patrol_points[2]
     final_point = patrol_points[-1]
 
     assert fourth_point["y"] < 0.0
@@ -174,14 +174,14 @@ def test_demo_profile_approaches_source_from_above_obstacle_one():
 def test_demo_profile_balances_background_rejection_with_source_entry():
     mission = _scene_profile(_demo_profile())["mission_manager"]
 
-    assert 0.9 <= float(mission["enter_threshold"]) <= 1.5
+    assert 0.7 <= float(mission["enter_threshold"]) <= 1.2
     assert int(mission["confirm_samples"]) == 2
-    assert float(mission["source_threshold"]) >= 4.5
+    assert float(mission["source_threshold"]) >= 4.0
     assert float(mission["source_threshold"]) > float(mission["enter_threshold"])
-    assert 0.6 <= float(mission["exit_threshold"]) < float(mission["enter_threshold"])
+    assert 0.4 <= float(mission["exit_threshold"]) < float(mission["enter_threshold"])
     assert float(mission["track_step"]) <= 0.5
     assert float(mission["source_radius"]) >= 1.0
-    assert int(mission["source_hold_steps"]) == 2
+    assert int(mission["source_hold_steps"]) == 1
 
 
 

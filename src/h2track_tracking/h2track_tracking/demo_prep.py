@@ -64,6 +64,21 @@ def find_stale_processes(ps_output: str, demo_world_path: Path = BASELINE_WORLD_
             continue
         if _is_h2track_nav2_lifecycle_process(command):
             matches.append(MatchedProcess(pid=pid, kind="nav2_lifecycle_manager", command=command))
+            continue
+        if _is_gaden_environment_process(command):
+            matches.append(MatchedProcess(pid=pid, kind="gaden_environment", command=command))
+            continue
+        if _is_gaden_player_process(command):
+            matches.append(MatchedProcess(pid=pid, kind="gaden_player", command=command))
+            continue
+        if _is_gaden_sensor_gate_process(command):
+            matches.append(MatchedProcess(pid=pid, kind="gaden_sensor_gate", command=command))
+            continue
+        if _is_gaden_adapter_process(command):
+            matches.append(MatchedProcess(pid=pid, kind="gaden_adapter", command=command))
+            continue
+        if _is_mission_manager_process(command):
+            matches.append(MatchedProcess(pid=pid, kind="mission_manager", command=command))
     return matches
 
 
@@ -167,14 +182,6 @@ def main(
         scene_profile = scene_loader(args.scene)
     except PackageNotFoundError:
         scene_profile = default_scene_profile(args.scene)
-
-    scene_loader = scene_profile_loader or (
-        lambda scene_name: load_scene_profile(scene_name, package_share_resolver=share_resolver)
-    )
-    try:
-        scene_profile = scene_loader(args.scene)
-    except PackageNotFoundError:
-        scene_profile = default_scene_profile(args.scene)
     use_gaden = resolve_use_gaden(args.use_gaden, scene_profile)
     demo_world_path = resolve_scene_world_path(scene_profile, package_share)
     required_packages = required_packages_for_scene(use_gaden=use_gaden)
@@ -230,6 +237,26 @@ def _is_h2track_gazebo_process(command: str, demo_world_path: Path) -> bool:
 
 def _is_h2track_nav2_lifecycle_process(command: str) -> bool:
     return "nav2_lifecycle_manager/lifecycle_manager" in command and "__node:=lifecycle_manager_navigation" in command
+
+
+def _is_gaden_environment_process(command: str) -> bool:
+    return "gaden_environment/environment" in command and "__node:=gaden_environment" in command
+
+
+def _is_gaden_player_process(command: str) -> bool:
+    return "gaden_player/player" in command and "__node:=gaden_player" in command
+
+
+def _is_gaden_sensor_gate_process(command: str) -> bool:
+    return "gaden_sensor_gate_node" in command and "__node:=gaden_sensor_gate_node" in command
+
+
+def _is_gaden_adapter_process(command: str) -> bool:
+    return "gaden_adapter_node" in command and "__node:=gaden_adapter_node" in command
+
+
+def _is_mission_manager_process(command: str) -> bool:
+    return "mission_manager_node" in command and "__node:=mission_manager_node" in command
 
 
 def _read_process_table() -> str:
