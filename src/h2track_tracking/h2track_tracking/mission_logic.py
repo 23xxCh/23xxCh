@@ -24,6 +24,7 @@ class MissionConfig:
     confirm_samples: int
     source_radius: float
     source_hold_steps: int
+    track_exit_samples: int | None = None
     actual_source: tuple[float, float] | None = None
 
 
@@ -31,7 +32,9 @@ class MissionStateMachine:
     def __init__(self, config: MissionConfig) -> None:
         self.config = config
         self.mode = MissionMode.PATROL
-        self._recent_observations: deque[tuple[tuple[float, float], float]] = deque(maxlen=max(1, config.confirm_samples))
+        self._track_exit_samples = max(1, int(config.track_exit_samples or config.confirm_samples))
+        history_len = max(1, int(config.confirm_samples), self._track_exit_samples)
+        self._recent_observations: deque[tuple[tuple[float, float], float]] = deque(maxlen=history_len)
         self._source_hits = 0
         self._current_patrol_index = 0
         self.source_estimate: tuple[float, float] | None = None
@@ -61,22 +64,25 @@ class MissionStateMachine:
     ) -> MissionMode:
         self._recent_observations.append((robot_position, concentration))
 
-        recent_concentrations = [value for _, value in self._recent_observations]
         recent_count = len(self._recent_observations)
+        confirm_window = list(self._recent_observations)[-self.config.confirm_samples :]
+        confirm_concentrations = [value for _, value in confirm_window]
+        track_exit_window = list(self._recent_observations)[-self._track_exit_samples :]
+        track_exit_concentrations = [value for _, value in track_exit_window]
 
         if self.mode is MissionMode.PATROL:
             if goal_reached:
                 self.advance_patrol()
             if (
-                recent_count == self.config.confirm_samples
-                and min(recent_concentrations) >= self.config.enter_threshold
+                recent_count >= self.config.confirm_samples
+                and min(confirm_concentrations) >= self.config.enter_threshold
             ):
                 self.mode = MissionMode.SEEK_CONFIRM
 
         elif self.mode is MissionMode.SEEK_CONFIRM:
             if (
-                recent_count == self.config.confirm_samples
-                and max(recent_concentrations) < self.config.exit_threshold
+                recent_count >= self.config.confirm_samples
+                and max(confirm_concentrations) < self.config.exit_threshold
             ):
                 self.mode = MissionMode.PATROL
                 self._recent_observations.clear()
@@ -85,16 +91,16 @@ class MissionStateMachine:
 
         elif self.mode is MissionMode.SEEK_TRACK:
             if (
-                recent_count == self.config.confirm_samples
-                and max(recent_concentrations) < self.config.exit_threshold
+                recent_count >= self._track_exit_samples
+                and max(track_exit_concentrations) < self.config.exit_threshold
             ):
                 self.mode = MissionMode.PATROL
                 self._source_hits = 0
                 self.source_estimate = None
                 self._recent_observations.clear()
-            elif max(recent_concentrations) >= self.config.source_threshold:
+            elif max(confirm_concentrations) >= self.config.source_threshold:
                 strongest_position, strongest_concentration = max(
-                    self._recent_observations,
+                    confirm_window,
                     key=lambda observation: observation[1],
                 )
                 strongest_radius = math.hypot(

@@ -151,3 +151,32 @@ This warehouse GADEN integration is still approximate in geometry, but the runti
 - occupancy, wind, and playback results are generated under `h2track_warehouse/config1`
 - the generated occupancy covers the full warehouse map extents used by Nav2
 - the scene is now scene-owned and no longer falls back to the baseline room path by default
+
+## Navigation Robustness Regression
+
+Use the built-in regression runner to evaluate warehouse stability over repeated rounds:
+
+```bash
+ros2 run h2track_tracking demo_regression \
+  --scene warehouse \
+  --use-gaden true \
+  --use-slam true \
+  --rounds 20 \
+  --run-timeout-sec 240 \
+  --log-dir /tmp/h2track_nav_regression
+```
+
+What it now records per round:
+- `failed_to_make_progress` count
+- `patrol_timeouts` count
+- `goal_succeeded` count
+- whether `SEEK_TRACK` was reached
+- whether `SOURCE_FOUND` was reached
+
+Generated outputs:
+- `/tmp/h2track_nav_regression/rounds.csv`
+- `/tmp/h2track_nav_regression/summary.json`
+
+Target gate for this phase:
+- success rule: no `Failed to make progress` and `SEEK_TRACK` reached
+- pass threshold: at least 18/20 successful rounds (>= 90%)

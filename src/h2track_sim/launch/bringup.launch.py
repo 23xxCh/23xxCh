@@ -42,6 +42,8 @@ def generate_launch_description():
     world = LaunchConfiguration("world")
     gazebo_model_path = LaunchConfiguration("gazebo_model_path")
     use_gaden = LaunchConfiguration("use_gaden")
+    use_slam = LaunchConfiguration("use_slam")
+    nav2_map_file = LaunchConfiguration("nav2_map_file")
     nav2_params_file = LaunchConfiguration("nav2_params_file")
     nav2_autostart = LaunchConfiguration("nav2_autostart")
     nav2_launch_delay = LaunchConfiguration("nav2_launch_delay")
@@ -55,17 +57,21 @@ def generate_launch_description():
     initial_pose_x = LaunchConfiguration("initial_pose_x")
     initial_pose_y = LaunchConfiguration("initial_pose_y")
     initial_pose_yaw = LaunchConfiguration("initial_pose_yaw")
+    patrol_goal_timeout_sec = LaunchConfiguration("patrol_goal_timeout_sec")
     patrol_points = LaunchConfiguration("patrol_points")
     enter_threshold = LaunchConfiguration("enter_threshold")
     exit_threshold = LaunchConfiguration("exit_threshold")
     source_threshold = LaunchConfiguration("source_threshold")
     confirm_samples = LaunchConfiguration("confirm_samples")
+    track_exit_samples = LaunchConfiguration("track_exit_samples")
     source_radius = LaunchConfiguration("source_radius")
     source_hold_steps = LaunchConfiguration("source_hold_steps")
     track_step = LaunchConfiguration("track_step")
     sweep_angle_deg = LaunchConfiguration("sweep_angle_deg")
     source_x = LaunchConfiguration("source_x")
     source_y = LaunchConfiguration("source_y")
+    localizer_node = LaunchConfiguration("localizer_node")
+    publish_initial_pose = LaunchConfiguration("publish_initial_pose")
     gas_source_strength = LaunchConfiguration("gas_source_strength")
     gas_decay_rate = LaunchConfiguration("gas_decay_rate")
     gas_plume_stddev = LaunchConfiguration("gas_plume_stddev")
@@ -93,6 +99,8 @@ def generate_launch_description():
     declare_world = DeclareLaunchArgument("world", default_value="")
     declare_gazebo_model_path = DeclareLaunchArgument("gazebo_model_path", default_value="")
     declare_use_gaden = DeclareLaunchArgument("use_gaden", default_value="false")
+    declare_use_slam = DeclareLaunchArgument("use_slam", default_value="")
+    declare_nav2_map_file = DeclareLaunchArgument("nav2_map_file", default_value="")
     declare_nav2_params_file = DeclareLaunchArgument("nav2_params_file", default_value="")
     declare_nav2_autostart = DeclareLaunchArgument("nav2_autostart", default_value="true")
     declare_nav2_launch_delay = DeclareLaunchArgument("nav2_launch_delay", default_value="12.0")
@@ -106,17 +114,21 @@ def generate_launch_description():
     declare_initial_pose_x = DeclareLaunchArgument("initial_pose_x", default_value="0.0")
     declare_initial_pose_y = DeclareLaunchArgument("initial_pose_y", default_value="0.0")
     declare_initial_pose_yaw = DeclareLaunchArgument("initial_pose_yaw", default_value="0.0")
+    declare_patrol_goal_timeout_sec = DeclareLaunchArgument("patrol_goal_timeout_sec", default_value="45.0")
     declare_patrol_points = DeclareLaunchArgument("patrol_points", default_value="[3.0, 3.0, -3.0, 3.0, -3.0, -3.0, 3.0, -3.0]")
     declare_enter_threshold = DeclareLaunchArgument("enter_threshold", default_value="4.0")
     declare_exit_threshold = DeclareLaunchArgument("exit_threshold", default_value="1.5")
     declare_source_threshold = DeclareLaunchArgument("source_threshold", default_value="8.0")
     declare_confirm_samples = DeclareLaunchArgument("confirm_samples", default_value="3")
+    declare_track_exit_samples = DeclareLaunchArgument("track_exit_samples", default_value="3")
     declare_source_radius = DeclareLaunchArgument("source_radius", default_value="0.6")
     declare_source_hold_steps = DeclareLaunchArgument("source_hold_steps", default_value="3")
     declare_track_step = DeclareLaunchArgument("track_step", default_value="0.7")
     declare_sweep_angle_deg = DeclareLaunchArgument("sweep_angle_deg", default_value="30.0")
     declare_source_x = DeclareLaunchArgument("source_x", default_value="-3.2")
     declare_source_y = DeclareLaunchArgument("source_y", default_value="-3.0")
+    declare_localizer_node = DeclareLaunchArgument("localizer_node", default_value="")
+    declare_publish_initial_pose = DeclareLaunchArgument("publish_initial_pose", default_value="")
     declare_gas_source_strength = DeclareLaunchArgument("gas_source_strength", default_value="")
     declare_gas_decay_rate = DeclareLaunchArgument("gas_decay_rate", default_value="")
     declare_gas_plume_stddev = DeclareLaunchArgument("gas_plume_stddev", default_value="")
@@ -144,9 +156,22 @@ def generate_launch_description():
         gaden = scene_profile.get("gaden")
         use_gaden_value = use_gaden.perform(context).strip().lower()
         use_gaden_enabled = use_gaden_value in ("1", "true", "yes", "on")
+        requested_use_slam = use_slam.perform(context).strip().lower()
+        if requested_use_slam:
+            use_slam_enabled = requested_use_slam in ("1", "true", "yes", "on")
+        else:
+            use_slam_enabled = bool(scene_profile.get("use_slam", False))
         resolved_world = world.perform(context).strip() or resolve_scene_world(pkg_share, scene_name)
         resolved_model_path = gazebo_model_path.perform(context).strip() or resolve_scene_model_path(pkg_share, scene_name)
         resolved_nav2_params_file = nav2_params_file.perform(context).strip() or resolve_scene_nav2_params(pkg_share, scene_name)
+        resolved_localizer_node = localizer_node.perform(context).strip() or str(
+            scene_profile.get("localizer_node", "none" if use_slam_enabled else "amcl")
+        )
+        requested_publish_initial_pose = publish_initial_pose.perform(context).strip().lower()
+        if requested_publish_initial_pose:
+            resolved_publish_initial_pose = requested_publish_initial_pose in ("1", "true", "yes", "on")
+        else:
+            resolved_publish_initial_pose = not use_slam_enabled
         resolved_gaden_project_path = gaden_project_path.perform(context).strip()
         resolved_gaden_playback_id = gaden_playback_id.perform(context).strip()
         resolved_gaden_player_freq = gaden_player_freq.perform(context).strip()
@@ -192,6 +217,9 @@ def generate_launch_description():
             SetLaunchConfiguration("world", resolved_world),
             SetLaunchConfiguration("gazebo_model_path", resolved_model_path),
             SetLaunchConfiguration("nav2_params_file", resolved_nav2_params_file),
+            SetLaunchConfiguration("use_slam", str(use_slam_enabled).lower()),
+            SetLaunchConfiguration("localizer_node", resolved_localizer_node),
+            SetLaunchConfiguration("publish_initial_pose", str(resolved_publish_initial_pose).lower()),
             SetLaunchConfiguration("gas_source_strength", resolved_gas_source_strength),
             SetLaunchConfiguration("gas_decay_rate", resolved_gas_decay_rate),
             SetLaunchConfiguration("gas_plume_stddev", resolved_gas_plume_stddev),
@@ -231,7 +259,14 @@ def generate_launch_description():
 
     nav2_include = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(pkg_share, "launch", "nav2.launch.py")),
-        launch_arguments={"scene": scene, "use_sim_time": use_sim_time, "params_file": nav2_params_file, "autostart": nav2_autostart}.items(),
+        launch_arguments={
+            "scene": scene,
+            "use_sim_time": use_sim_time,
+            "params_file": nav2_params_file,
+            "map": nav2_map_file,
+            "autostart": nav2_autostart,
+            "use_slam": use_slam,
+        }.items(),
     )
     nav2 = TimerAction(
         period=nav2_launch_delay,
@@ -383,17 +418,22 @@ def generate_launch_description():
                 "initial_pose_x": initial_pose_x,
                 "initial_pose_y": initial_pose_y,
                 "initial_pose_yaw": initial_pose_yaw,
+                "patrol_goal_timeout_sec": patrol_goal_timeout_sec,
                 "patrol_points": ParameterValue(patrol_points, value_type=str),
                 "enter_threshold": enter_threshold,
                 "exit_threshold": exit_threshold,
                 "source_threshold": source_threshold,
                 "confirm_samples": confirm_samples,
+                "track_exit_samples": track_exit_samples,
                 "source_radius": source_radius,
                 "source_hold_steps": source_hold_steps,
                 "track_step": track_step,
                 "sweep_angle_deg": sweep_angle_deg,
                 "source_x": source_x,
                 "source_y": source_y,
+                "localizer_node": localizer_node,
+                "use_slam": ParameterValue(use_slam, value_type=bool),
+                "publish_initial_pose": ParameterValue(publish_initial_pose, value_type=bool),
             },
         ],
     )
@@ -436,6 +476,8 @@ def generate_launch_description():
             declare_world,
             declare_gazebo_model_path,
             declare_use_gaden,
+            declare_use_slam,
+            declare_nav2_map_file,
             declare_nav2_params_file,
             declare_nav2_autostart,
             declare_nav2_launch_delay,
@@ -449,17 +491,21 @@ def generate_launch_description():
             declare_initial_pose_x,
             declare_initial_pose_y,
             declare_initial_pose_yaw,
+            declare_patrol_goal_timeout_sec,
             declare_patrol_points,
             declare_enter_threshold,
             declare_exit_threshold,
             declare_source_threshold,
             declare_confirm_samples,
+            declare_track_exit_samples,
             declare_source_radius,
             declare_source_hold_steps,
             declare_track_step,
             declare_sweep_angle_deg,
             declare_source_x,
             declare_source_y,
+            declare_localizer_node,
+            declare_publish_initial_pose,
             declare_gas_source_strength,
             declare_gas_decay_rate,
             declare_gas_plume_stddev,

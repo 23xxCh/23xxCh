@@ -41,15 +41,19 @@ def _flatten_patrol_points(points: list[list[float]]) -> list[float]:
     return flattened
 
 
-def _scene_actions(context, *, pkg_share: str, bringup_path: str, default_use_gaden: str):
+def _scene_actions(context, *, pkg_share: str, bringup_path: str, default_use_gaden: str, default_use_slam: str):
     scene = LaunchConfiguration('scene')
     use_gaden = LaunchConfiguration('use_gaden')
+    use_slam = LaunchConfiguration('use_slam')
+    nav2_map_file = LaunchConfiguration('nav2_map_file')
     nav2_params_file = LaunchConfiguration('nav2_params_file')
     scene_name = scene.perform(context)
     requested_use_gaden = use_gaden.perform(context).strip()
+    requested_use_slam = use_slam.perform(context).strip()
     requested_nav2_params = nav2_params_file.perform(context).strip()
     scene_profile = load_scene_profile(pkg_share, scene_name)
     resolved_use_gaden = requested_use_gaden if requested_use_gaden else str(scene_profile.get('use_gaden', default_use_gaden)).lower()
+    resolved_use_slam = requested_use_slam if requested_use_slam else str(scene_profile.get('use_slam', default_use_slam)).lower()
     resolved_nav2_params = requested_nav2_params or resolve_scene_nav2_params(pkg_share, scene_name)
     mission = scene_profile['mission_manager']
     source = scene_profile['gas_source']
@@ -57,15 +61,18 @@ def _scene_actions(context, *, pkg_share: str, bringup_path: str, default_use_ga
 
     return [
         SetLaunchConfiguration('use_gaden', resolved_use_gaden),
+        SetLaunchConfiguration('use_slam', resolved_use_slam),
         SetLaunchConfiguration('initial_pose_x', str(initial_pose['x'])),
         SetLaunchConfiguration('initial_pose_y', str(initial_pose['y'])),
         SetLaunchConfiguration('initial_pose_yaw', str(initial_pose['yaw'])),
+        SetLaunchConfiguration('patrol_goal_timeout_sec', str(mission.get('patrol_goal_timeout_sec', 45.0))),
         SetLaunchConfiguration('nav2_params_file', resolved_nav2_params),
         SetLaunchConfiguration('patrol_points', json.dumps(_flatten_patrol_points(mission['patrol_points']))),
         SetLaunchConfiguration('enter_threshold', str(mission['enter_threshold'])),
         SetLaunchConfiguration('exit_threshold', str(mission['exit_threshold'])),
         SetLaunchConfiguration('source_threshold', str(mission['source_threshold'])),
         SetLaunchConfiguration('confirm_samples', str(mission['confirm_samples'])),
+        SetLaunchConfiguration('track_exit_samples', str(mission.get('track_exit_samples', mission['confirm_samples']))),
         SetLaunchConfiguration('source_radius', str(mission['source_radius'])),
         SetLaunchConfiguration('source_hold_steps', str(mission['source_hold_steps'])),
         SetLaunchConfiguration('track_step', str(mission['track_step'])),
@@ -83,6 +90,8 @@ def _scene_actions(context, *, pkg_share: str, bringup_path: str, default_use_ga
                 'use_rviz': LaunchConfiguration('use_rviz'),
                 'headless': LaunchConfiguration('headless'),
                 'use_gaden': LaunchConfiguration('use_gaden'),
+                'use_slam': LaunchConfiguration('use_slam'),
+                'nav2_map_file': nav2_map_file,
                 'nav2_params_file': LaunchConfiguration('nav2_params_file'),
             }.items(),
         ),
@@ -99,7 +108,10 @@ def generate_launch_description():
     declare_use_rviz = DeclareLaunchArgument('use_rviz', default_value=str(demo.get('use_rviz', True)).lower())
     declare_headless = DeclareLaunchArgument('headless', default_value=str(demo.get('headless', False)).lower())
     default_use_gaden = str(demo.get('use_gaden', True)).lower()
+    default_use_slam = str(demo.get('use_slam', False)).lower()
+    declare_use_slam = DeclareLaunchArgument('use_slam', default_value='')
     declare_use_gaden = DeclareLaunchArgument('use_gaden', default_value='')
+    declare_nav2_map_file = DeclareLaunchArgument('nav2_map_file', default_value='')
     declare_nav2_params_file = DeclareLaunchArgument('nav2_params_file', default_value='')
 
     set_demo_values = [
@@ -110,14 +122,21 @@ def generate_launch_description():
 
     configure_scene = OpaqueFunction(
         function=_scene_actions,
-        kwargs={'pkg_share': pkg_share, 'bringup_path': bringup_path, 'default_use_gaden': default_use_gaden},
+        kwargs={
+            'pkg_share': pkg_share,
+            'bringup_path': bringup_path,
+            'default_use_gaden': default_use_gaden,
+            'default_use_slam': default_use_slam,
+        },
     )
 
     return LaunchDescription([
         declare_scene,
         declare_use_rviz,
         declare_headless,
+        declare_use_slam,
         declare_use_gaden,
+        declare_nav2_map_file,
         declare_nav2_params_file,
         *set_demo_values,
         configure_scene,

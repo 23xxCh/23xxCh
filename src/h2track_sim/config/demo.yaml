@@ -1,4 +1,5 @@
 use_gaden: true
+use_slam: true
 scene: warehouse
 use_rviz: true
 headless: false

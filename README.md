@@ -37,6 +37,37 @@ source install/setup.bash
 ros2 launch h2track_sim bringup.launch.py use_gaden:=true use_rviz:=true
 ```
 
+## Launch with SLAM mapping + GADEN (warehouse)
+
+```bash
+cd /home/user/h2track-xian
+source /opt/ros/humble/setup.bash
+source /home/user/gaden_ws/install/setup.bash
+source install/setup.bash
+ros2 launch h2track_sim slam_demo.launch.py use_rviz:=true headless:=false
+```
+
+## Save map from SLAM
+
+After SLAM run is stable, save the built map:
+
+```bash
+cd /home/user/h2track-xian
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 run h2track_tracking slam_save_map --output /home/user/h2track-xian/src/h2track_sim/scenes/warehouse/maps/warehouse_slam_map
+```
+
+## Switch back to static-map navigation with the saved map
+
+```bash
+cd /home/user/h2track-xian
+source /opt/ros/humble/setup.bash
+source /home/user/gaden_ws/install/setup.bash
+source install/setup.bash
+ros2 launch h2track_sim demo.launch.py scene:=warehouse use_slam:=false nav2_map_file:=/home/user/h2track-xian/src/h2track_sim/scenes/warehouse/maps/warehouse_slam_map.yaml use_rviz:=true
+```
+
 
 ## Demo prep
 
@@ -100,6 +131,16 @@ source install/setup.bash
 ros2 run h2track_tracking demo_regression --scene warehouse --use-gaden true --rounds 3 --run-timeout-sec 110
 ```
 
+Compare SLAM vs non-SLAM regression behavior:
+
+```bash
+# Scene default SLAM behavior
+ros2 run h2track_tracking demo_regression --scene warehouse --use-gaden true --use-slam auto --rounds 1 --run-timeout-sec 180
+
+# Force static-map localization behavior
+ros2 run h2track_tracking demo_regression --scene warehouse --use-gaden true --use-slam false --rounds 1 --run-timeout-sec 180
+```
+
 If any step fails, do not start the formal demo. Return to step 1 and fix the issue first.
 
 ```bash
@@ -119,4 +160,5 @@ ros2 run h2track_tracking demo_selfcheck --timeout 5.0
 
 - `use_gaden:=false` uses `gas_field_node` to publish `/gas_concentration`.
 - `use_gaden:=true` starts `gaden_environment`, `gaden_player`, `gaden_sensor_gate_node`, `gaden_adapter_node`, and a static `gaden_map -> map` transform; the gate node waits for TF connectivity before launching `simulated_gas_sensor`.
+- `use_slam:=true` routes Nav2 bringup through `slam_toolbox`; `mission_manager_node` switches to TF-based pose refresh (`map <- base_link`) and does not require `/amcl_pose` to become available.
 - The Nav2 configuration is limited to `navigate_to_pose` to avoid the old `ComputePathThroughPoses` BT issue from the previous repo.

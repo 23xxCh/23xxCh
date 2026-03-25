@@ -116,6 +116,18 @@ def test_bringup_launch_exposes_nav2_params_file_argument():
     assert '"params_file": nav2_params_file' in text
 
 
+def test_bringup_launch_exposes_nav2_map_override_argument():
+    text = _launch_text("bringup.launch.py")
+    assert 'DeclareLaunchArgument("nav2_map_file"' in text
+    assert '"map": nav2_map_file' in text
+
+
+def test_bringup_launch_exposes_use_slam_argument_and_forwards_to_nav2():
+    text = _launch_text("bringup.launch.py")
+    assert 'DeclareLaunchArgument("use_slam"' in text
+    assert '"use_slam": use_slam' in text
+
+
 def test_bringup_launch_routes_scene_specific_nav2_params_file():
     text = _launch_text("bringup.launch.py")
     assert 'resolve_scene_nav2_params' in text
@@ -141,6 +153,18 @@ def test_bringup_launch_forwards_scene_to_nav2_launch():
 def test_bringup_launch_forces_patrol_points_parameter_to_string():
     text = _launch_text("bringup.launch.py")
     assert 'ParameterValue(patrol_points, value_type=str)' in text
+
+
+def test_bringup_launch_exposes_track_exit_samples_argument_and_routes_to_mission_manager():
+    text = _launch_text("bringup.launch.py")
+    assert 'DeclareLaunchArgument("track_exit_samples"' in text
+    assert '"track_exit_samples": track_exit_samples' in text
+
+
+def test_bringup_launch_exposes_patrol_goal_timeout_and_routes_to_mission_manager():
+    text = _launch_text("bringup.launch.py")
+    assert 'DeclareLaunchArgument("patrol_goal_timeout_sec"' in text
+    assert '"patrol_goal_timeout_sec": patrol_goal_timeout_sec' in text
 
 
 def test_bringup_launch_exposes_nav2_autostart_argument():
@@ -191,6 +215,14 @@ def test_nav2_launch_resolves_runtime_map_from_selected_scene():
     assert 'DeclareLaunchArgument("scene"' in text or "DeclareLaunchArgument('scene'" in text
     assert 'resolve_scene_map' in text
     assert 'scene.perform(context)' in text or 'LaunchConfiguration("scene").perform(context)' in text or "LaunchConfiguration('scene').perform(context)" in text
+
+
+def test_nav2_launch_accepts_use_slam_and_routes_to_nav2_bringup():
+    text = _launch_text("nav2.launch.py")
+    assert 'DeclareLaunchArgument("use_slam"' in text or "DeclareLaunchArgument('use_slam'" in text
+    assert "PythonExpression" in text
+    assert "use_slam_bool" in text
+    assert '"slam": use_slam_bool' in text or "'slam': use_slam_bool" in text
 
 
 def test_nav2_launch_rewrites_runtime_params_for_selected_scene_initial_pose():

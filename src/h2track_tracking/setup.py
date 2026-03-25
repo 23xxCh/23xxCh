@@ -27,6 +27,7 @@ setup(
             "demo_prep = h2track_tracking.demo_prep:main",
             "demo_selfcheck = h2track_tracking.demo_selfcheck:main",
             "demo_regression = h2track_tracking.demo_regression:main",
+            "slam_save_map = h2track_tracking.slam_save_map:main",
         ],
     },
 )

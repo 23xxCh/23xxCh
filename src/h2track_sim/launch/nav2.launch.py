@@ -9,7 +9,7 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, SetLaunchConfiguration
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 import yaml
 
 
@@ -77,19 +77,22 @@ def generate_launch_description():
 
     use_sim_time = LaunchConfiguration('use_sim_time')
     map_yaml = LaunchConfiguration('map')
+    use_slam = LaunchConfiguration('use_slam')
+    use_slam_bool = PythonExpression(["'", use_slam, "'.lower() in ('1', 'true', 'yes', 'on')"])
     params_file = LaunchConfiguration('params_file')
     autostart = LaunchConfiguration('autostart')
 
     declare_scene = DeclareLaunchArgument('scene', default_value='baseline')
     declare_use_sim_time = DeclareLaunchArgument('use_sim_time', default_value='true')
     declare_map = DeclareLaunchArgument('map', default_value='')
+    declare_use_slam = DeclareLaunchArgument('use_slam', default_value='false')
     declare_params = DeclareLaunchArgument('params_file', default_value=default_params)
     declare_autostart = DeclareLaunchArgument('autostart', default_value='true')
 
     nav2_bringup = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(nav2_share, 'launch', 'bringup_launch.py')),
         launch_arguments={
-            'slam': 'False',
+            'slam': use_slam_bool,
             'map': map_yaml,
             'use_sim_time': use_sim_time,
             'params_file': params_file,
@@ -104,6 +107,7 @@ def generate_launch_description():
             declare_scene,
             declare_use_sim_time,
             declare_map,
+            declare_use_slam,
             declare_params,
             declare_autostart,
             OpaqueFunction(function=prepare_runtime_files),

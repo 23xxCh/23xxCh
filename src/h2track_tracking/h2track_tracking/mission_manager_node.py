@@ -249,6 +249,16 @@ class MissionManagerNode(Node):
             self._active_mode = mode
 
         if previous_mode is not mode:
+            self.get_logger().info(
+                "Mode transition: %s -> %s (conc=%.3f, pose=(%.2f, %.2f))"
+                % (
+                    previous_mode.name,
+                    mode.name,
+                    self._current_concentration,
+                    self._current_pose.x,
+                    self._current_pose.y,
+                )
+            )
             if mode is MissionMode.SEEK_CONFIRM:
                 self._navigator.cancelTask()
                 self._current_goal_kind = None

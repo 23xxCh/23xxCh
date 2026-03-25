@@ -1,15 +1,18 @@
-"""Run repeated warehouse demo simulations and report source-finding success rate."""
+"""Run repeated warehouse demo simulations and report navigation robustness."""
 
 from __future__ import annotations
 
 import argparse
+import csv
 from dataclasses import dataclass
+import json
 from pathlib import Path
 import os
+import re
 import signal
 import subprocess
 import time
-from typing import cast
+from typing import Any, cast
 
 import rclpy
 from rclpy.node import Node
@@ -19,8 +22,14 @@ from std_msgs.msg import Bool
 @dataclass(frozen=True)
 class RegressionRound:
     index: int
+    success: bool
+    seek_track_seen: bool
     source_found: bool
+    source_found_seen: bool
     source_found_time: float | None
+    failed_to_make_progress: int
+    patrol_timeouts: int
+    goal_succeeded: int
     notes: str
 
 
@@ -29,18 +38,94 @@ def parse_source_found_output(output: str) -> bool:
     return "data: true" in text
 
 
+def extract_round_metrics(log_text: str) -> dict[str, int | bool]:
+    failed_to_make_progress = len(re.findall(r"Failed to make progress", log_text))
+    patrol_timeouts = len(re.findall(r"Patrol goal timed out", log_text))
+    goal_succeeded = len(re.findall(r"Goal succeeded", log_text))
+    seek_track_seen = bool(re.search(r"Mode transition:\s+\w+\s+->\s+SEEK_TRACK", log_text))
+    source_found_seen = bool(re.search(r"Mode transition:\s+\w+\s+->\s+SOURCE_FOUND", log_text))
+    return {
+        "failed_to_make_progress": failed_to_make_progress,
+        "patrol_timeouts": patrol_timeouts,
+        "goal_succeeded": goal_succeeded,
+        "seek_track_seen": seek_track_seen,
+        "source_found_seen": source_found_seen,
+    }
+
+
+def evaluate_round_success(
+    *,
+    failed_to_make_progress: int,
+    seek_track_seen: bool,
+    source_found: bool,
+    require_source_found: bool,
+) -> bool:
+    if failed_to_make_progress > 0:
+        return False
+    if not seek_track_seen:
+        return False
+    if require_source_found and not source_found:
+        return False
+    return True
+
+
 def summarize_rounds(rounds: list[RegressionRound]) -> dict[str, float | int | None]:
     total = len(rounds)
-    successes = sum(1 for r in rounds if r.source_found)
+    successes = sum(1 for r in rounds if r.success)
     success_rate = (successes / total) if total else 0.0
     found_times = [r.source_found_time for r in rounds if r.source_found and r.source_found_time is not None]
     mean_time = (sum(found_times) / len(found_times)) if found_times else None
+    seek_track_rounds = sum(1 for r in rounds if r.seek_track_seen)
+    source_found_rounds = sum(1 for r in rounds if r.source_found)
+    total_failed_progress = sum(r.failed_to_make_progress for r in rounds)
+    total_patrol_timeouts = sum(r.patrol_timeouts for r in rounds)
+    mean_goal_succeeded = (sum(r.goal_succeeded for r in rounds) / total) if total else 0.0
     return {
         "rounds": total,
         "successes": successes,
         "success_rate": success_rate,
+        "seek_track_rounds": seek_track_rounds,
+        "source_found_rounds": source_found_rounds,
+        "total_failed_to_make_progress": total_failed_progress,
+        "total_patrol_timeouts": total_patrol_timeouts,
+        "mean_goal_succeeded": mean_goal_succeeded,
         "mean_source_found_time": mean_time,
     }
+
+
+def write_rounds_csv(rounds: list[RegressionRound], csv_path: Path) -> None:
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    with csv_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(
+            [
+                "round",
+                "success",
+                "seek_track_seen",
+                "source_found",
+                "source_found_seen",
+                "source_found_time_sec",
+                "failed_to_make_progress",
+                "patrol_timeouts",
+                "goal_succeeded",
+                "notes",
+            ]
+        )
+        for round_result in rounds:
+            writer.writerow(
+                [
+                    round_result.index,
+                    int(round_result.success),
+                    int(round_result.seek_track_seen),
+                    int(round_result.source_found),
+                    int(round_result.source_found_seen),
+                    "" if round_result.source_found_time is None else f"{round_result.source_found_time:.3f}",
+                    round_result.failed_to_make_progress,
+                    round_result.patrol_timeouts,
+                    round_result.goal_succeeded,
+                    round_result.notes,
+                ]
+            )
 
 
 def _run_command(cmd: list[str], *, check: bool = False, timeout: float | None = None) -> subprocess.CompletedProcess[str]:
@@ -59,6 +144,22 @@ def _run_command(cmd: list[str], *, check: bool = False, timeout: float | None =
             f"stderr:\n{result.stderr}"
         )
     return result
+
+
+def build_demo_launch_command(*, scene: str, use_gaden: str, use_slam: str) -> list[str]:
+    cmd = [
+        "ros2",
+        "launch",
+        "h2track_sim",
+        "demo.launch.py",
+        f"scene:={scene}",
+        f"use_gaden:={use_gaden}",
+        "use_rviz:=false",
+        "headless:=true",
+    ]
+    if use_slam in ("true", "false"):
+        cmd.append(f"use_slam:={use_slam}")
+    return cmd
 
 
 def _terminate_launch_process(proc: subprocess.Popen[bytes]) -> None:
@@ -90,20 +191,11 @@ def _run_demo_prep(scene: str, use_gaden: str) -> None:
     )
 
 
-def _launch_round(scene: str, use_gaden: str, log_path: Path) -> subprocess.Popen[bytes]:
+def _launch_round(scene: str, use_gaden: str, use_slam: str, log_path: Path) -> subprocess.Popen[bytes]:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_file = log_path.open("wb")
     return subprocess.Popen(
-        [
-            "ros2",
-            "launch",
-            "h2track_sim",
-            "demo.launch.py",
-            f"scene:={scene}",
-            f"use_gaden:={use_gaden}",
-            "use_rviz:=false",
-            "headless:=true",
-        ],
+        build_demo_launch_command(scene=scene, use_gaden=use_gaden, use_slam=use_slam),
         stdout=log_file,
         stderr=subprocess.STDOUT,
         preexec_fn=os.setsid,
@@ -115,29 +207,53 @@ def _run_single_round(
     index: int,
     scene: str,
     use_gaden: str,
+    use_slam: str,
+    require_source_found: bool,
     run_timeout_sec: float,
     warmup_sec: float,
     log_dir: Path,
 ) -> RegressionRound:
     _run_demo_prep(scene, use_gaden)
     round_start = time.monotonic()
-    launch_proc = _launch_round(scene, use_gaden, log_dir / f"round_{index}.log")
+    round_log = log_dir / f"round_{index}.log"
+    launch_proc = _launch_round(scene, use_gaden, use_slam, round_log)
     try:
         time.sleep(max(0.0, warmup_sec))
         found, found_t_abs = _wait_for_source_found(run_timeout_sec)
         found_t = (time.monotonic() - round_start) if found else None
-        notes = ""
-        if not found:
-            notes = "timeout"
-        elif found_t_abs is not None:
+        if found and found_t_abs is not None:
             found_t = max(0.0, found_t_abs + max(0.0, warmup_sec))
-        return RegressionRound(index=index, source_found=found, source_found_time=found_t, notes=notes)
     finally:
         _terminate_launch_process(launch_proc)
         _run_command(
             ["ros2", "run", "h2track_tracking", "demo_prep", "--scene", scene, "--use-gaden", use_gaden],
             check=False,
         )
+    metrics = extract_round_metrics(round_log.read_text(encoding="utf-8", errors="replace"))
+    source_found = found or bool(metrics["source_found_seen"])
+    notes: list[str] = []
+    if not source_found:
+        notes.append("timeout")
+    if int(metrics["failed_to_make_progress"]) > 0:
+        notes.append("progress_fail")
+    success = evaluate_round_success(
+        failed_to_make_progress=int(metrics["failed_to_make_progress"]),
+        seek_track_seen=bool(metrics["seek_track_seen"]),
+        source_found=source_found,
+        require_source_found=require_source_found,
+    )
+    return RegressionRound(
+        index=index,
+        success=success,
+        seek_track_seen=bool(metrics["seek_track_seen"]),
+        source_found=source_found,
+        source_found_seen=bool(metrics["source_found_seen"]),
+        source_found_time=found_t if source_found else None,
+        failed_to_make_progress=int(metrics["failed_to_make_progress"]),
+        patrol_timeouts=int(metrics["patrol_timeouts"]),
+        goal_succeeded=int(metrics["goal_succeeded"]),
+        notes=",".join(notes),
+    )
 
 
 def _wait_for_source_found(timeout_sec: float) -> tuple[bool, float | None]:
@@ -176,9 +292,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run repeated warehouse+GADEN demo regression rounds.")
     parser.add_argument("--scene", default="warehouse")
     parser.add_argument("--use-gaden", choices=("true", "false"), default="true")
-    parser.add_argument("--rounds", type=int, default=3)
-    parser.add_argument("--run-timeout-sec", type=float, default=110.0)
+    parser.add_argument("--use-slam", choices=("auto", "true", "false"), default="auto")
+    parser.add_argument("--rounds", type=int, default=20)
+    parser.add_argument("--run-timeout-sec", type=float, default=240.0)
     parser.add_argument("--warmup-sec", type=float, default=4.0)
+    parser.add_argument("--require-source-found", action="store_true")
     parser.add_argument("--log-dir", default="/tmp/h2track_regression_logs")
     args = parser.parse_args(argv)
 
@@ -193,27 +311,53 @@ def main(argv: list[str] | None = None) -> int:
             index=i,
             scene=args.scene,
             use_gaden=args.use_gaden,
+            use_slam=args.use_slam,
+            require_source_found=bool(args.require_source_found),
             run_timeout_sec=float(args.run_timeout_sec),
             warmup_sec=float(args.warmup_sec),
             log_dir=log_dir,
         )
         results.append(result)
-        if result.source_found:
-            print(f"round {i}: SOURCE_FOUND at {result.source_found_time:.2f}s")
+        if result.success:
+            print(
+                f"round {i}: OK"
+                f" source_found={int(result.source_found)}"
+                f" seek_track={int(result.seek_track_seen)}"
+                f" progress_fail={result.failed_to_make_progress}"
+                f" goals={result.goal_succeeded}"
+            )
         else:
             note = f" ({result.notes})" if result.notes else ""
-            print(f"round {i}: NO_SOURCE_FOUND{note}")
+            print(
+                f"round {i}: FAIL"
+                f" source_found={int(result.source_found)}"
+                f" seek_track={int(result.seek_track_seen)}"
+                f" progress_fail={result.failed_to_make_progress}"
+                f" goals={result.goal_succeeded}{note}"
+            )
 
     summary = summarize_rounds(results)
+    rounds_csv = log_dir / "rounds.csv"
+    summary_json = log_dir / "summary.json"
+    write_rounds_csv(results, rounds_csv)
+    summary_json.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+
     print("---")
     print(f"rounds: {summary['rounds']}")
     print(f"successes: {summary['successes']}")
     print(f"success_rate: {summary['success_rate']:.3f}")
+    print(f"seek_track_rounds: {summary['seek_track_rounds']}")
+    print(f"source_found_rounds: {summary['source_found_rounds']}")
+    print(f"total_failed_to_make_progress: {summary['total_failed_to_make_progress']}")
+    print(f"total_patrol_timeouts: {summary['total_patrol_timeouts']}")
+    print(f"mean_goal_succeeded: {summary['mean_goal_succeeded']:.2f}")
     if summary["mean_source_found_time"] is None:
         print("mean_source_found_time: NA")
     else:
         print(f"mean_source_found_time: {summary['mean_source_found_time']:.2f}s")
     print(f"logs: {log_dir}")
+    print(f"rounds_csv: {rounds_csv}")
+    print(f"summary_json: {summary_json}")
 
     return 0 if int(summary["successes"]) == int(summary["rounds"]) else 1
 

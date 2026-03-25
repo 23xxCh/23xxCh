@@ -246,3 +246,34 @@ def test_tracking_declares_source_found_when_estimate_is_near_actual_source():
     machine.update(9.3, (1.95, 2.05), False)
 
     assert machine.mode is MissionMode.SOURCE_FOUND
+
+
+def test_tracking_uses_separate_exit_window_when_configured():
+    machine = MissionStateMachine(
+        MissionConfig(
+            patrol_points=[(1.0, 1.0)],
+            enter_threshold=3.0,
+            exit_threshold=1.0,
+            source_threshold=8.0,
+            confirm_samples=1,
+            track_exit_samples=3,
+            source_radius=0.5,
+            source_hold_steps=2,
+        )
+    )
+
+    # Enter tracking quickly using single-sample entry confirmation.
+    machine.update(3.5, (0.0, 0.0), False)
+    assert machine.mode is MissionMode.SEEK_CONFIRM
+    machine.update(3.4, (0.0, 0.0), False)
+    assert machine.mode is MissionMode.SEEK_TRACK
+
+    # A transient low sample should not immediately kick us back to patrol.
+    machine.update(0.5, (0.1, 0.1), False)
+    assert machine.mode is MissionMode.SEEK_TRACK
+    machine.update(0.6, (0.1, 0.1), False)
+    assert machine.mode is MissionMode.SEEK_TRACK
+
+    # Sustained collapse across the configured exit window should return to patrol.
+    machine.update(0.7, (0.1, 0.1), False)
+    assert machine.mode is MissionMode.PATROL
