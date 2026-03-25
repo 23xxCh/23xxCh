@@ -88,6 +88,7 @@ class MissionManagerNode(Node):
         self.declare_parameter("source_x", -3.5)
         self.declare_parameter("source_y", -3.5)
         self.declare_parameter("patrol_goal_timeout_sec", 45.0)
+        self.declare_parameter("goal_reject_retry_sec", 2.0)
         self.declare_parameter("localizer_node", "amcl")
         self.declare_parameter("use_slam", False)
         self.declare_parameter("publish_initial_pose", True)
@@ -133,6 +134,7 @@ class MissionManagerNode(Node):
         self._use_slam = bool(self.get_parameter("use_slam").value)
         self._publish_initial_pose = bool(self.get_parameter("publish_initial_pose").value)
         self._patrol_goal_timeout_sec = float(self.get_parameter("patrol_goal_timeout_sec").value)
+        self._goal_reject_retry_sec = float(self.get_parameter("goal_reject_retry_sec").value)
         if not self._localizer_node:
             self._localizer_node = "none" if self._use_slam else "amcl"
         self._current_pose = Pose2D(0.0, 0.0)
@@ -144,6 +146,8 @@ class MissionManagerNode(Node):
         self._initial_pose_sent = False
         self._current_goal_kind = None
         self._goal_started_at_sec: float | None = None
+        self._retry_goal_kind: str | None = None
+        self._retry_goal_at_sec: float | None = None
         self._source_announced = False
 
         self.create_subscription(PoseWithCovarianceStamped, "/amcl_pose", self._amcl_pose_callback, 10)
@@ -171,13 +175,23 @@ class MissionManagerNode(Node):
         goal.pose.orientation.w = math.cos(yaw / 2.0)
         return goal
 
-    def _send_patrol_goal(self) -> None:
+    def _send_patrol_goal(self) -> bool:
         goal_x, goal_y = self._machine.current_patrol_goal
-        self._navigator.goToPose(self._make_goal(goal_x, goal_y))
+        accepted = self._navigator.goToPose(self._make_goal(goal_x, goal_y))
+        if not accepted:
+            self.get_logger().warning(
+                f"Patrol goal rejected; retrying in {self._goal_reject_retry_sec:.1f}s."
+            )
+            self._current_goal_kind = None
+            self._goal_started_at_sec = None
+            self._schedule_goal_retry("patrol")
+            return False
         self._current_goal_kind = "patrol"
         self._goal_started_at_sec = self._now_sec()
+        self._clear_goal_retry()
+        return True
 
-    def _send_tracking_goal(self) -> None:
+    def _send_tracking_goal(self) -> bool:
         next_target = select_tracking_target(
             gas_model=self._gas_model,
             current_pose=self._current_pose,
@@ -187,9 +201,19 @@ class MissionManagerNode(Node):
             sweep_angle=math.radians(float(self.get_parameter("sweep_angle_deg").value)),
             source_threshold=float(self.get_parameter("source_threshold").value),
         )
-        self._navigator.goToPose(self._make_goal(next_target.x, next_target.y))
+        accepted = self._navigator.goToPose(self._make_goal(next_target.x, next_target.y))
+        if not accepted:
+            self.get_logger().warning(
+                f"Tracking goal rejected; retrying in {self._goal_reject_retry_sec:.1f}s."
+            )
+            self._current_goal_kind = None
+            self._goal_started_at_sec = None
+            self._schedule_goal_retry("track")
+            return False
         self._current_goal_kind = "track"
         self._goal_started_at_sec = self._now_sec()
+        self._clear_goal_retry()
+        return True
 
     def _publish_source_estimate(self) -> None:
         if self._machine.source_estimate is None:
@@ -215,6 +239,40 @@ class MissionManagerNode(Node):
     def _now_sec(self) -> float:
         return self.get_clock().now().nanoseconds / 1e9
 
+    def _schedule_goal_retry(self, goal_kind: str) -> None:
+        retry_delay = max(0.2, self._goal_reject_retry_sec)
+        self._retry_goal_kind = goal_kind
+        self._retry_goal_at_sec = self._now_sec() + retry_delay
+
+    def _clear_goal_retry(self) -> None:
+        self._retry_goal_kind = None
+        self._retry_goal_at_sec = None
+
+    def _maybe_retry_rejected_goal(self, mode: MissionMode) -> bool:
+        if self._retry_goal_kind is None or self._retry_goal_at_sec is None:
+            return False
+        if self._now_sec() < self._retry_goal_at_sec:
+            return False
+
+        if self._retry_goal_kind == "patrol":
+            if mode is not MissionMode.PATROL:
+                self._clear_goal_retry()
+                return False
+            self.get_logger().info("Retrying patrol goal after rejection.")
+            self._send_patrol_goal()
+            return True
+
+        if self._retry_goal_kind == "track":
+            if mode is not MissionMode.SEEK_TRACK:
+                self._clear_goal_retry()
+                return False
+            self.get_logger().info("Retrying tracking goal after rejection.")
+            self._send_tracking_goal()
+            return True
+
+        self._clear_goal_retry()
+        return False
+
     def _control_loop(self) -> None:
         tf_ready = self._refresh_pose_from_tf()
 
@@ -228,6 +286,7 @@ class MissionManagerNode(Node):
                     return
                 if not self._navigator.nav_to_pose_client.wait_for_server(timeout_sec=0.2):
                     return
+                self._navigator._waitForNodeToActivate("bt_navigator")
                 self._navigator.info("Nav2 is ready for use!")
             else:
                 self._navigator.waitUntilNav2Active(localizer=self._localizer_node)
@@ -236,12 +295,16 @@ class MissionManagerNode(Node):
             return
 
         task_complete = self._navigator.isTaskComplete()
+        nav_result = None
+        if task_complete:
+            nav_result = self._navigator.getResult()
+        goal_reached = task_complete and nav_result == TaskResult.SUCCEEDED
         previous_mode = self._machine.mode
 
         mode = self._machine.update(
             concentration=self._current_concentration,
             robot_position=(self._current_pose.x, self._current_pose.y),
-            goal_reached=task_complete,
+            goal_reached=goal_reached,
         )
 
         if mode is not self._active_mode:
@@ -249,6 +312,7 @@ class MissionManagerNode(Node):
             self._active_mode = mode
 
         if previous_mode is not mode:
+            self._clear_goal_retry()
             self.get_logger().info(
                 "Mode transition: %s -> %s (conc=%.3f, pose=(%.2f, %.2f))"
                 % (
@@ -277,6 +341,9 @@ class MissionManagerNode(Node):
                 self._source_announced = True
             return
 
+        if self._maybe_retry_rejected_goal(mode):
+            return
+
         if (
             mode is MissionMode.PATROL
             and self._current_goal_kind == "patrol"
@@ -291,10 +358,23 @@ class MissionManagerNode(Node):
             return
 
         if mode is MissionMode.PATROL and task_complete:
-            if self._navigator.getResult() in (TaskResult.SUCCEEDED, TaskResult.CANCELED, TaskResult.FAILED):
+            if nav_result == TaskResult.SUCCEEDED:
+                self._send_patrol_goal()
+            elif nav_result in (TaskResult.FAILED, TaskResult.CANCELED):
+                self.get_logger().warning(
+                    f"Patrol goal finished with result={nav_result}; skipping to next waypoint."
+                )
+                self._machine.advance_patrol()
                 self._send_patrol_goal()
         elif mode is MissionMode.SEEK_TRACK and task_complete:
-            self._send_tracking_goal()
+            if nav_result == TaskResult.SUCCEEDED:
+                self._send_tracking_goal()
+            elif nav_result in (TaskResult.FAILED, TaskResult.CANCELED):
+                if self._retry_goal_kind is None:
+                    self.get_logger().warning(
+                        f"Tracking goal finished with result={nav_result}; scheduling retry."
+                    )
+                    self._schedule_goal_retry("track")
         elif mode is MissionMode.SOURCE_FOUND and not self._source_announced:
             self._source_pub.publish(Bool(data=True))
             self._publish_source_estimate()

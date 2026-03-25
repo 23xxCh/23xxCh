@@ -77,6 +77,7 @@ def test_mission_manager_supports_slam_mode_localizer_behavior():
     assert "tf_ready = self._refresh_pose_from_tf()" in text
     assert "if not tf_ready:" in text
     assert "nav_to_pose_client.wait_for_server(timeout_sec=0.2)" in text
+    assert '_waitForNodeToActivate("bt_navigator")' in text or "_waitForNodeToActivate('bt_navigator')" in text
     assert 'lookup_transform("map", "base_link"' in text or "lookup_transform('map', 'base_link'" in text
 
 
@@ -90,6 +91,47 @@ def test_mission_manager_supports_patrol_goal_timeout_and_skip():
     assert 'declare_parameter("patrol_goal_timeout_sec"' in text
     assert '_patrol_goal_timeout_sec' in text
     assert 'self._navigator.cancelTask()' in text
+    assert 'self._machine.advance_patrol()' in text
+    assert 'self._send_patrol_goal()' in text
+
+
+def test_mission_manager_retries_after_goal_rejection():
+    text = (
+        Path(__file__).resolve().parents[1]
+        / 'h2track_tracking'
+        / 'mission_manager_node.py'
+    ).read_text(encoding='utf-8')
+
+    assert 'declare_parameter("goal_reject_retry_sec"' in text
+    assert 'accepted = self._navigator.goToPose' in text
+    assert 'if not accepted:' in text
+    assert '_retry_goal_kind' in text
+    assert '_retry_goal_at_sec' in text
+    assert '_maybe_retry_rejected_goal' in text
+
+
+def test_mission_manager_treats_only_succeeded_result_as_goal_reached():
+    text = (
+        Path(__file__).resolve().parents[1]
+        / 'h2track_tracking'
+        / 'mission_manager_node.py'
+    ).read_text(encoding='utf-8')
+
+    assert 'nav_result = None' in text
+    assert 'if task_complete:' in text
+    assert 'nav_result = self._navigator.getResult()' in text
+    assert 'goal_reached = task_complete and nav_result == TaskResult.SUCCEEDED' in text
+
+
+def test_mission_manager_skips_patrol_waypoint_after_failed_or_canceled_result():
+    text = (
+        Path(__file__).resolve().parents[1]
+        / 'h2track_tracking'
+        / 'mission_manager_node.py'
+    ).read_text(encoding='utf-8')
+
+    assert "Patrol goal finished with result=" in text
+    assert "skipping to next waypoint" in text
     assert 'self._machine.advance_patrol()' in text
     assert 'self._send_patrol_goal()' in text
 
