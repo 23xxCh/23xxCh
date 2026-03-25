@@ -27,8 +27,8 @@ mission_manager:
     - -2.4
   - - 3.5
     - -2.9
-  enter_threshold: 0.7
-  exit_threshold: 0.45
+  enter_threshold: 0.65
+  exit_threshold: 0.4
   source_threshold: 3.4
   confirm_samples: 1
   track_exit_samples: 3
