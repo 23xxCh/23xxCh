@@ -6,6 +6,7 @@ import argparse
 from dataclasses import dataclass, field
 import os
 from pathlib import Path
+import re
 import signal
 import subprocess
 from typing import Callable
@@ -222,10 +223,36 @@ def main(
 
 
 def _is_h2track_gazebo_process(command: str, demo_world_path: Path) -> bool:
-    return (
-        (command.startswith("gzserver ") or command.startswith("gazebo "))
-        and str(demo_world_path) in command
-    )
+    if not (command.startswith("gzserver ") or command.startswith("gazebo ")):
+        return False
+
+    if str(demo_world_path) in command:
+        return True
+
+    world_arg = _extract_world_arg(command)
+    if not world_arg:
+        return False
+
+    selected_suffix = _h2track_world_suffix(str(demo_world_path))
+    command_suffix = _h2track_world_suffix(world_arg)
+    if selected_suffix and command_suffix:
+        return selected_suffix == command_suffix
+
+    return False
+
+
+def _extract_world_arg(command: str) -> str | None:
+    for token in command.split():
+        if token.endswith(".world"):
+            return token
+    return None
+
+
+def _h2track_world_suffix(path: str) -> str | None:
+    match = re.search(r"/share/h2track_sim/(?P<suffix>.+\.world)$", path)
+    if not match:
+        return None
+    return match.group("suffix")
 
 
 def _is_h2track_nav2_lifecycle_process(command: str) -> bool:

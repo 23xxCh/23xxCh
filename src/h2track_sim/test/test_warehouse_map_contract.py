@@ -39,7 +39,8 @@ def test_warehouse_map_marks_left_corridor_clutter():
 
 def test_warehouse_patrol_reaches_detectable_source_approach_route():
     scene = yaml.safe_load(SCENE_YAML.read_text(encoding='utf-8'))
-    patrol = scene['mission_manager']['patrol_points']
+    mission = scene['mission_manager']
+    patrol = mission['patrol_points']
     source = scene['gas_source']
     first, second, third, fourth, fifth = patrol
 
@@ -48,7 +49,9 @@ def test_warehouse_patrol_reaches_detectable_source_approach_route():
     assert third == [3.0, 1.0]
     assert fourth == [3.4, -2.2]
     assert fifth == [3.5, -2.8]
-    assert scene['mission_manager']['enter_threshold'] == 1.0
+    assert scene['mission_manager']['enter_threshold'] == 0.6
+    assert scene['mission_manager']['exit_threshold'] == 0.3
+    assert scene['mission_manager']['source_threshold'] == 3.0
     assert second[1] == first[1]
     assert third[0] > second[0]
     assert third[1] < second[1]
@@ -57,3 +60,6 @@ def test_warehouse_patrol_reaches_detectable_source_approach_route():
     assert fifth[1] < fourth[1]
     assert abs(fifth[0] - source['x']) <= 0.2
     assert abs(fifth[1] - source['y']) <= 0.3
+    assert mission['source_radius'] == 0.7
+    assert mission['source_hold_steps'] == 2
+    assert mission['track_step'] == 0.3

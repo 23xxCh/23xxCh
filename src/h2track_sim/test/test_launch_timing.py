@@ -60,6 +60,13 @@ def test_bringup_launch_reads_scene_specific_gaden_block():
     assert 'gaden_player_freq' in text
 
 
+def test_bringup_launch_forces_fastdds_udp_transport_for_stability():
+    text = _launch_text("bringup.launch.py")
+    assert 'SetEnvironmentVariable(' in text
+    assert '"FASTDDS_BUILTIN_TRANSPORTS"' in text
+    assert '"UDPv4"' in text
+
+
 def test_bringup_launch_routes_scene_specific_gaden_player_frequency():
     text = _launch_text("bringup.launch.py")
     assert 'DeclareLaunchArgument("gaden_player_freq"' in text or "DeclareLaunchArgument('gaden_player_freq'" in text

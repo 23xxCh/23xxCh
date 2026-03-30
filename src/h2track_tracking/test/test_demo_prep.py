@@ -88,6 +88,29 @@ def test_matches_only_selected_scene_world_processes():
     ]
 
 
+def test_matches_same_scene_world_across_different_workspace_paths():
+    processes = find_stale_processes(
+        """
+user       21001    1282  0 00:00 ?        00:00:01 gzserver --verbose -s libgazebo_ros_init.so -s libgazebo_ros_factory.so /home/user/h2track-xian/install/h2track_sim/share/h2track_sim/scenes/warehouse/warehouse.world
+user       21002    1282  0 00:00 ?        00:00:00 /opt/ros/humble/lib/nav2_lifecycle_manager/lifecycle_manager --ros-args -r __node:=lifecycle_manager_navigation
+""",
+        Path('/home/user/h2track-xian/.worktrees/dual-scene-platform/install/h2track_sim/share/h2track_sim/scenes/warehouse/warehouse.world'),
+    )
+
+    assert processes == [
+        MatchedProcess(
+            pid=21001,
+            kind='gazebo',
+            command='gzserver --verbose -s libgazebo_ros_init.so -s libgazebo_ros_factory.so /home/user/h2track-xian/install/h2track_sim/share/h2track_sim/scenes/warehouse/warehouse.world',
+        ),
+        MatchedProcess(
+            pid=21002,
+            kind='nav2_lifecycle_manager',
+            command='/opt/ros/humble/lib/nav2_lifecycle_manager/lifecycle_manager --ros-args -r __node:=lifecycle_manager_navigation',
+        ),
+    ]
+
+
 def test_cli_warehouse_auto_mode_skips_gaden_package_requirement(capsys):
     exit_code = main(
         ['--scene', 'warehouse'],
