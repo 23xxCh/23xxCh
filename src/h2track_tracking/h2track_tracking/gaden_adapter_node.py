@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 from olfaction_msgs.msg import GasSensor
 import rclpy
 from rclpy.node import Node
@@ -16,6 +18,19 @@ from .gaden_adapter import (
 )
 
 
+def should_emit_periodic_log(
+    *,
+    last_emit_sec: float | None,
+    now_sec: float,
+    interval_sec: float,
+) -> bool:
+    if interval_sec <= 0.0:
+        return True
+    if last_emit_sec is None:
+        return True
+    return (now_sec - last_emit_sec) >= interval_sec
+
+
 class GadenAdapterNode(Node):
     def __init__(self) -> None:
         super().__init__("gaden_adapter_node")
@@ -26,6 +41,7 @@ class GadenAdapterNode(Node):
         self.declare_parameter("voltage_scale", 1.0)
         self.declare_parameter("minimum_concentration_ppm", 0.0)
         self.declare_parameter("maximum_concentration_ppm", 0.0)
+        self.declare_parameter("log_interval_sec", 1.0)
 
         self._config = GasSensorAdapterConfig(
             sensor_model=self._resolve_default_sensor_model(),
@@ -36,6 +52,8 @@ class GadenAdapterNode(Node):
         )
         sensor_topic = str(self.get_parameter("gas_sensor_topic").value)
         concentration_topic = str(self.get_parameter("gas_concentration_topic").value)
+        self._log_interval_sec = max(0.0, float(self.get_parameter("log_interval_sec").value))
+        self._last_log_emit_sec: float | None = None
         self._publisher = self.create_publisher(Float32, concentration_topic, 10)
         self.create_subscription(GasSensor, sensor_topic, self._sensor_callback, 10)
 
@@ -80,6 +98,14 @@ class GadenAdapterNode(Node):
 
         concentration = convert_gas_sensor_sample(sample, self._config)
         self._publisher.publish(Float32(data=float(concentration)))
+        now_sec = time.monotonic()
+        if should_emit_periodic_log(
+            last_emit_sec=self._last_log_emit_sec,
+            now_sec=now_sec,
+            interval_sec=self._log_interval_sec,
+        ):
+            self._last_log_emit_sec = now_sec
+            self.get_logger().info(f"concentration={float(concentration):.3f}")
 
     def _coerce_units(self, value: int) -> GasSensorUnits:
         try:

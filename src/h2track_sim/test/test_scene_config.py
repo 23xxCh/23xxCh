@@ -68,8 +68,10 @@ def test_scene_profiles_declare_use_slam_and_localizer_defaults():
 
     assert baseline['use_slam'] is False
     assert baseline['localizer_node'] == 'amcl'
+    assert baseline.get('nav2_autostart', True) is True
     assert warehouse['use_slam'] is True
     assert warehouse['localizer_node'] == 'none'
+    assert warehouse.get('nav2_autostart', True) is False
 
 
 def _scene_loader_module():
@@ -127,12 +129,12 @@ def test_scene_loader_reads_warehouse_gaden_settings():
     assert warehouse['gaden']['player_freq'] == 0.5
 
 
-def test_warehouse_scene_uses_dedicated_gas_sensor_frame():
+def test_warehouse_scene_uses_stable_gas_sensor_frame():
     pkg_share = str(Path(__file__).resolve().parents[1])
     loader = _scene_loader_module()
     warehouse = loader.load_scene_profile(pkg_share, 'warehouse')
 
-    assert warehouse['gaden']['sensor_frame'] == 'gas_sensor_link'
+    assert warehouse['gaden']['sensor_frame'] == 'base_link'
 
 
 def test_robot_urdf_declares_elevated_gas_sensor_link():
@@ -176,6 +178,16 @@ def test_scene_loader_resolves_map_paths_from_selected_scene():
     warehouse_map = loader.resolve_scene_map(pkg_share, 'warehouse')
 
     assert baseline_map.endswith('maps/h2track_map.yaml')
+
+
+def test_warehouse_nav2_enables_rotate_to_heading_for_rpp_stability():
+    pkg_share = Path(__file__).resolve().parents[1]
+    warehouse_scene = yaml.safe_load((pkg_share / 'scenes' / 'warehouse' / 'scene.yaml').read_text(encoding='utf-8'))
+    nav2_params = yaml.safe_load((pkg_share / warehouse_scene['nav2_params']).read_text(encoding='utf-8'))
+    follow_path = nav2_params['controller_server']['ros__parameters']['FollowPath']
+
+    assert follow_path['plugin'] == 'nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController'
+    assert follow_path['use_rotate_to_heading'] is True
     assert warehouse_map.endswith('scenes/warehouse/maps/warehouse_map.yaml')
 
 
@@ -200,7 +212,7 @@ def test_warehouse_scene_declares_patrol_goal_timeout_for_skip_logic():
     loader = _scene_loader_module()
     warehouse = loader.load_scene_profile(pkg_share, 'warehouse')
     timeout_sec = float(warehouse['mission_manager']['patrol_goal_timeout_sec'])
-    assert timeout_sec >= 30.0
+    assert timeout_sec >= 60.0
 
 
 def test_warehouse_nav2_progress_checker_is_tuned_for_slow_cluttered_aisles():
@@ -210,3 +222,13 @@ def test_warehouse_nav2_progress_checker_is_tuned_for_slow_cluttered_aisles():
 
     assert float(checker['required_movement_radius']) <= 0.06
     assert float(checker['movement_time_allowance']) >= 35.0
+
+
+def test_warehouse_nav2_controller_speed_is_tuned_for_long_aisle_reachability():
+    nav2_path = Path(__file__).resolve().parents[1] / 'scenes' / 'warehouse' / 'nav2_params.yaml'
+    nav2 = yaml.safe_load(nav2_path.read_text(encoding='utf-8'))
+    follow = nav2['controller_server']['ros__parameters']['FollowPath']
+
+    assert float(follow['desired_linear_vel']) >= 0.2
+    assert float(follow['lookahead_dist']) >= 0.4
+    assert float(follow['rotate_to_heading_angular_vel']) >= 0.8

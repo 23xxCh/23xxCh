@@ -4,6 +4,7 @@ nav2_params: config/nav2_demo_params.yaml
 scene_name: baseline
 use_gaden: true
 use_slam: false
+nav2_autostart: true
 localizer_node: amcl
 use_rviz: true
 headless: false

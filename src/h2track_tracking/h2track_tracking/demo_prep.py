@@ -55,6 +55,7 @@ class PrepReport:
 
 def find_stale_processes(ps_output: str, demo_world_path: Path = BASELINE_WORLD_PATH) -> list[MatchedProcess]:
     matches: list[MatchedProcess] = []
+    world_markers = _candidate_world_markers(demo_world_path)
     for line in ps_output.splitlines():
         line = line.strip()
         if not line:
@@ -67,11 +68,17 @@ def find_stale_processes(ps_output: str, demo_world_path: Path = BASELINE_WORLD_
         except ValueError:
             continue
         command = parts[7]
-        if _is_h2track_gazebo_process(command, demo_world_path):
+        if _is_h2track_gazebo_process(command, world_markers):
             matches.append(MatchedProcess(pid=pid, kind="gazebo", command=command))
+            continue
+        if _is_h2track_clock_bridge_process(command):
+            matches.append(MatchedProcess(pid=pid, kind="clock_bridge", command=command))
             continue
         if _is_h2track_nav2_lifecycle_process(command):
             matches.append(MatchedProcess(pid=pid, kind="nav2_lifecycle_manager", command=command))
+            continue
+        if _is_h2track_nav2_runtime_process(command):
+            matches.append(MatchedProcess(pid=pid, kind="nav2_runtime", command=command))
             continue
         if _is_gaden_environment_process(command):
             matches.append(MatchedProcess(pid=pid, kind="gaden_environment", command=command))
@@ -285,23 +292,58 @@ def main(
     return 1
 
 
-def _is_h2track_gazebo_process(command: str, demo_world_path: Path) -> bool:
-    if not (command.startswith("gzserver ") or command.startswith("gazebo ")):
+def _candidate_world_markers(demo_world_path: Path) -> tuple[str, ...]:
+    markers = {
+        str(demo_world_path),
+        str(BASELINE_WORLD_PATH),
+        str(WAREHOUSE_WORLD_PATH),
+    }
+    with_sources = set(markers)
+    for marker in markers:
+        if "/install/h2track_sim/share/h2track_sim/" in marker:
+            with_sources.add(
+                marker.replace(
+                    "/install/h2track_sim/share/h2track_sim/",
+                    "/src/h2track_sim/",
+                )
+            )
+    return tuple(sorted(with_sources))
+
+
+def _is_h2track_gazebo_process(command: str, world_markers: tuple[str, ...]) -> bool:
+    world_suffixes = (
+        "scenes/baseline/h2track_lab.world",
+        "scenes/warehouse/warehouse.world",
+        "worlds/h2track_lab.world",
+    )
+    is_gazebo = (
+        command.startswith("gzserver ")
+        or command.startswith("gazebo ")
+        or "ign gazebo server" in command
+    )
+    if not is_gazebo:
         return False
 
-    if str(demo_world_path) in command:
+    if any(marker and marker in command for marker in world_markers):
+        return True
+
+    if any(suffix in command for suffix in world_suffixes):
         return True
 
     world_arg = _extract_world_arg(command)
     if not world_arg:
         return False
 
-    selected_suffix = _h2track_world_suffix(str(demo_world_path))
     command_suffix = _h2track_world_suffix(world_arg)
-    if selected_suffix and command_suffix:
-        return selected_suffix == command_suffix
+    if not command_suffix:
+        return False
 
-    return False
+    selected_suffixes = [
+        _h2track_world_suffix(marker)
+        for marker in world_markers
+        if marker.endswith(".world")
+    ]
+    return any(sfx == command_suffix for sfx in selected_suffixes if sfx)
 
 
 def _extract_world_arg(command: str) -> str | None:
@@ -320,6 +362,30 @@ def _h2track_world_suffix(path: str) -> str | None:
 
 def _is_h2track_nav2_lifecycle_process(command: str) -> bool:
     return "nav2_lifecycle_manager/lifecycle_manager" in command and "__node:=lifecycle_manager_navigation" in command
+
+
+def _is_h2track_nav2_runtime_process(command: str) -> bool:
+    nav2_runtime_markers = (
+        "nav2_controller/controller_server",
+        "nav2_planner/planner_server",
+        "nav2_bt_navigator/bt_navigator",
+        "nav2_behaviors/behavior_server",
+        "nav2_smoother/smoother_server",
+        "nav2_waypoint_follower/waypoint_follower",
+        "nav2_velocity_smoother/velocity_smoother",
+        "nav2_map_server/map_saver_server",
+        "slam_toolbox/sync_slam_toolbox_node",
+    )
+    return any(marker in command for marker in nav2_runtime_markers)
+
+
+def _is_h2track_clock_bridge_process(command: str) -> bool:
+    if "ros_gz_bridge/parameter_bridge" not in command:
+        return False
+    return (
+        "/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock" in command
+        or "/model/target/pose" in command
+    )
 
 
 def _is_gaden_environment_process(command: str) -> bool:

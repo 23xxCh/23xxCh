@@ -6,9 +6,8 @@ from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, RegisterEventHandler, SetLaunchConfiguration, Shutdown, TimerAction
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, SetEnvironmentVariable, SetLaunchConfiguration, TimerAction
 from launch.conditions import IfCondition, UnlessCondition
-from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node
@@ -102,7 +101,7 @@ def generate_launch_description():
     declare_use_slam = DeclareLaunchArgument("use_slam", default_value="")
     declare_nav2_map_file = DeclareLaunchArgument("nav2_map_file", default_value="")
     declare_nav2_params_file = DeclareLaunchArgument("nav2_params_file", default_value="")
-    declare_nav2_autostart = DeclareLaunchArgument("nav2_autostart", default_value="true")
+    declare_nav2_autostart = DeclareLaunchArgument("nav2_autostart", default_value="")
     declare_nav2_launch_delay = DeclareLaunchArgument("nav2_launch_delay", default_value="12.0")
     declare_mission_manager_delay = DeclareLaunchArgument("mission_manager_delay", default_value="10.0")
     declare_nav2_startup_gate_timeout = DeclareLaunchArgument("nav2_startup_gate_timeout", default_value="30.0")
@@ -161,6 +160,11 @@ def generate_launch_description():
             use_slam_enabled = requested_use_slam in ("1", "true", "yes", "on")
         else:
             use_slam_enabled = bool(scene_profile.get("use_slam", False))
+        requested_nav2_autostart = nav2_autostart.perform(context).strip().lower()
+        if requested_nav2_autostart:
+            resolved_nav2_autostart = requested_nav2_autostart in ("1", "true", "yes", "on")
+        else:
+            resolved_nav2_autostart = bool(scene_profile.get("nav2_autostart", True))
         resolved_world = world.perform(context).strip() or resolve_scene_world(pkg_share, scene_name)
         resolved_model_path = gazebo_model_path.perform(context).strip() or resolve_scene_model_path(pkg_share, scene_name)
         resolved_nav2_params_file = nav2_params_file.perform(context).strip() or resolve_scene_nav2_params(pkg_share, scene_name)
@@ -217,6 +221,7 @@ def generate_launch_description():
             SetLaunchConfiguration("world", resolved_world),
             SetLaunchConfiguration("gazebo_model_path", resolved_model_path),
             SetLaunchConfiguration("nav2_params_file", resolved_nav2_params_file),
+            SetLaunchConfiguration("nav2_autostart", str(resolved_nav2_autostart).lower()),
             SetLaunchConfiguration("use_slam", str(use_slam_enabled).lower()),
             SetLaunchConfiguration("localizer_node", resolved_localizer_node),
             SetLaunchConfiguration("publish_initial_pose", str(resolved_publish_initial_pose).lower()),
@@ -242,6 +247,7 @@ def generate_launch_description():
         ]
 
     scene_defaults = OpaqueFunction(function=_scene_defaults)
+    set_fastdds_udp = SetEnvironmentVariable("FASTDDS_BUILTIN_TRANSPORTS", "UDPv4")
 
     sim = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(pkg_share, "launch", "sim.launch.py")),
@@ -438,23 +444,9 @@ def generate_launch_description():
         ],
     )
 
-    def _mission_manager_actions_after_nav2_gate_exit(event, context):
-        if event.returncode == 0:
-            return [mission_manager_node]
-        return [Shutdown(reason="Nav2 startup gate failed")]
-
     mission_manager = TimerAction(
-        condition=IfCondition(nav2_autostart),
         period=PythonExpression([nav2_launch_delay, " + ", mission_manager_delay]),
         actions=[mission_manager_node],
-    )
-
-    gated_mission_manager = RegisterEventHandler(
-        condition=UnlessCondition(nav2_autostart),
-        event_handler=OnProcessExit(
-            target_action=nav2_startup_gate,
-            on_exit=_mission_manager_actions_after_nav2_gate_exit,
-        ),
     )
 
     rviz = Node(
@@ -525,6 +517,7 @@ def generate_launch_description():
             declare_gaden_map_roll,
             declare_gaden_map_pitch,
             declare_gaden_map_yaw,
+            set_fastdds_udp,
             scene_defaults,
             sim,
             nav2,
@@ -536,7 +529,6 @@ def generate_launch_description():
             gaden_sensor_gate,
             gaden_adapter,
             mission_manager,
-            gated_mission_manager,
             rviz,
         ]
     )

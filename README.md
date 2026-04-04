@@ -87,6 +87,94 @@ Preview mode:
 ros2 run h2track_tracking demo_prep --dry-run
 ```
 
+## Web Console (Warehouse One-Click)
+
+Install the web runtime dependencies once (Ubuntu/Debian recommended):
+
+```bash
+sudo apt-get update
+sudo apt-get install -y python3-fastapi python3-uvicorn
+```
+
+Alternative (if you use a Python venv):
+
+```bash
+python -m pip install fastapi uvicorn
+```
+
+Start the web console:
+
+```bash
+cd /home/user/h2track-xian
+source /opt/ros/humble/setup.bash
+source /home/user/gaden_ws/install/setup.bash
+source install/setup.bash
+ros2 run h2track_tracking demo_web_server --host 0.0.0.0 --port 18080
+```
+
+Open in browser:
+
+```text
+http://<your-machine-ip>:18080
+```
+
+Frontend is now served from a built React bundle (`h2track_tracking/static_console`) by default.  
+If you modify UI code under `src/h2track_tracking/web_console`, rebuild with:
+
+```bash
+cd /home/user/h2track-xian/src/h2track_tracking/web_console
+npm install
+npm run build
+cd /home/user/h2track-xian
+source /opt/ros/humble/setup.bash
+colcon build --packages-select h2track_tracking
+```
+
+The page provides:
+
+- `Start Simulation`: runs `demo_prep` then launches simulation with the selected launch profile
+- `Stop Simulation`: sends SIGINT to the current launch process group
+- `Export Diagnostics`: writes a zip artifact to `artifacts/diag/`
+- `Export Run Report`: writes JSON + Markdown run reports to `artifacts/reports/`
+- live logs via SSE (`/api/logs/stream`)
+- phase timeline panel
+- topic health panel (`/gas_concentration`, `/robot_mode`, `/source_found`, `/odom`)
+- node health panel (core Nav2 + mission + GADEN nodes)
+- real-time metric cards (mode, gas concentration trend, source_found, nav quality)
+- AI assistant panel:
+  - configure multiple OpenAI-compatible model profiles (`URL/API key/model/protocol`)
+  - natural-language chat with structured system context (status + metrics + logs + recent reports)
+  - suggested actions with manual execution
+  - one-cycle auto loop (`analyze -> suggest -> execute`)
+  - execution audit table for AI-triggered actions
+
+The upgraded React console is organized into three tabs:
+
+- `总览`: simulation control, KPI cards, gas trend, phase timeline
+- `AI 策略`: model profile management, AI suggestions, action execution audit
+- `诊断日志`: topic/node health tables and live filtered logs
+
+Additional API:
+
+- `GET /api/metrics/recent?limit=120`: returns in-memory metric snapshot and short history for dashboard rendering
+- `GET /api/health/nodes`: returns latest node-health snapshot
+- `POST /api/diag/export`: creates a diagnostic bundle and returns the artifact path
+- `POST /api/report/export`: creates a JSON+Markdown run report and returns artifact paths
+- `GET /api/llm/profiles`: list model profiles (API key masked)
+- `POST /api/llm/profiles`: create/update a model profile
+- `POST /api/llm/profiles/{id}/activate`: set active profile
+- `POST /api/llm/profiles/{id}/check`: connectivity check for a profile
+- `DELETE /api/llm/profiles/{id}`: delete a profile
+- `POST /api/llm/chat`: AI analysis + structured suggested actions
+- `POST /api/llm/action/execute`: execute one suggested action
+- `POST /api/llm/loop/run-once`: run one AI cycle
+- `GET /api/llm/history`: read AI conversation history
+- `GET /api/llm/audit`: read action execution audit logs
+
+LLM profile storage (plaintext by design):
+
+- `~/.config/h2track/llm_profiles.json`
+
 
 ## Demo self-check
 

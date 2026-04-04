@@ -173,6 +173,12 @@ def test_bringup_launch_exposes_nav2_autostart_argument():
     assert '"autostart": nav2_autostart' in text
 
 
+def test_bringup_launch_routes_scene_specific_nav2_autostart_default():
+    text = _launch_text("bringup.launch.py")
+    assert 'scene_profile.get("nav2_autostart"' in text or "scene_profile.get('nav2_autostart'" in text
+    assert 'SetLaunchConfiguration("nav2_autostart"' in text or "SetLaunchConfiguration('nav2_autostart'" in text
+
+
 def test_bringup_launch_delays_nav2_start_until_sim_is_up():
     text = _launch_text("bringup.launch.py")
     assert 'DeclareLaunchArgument("nav2_launch_delay"' in text
@@ -187,13 +193,18 @@ def test_bringup_launch_uses_nav2_startup_gate_node_when_autostart_is_disabled()
     assert '"lifecycle_manager_service": "/lifecycle_manager_navigation/manage_nodes"' in text
 
 
-def test_bringup_launch_starts_mission_manager_after_successful_nav2_gate_exit():
+def test_bringup_launch_starts_mission_manager_by_timer_in_both_autostart_modes():
     text = _launch_text("bringup.launch.py")
-    assert 'RegisterEventHandler(' in text
-    assert 'OnProcessExit(' in text
-    assert 'target_action=nav2_startup_gate' in text
-    assert 'event.returncode == 0' in text
-    assert 'Shutdown(reason="Nav2 startup gate failed")' in text
+    assert "mission_manager = TimerAction(" in text
+    assert 'period=PythonExpression([nav2_launch_delay, " + ", mission_manager_delay])' in text
+    assert "condition=IfCondition(nav2_autostart)" not in text
+
+
+def test_bringup_launch_forces_fastdds_udp_transport_for_stability():
+    text = _launch_text("bringup.launch.py")
+    assert "SetEnvironmentVariable(" in text
+    assert '"FASTDDS_BUILTIN_TRANSPORTS"' in text
+    assert '"UDPv4"' in text
 
 
 def test_sim_launch_exposes_spawn_pose_arguments():

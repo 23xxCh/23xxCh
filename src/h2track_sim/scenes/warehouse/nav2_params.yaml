@@ -125,13 +125,13 @@ controller_server:
       yaw_goal_tolerance: 0.6
     FollowPath:
       plugin: nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController
-      desired_linear_vel: 0.18
-      lookahead_dist: 0.35
-      min_lookahead_dist: 0.2
-      max_lookahead_dist: 0.6
+      desired_linear_vel: 0.22
+      lookahead_dist: 0.45
+      min_lookahead_dist: 0.25
+      max_lookahead_dist: 0.75
       transform_tolerance: 0.2
-      rotate_to_heading_angular_vel: 0.6
-      use_rotate_to_heading: false
+      rotate_to_heading_angular_vel: 0.9
+      use_rotate_to_heading: true
 local_costmap:
   local_costmap:
     ros__parameters:

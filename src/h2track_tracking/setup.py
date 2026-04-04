@@ -1,6 +1,23 @@
 from setuptools import setup
+from pathlib import Path
+
 
 package_name = "h2track_tracking"
+
+
+def _collect_static_files() -> list[tuple[str, list[str]]]:
+    repo_root = Path(__file__).resolve().parent
+    root = repo_root / package_name / "static_console"
+    if not root.exists():
+        return []
+    rows: list[tuple[str, list[str]]] = []
+    for directory in sorted({path.parent for path in root.rglob("*") if path.is_file()}):
+        rel = directory.relative_to(root)
+        target = str(Path("share") / package_name / "static_console" / rel)
+        files = [str(path.relative_to(repo_root)) for path in sorted(directory.glob("*")) if path.is_file()]
+        if files:
+            rows.append((target, files))
+    return rows
 
 setup(
     name=package_name,
@@ -9,7 +26,7 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
-    ],
+    ] + _collect_static_files(),
     install_requires=["setuptools"],
     zip_safe=True,
     maintainer="user",
@@ -28,6 +45,7 @@ setup(
             "demo_selfcheck = h2track_tracking.demo_selfcheck:main",
             "demo_regression = h2track_tracking.demo_regression:main",
             "slam_save_map = h2track_tracking.slam_save_map:main",
+            "demo_web_server = h2track_tracking.demo_web_server:main",
         ],
     },
 )

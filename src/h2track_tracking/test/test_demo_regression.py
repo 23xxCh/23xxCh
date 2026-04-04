@@ -3,6 +3,7 @@ from h2track_tracking.demo_regression import (
     build_demo_launch_command,
     evaluate_round_success,
     extract_round_metrics,
+    extract_failure_hotspots,
     parse_source_found_output,
     summarize_rounds,
     write_rounds_csv,
@@ -147,27 +148,52 @@ def test_extract_round_metrics_parses_key_nav_and_mode_signals():
 def test_evaluate_round_success_uses_nav_robustness_gate():
     assert evaluate_round_success(
         failed_to_make_progress=0,
+        goal_succeeded=1,
         seek_track_seen=True,
         source_found=False,
+        require_seek_track=True,
         require_source_found=False,
     )
     assert not evaluate_round_success(
         failed_to_make_progress=1,
+        goal_succeeded=2,
         seek_track_seen=True,
         source_found=True,
+        require_seek_track=True,
         require_source_found=False,
     )
     assert not evaluate_round_success(
         failed_to_make_progress=0,
-        seek_track_seen=False,
-        source_found=True,
-        require_source_found=False,
-    )
-    assert not evaluate_round_success(
-        failed_to_make_progress=0,
+        goal_succeeded=0,
         seek_track_seen=True,
         source_found=False,
+        require_seek_track=False,
+        require_source_found=False,
+    )
+    assert not evaluate_round_success(
+        failed_to_make_progress=0,
+        goal_succeeded=2,
+        seek_track_seen=False,
+        source_found=True,
+        require_seek_track=True,
+        require_source_found=False,
+    )
+    assert not evaluate_round_success(
+        failed_to_make_progress=0,
+        goal_succeeded=3,
+        seek_track_seen=True,
+        source_found=False,
+        require_seek_track=True,
         require_source_found=True,
+    )
+    # Navigation-only mode: allow rounds without seek-track as long as there is no progress failure.
+    assert evaluate_round_success(
+        failed_to_make_progress=0,
+        goal_succeeded=1,
+        seek_track_seen=False,
+        source_found=False,
+        require_seek_track=False,
+        require_source_found=False,
     )
 
 
@@ -191,3 +217,20 @@ def test_write_rounds_csv_outputs_expected_columns(tmp_path):
     text = csv_path.read_text(encoding="utf-8")
     assert "round,success,seek_track_seen,source_found,source_found_seen,source_found_time_sec,failed_to_make_progress,patrol_timeouts,goal_succeeded,notes" in text
     assert "1,1,1,1,1,72.400,0,0,3," in text
+
+
+def test_extract_failure_hotspots_aggregates_progress_fail_positions():
+    log_text = """
+    [bt_navigator] Begin navigating from current location (3.12, -2.31) to (3.48, -2.92)
+    [controller_server] Failed to make progress
+    [bt_navigator] Begin navigating from current location (3.10, -2.28) to (3.48, -2.92)
+    [controller_server] Failed to make progress
+    [bt_navigator] Begin navigating from current location (1.82, 2.08) to (2.80, -0.70)
+    [controller_server] Failed to make progress
+    """
+    hotspots = extract_failure_hotspots(log_text, top_k=3)
+
+    assert len(hotspots) >= 2
+    assert hotspots[0]["count"] == 2
+    assert hotspots[0]["x"] == 3.1
+    assert hotspots[0]["y"] == -2.3

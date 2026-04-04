@@ -105,6 +105,20 @@ user       11002    1282  0 00:00 ?        00:00:01 gzserver --verbose -s libgaz
 user       11003    1282  0 00:00 ?        00:00:00 /opt/ros/humble/lib/nav2_lifecycle_manager/lifecycle_manager --ros-args -r __node:=lifecycle_manager_navigation
 """
 
+IGN_AND_BRIDGE_PS_OUTPUT = """
+user       13001    1282  0 00:00 ?        00:00:01 /usr/bin/ruby /usr/bin/ign gazebo server -r /home/user/h2track-xian/src/h2track_sim/scenes/warehouse/warehouse.world
+user       13002    1282  0 00:00 ?        00:00:00 /opt/ros/humble/lib/ros_gz_bridge/parameter_bridge /clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock --ros-args -r __node:=clock_bridge
+user       13003    1282  0 00:00 ?        00:00:00 /opt/ros/humble/lib/ros_gz_bridge/parameter_bridge /scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan --ros-args -r __node:=scan_bridge
+"""
+
+NAV2_RUNTIME_PS_OUTPUT = """
+user       14001    1282  0 00:00 ?        00:00:00 /opt/ros/humble/lib/nav2_controller/controller_server --ros-args -r __node:=controller_server
+user       14002    1282  0 00:00 ?        00:00:00 /opt/ros/humble/lib/nav2_planner/planner_server --ros-args -r __node:=planner_server
+user       14003    1282  0 00:00 ?        00:00:00 /opt/ros/humble/lib/nav2_bt_navigator/bt_navigator --ros-args -r __node:=bt_navigator
+user       14004    1282  0 00:00 ?        00:00:00 /opt/ros/humble/lib/nav2_behaviors/behavior_server --ros-args -r __node:=behavior_server
+user       14005    1282  0 00:00 ?        00:00:00 /opt/ros/humble/lib/slam_toolbox/sync_slam_toolbox_node --ros-args -r __node:=slam_toolbox
+"""
+
 GADEN_PS_OUTPUT = """
 user       12001    1282  0 00:00 ?        00:00:00 /home/user/gaden_ws/install/gaden_environment/lib/gaden_environment/environment --ros-args -r __node:=gaden_environment
 user       12002    1282  0 00:00 ?        00:00:00 /home/user/gaden_ws/install/gaden_player/lib/gaden_player/player --ros-args -r __node:=gaden_player
@@ -114,13 +128,18 @@ user       12005    1282  0 00:00 ?        00:00:00 /usr/bin/python3 /home/user/
 """
 
 
-def test_matches_only_selected_scene_world_processes():
+def test_matches_h2track_world_processes_across_scene_switches():
     processes = find_stale_processes(
         SCENE_PS_OUTPUT,
         Path('/tmp/h2track/scenes/warehouse/warehouse.world'),
     )
 
     assert processes == [
+        MatchedProcess(
+            pid=11001,
+            kind='gazebo',
+            command='gzserver --verbose -s libgazebo_ros_init.so -s libgazebo_ros_factory.so /tmp/h2track/scenes/baseline/h2track_lab.world',
+        ),
         MatchedProcess(
             pid=11002,
             kind='gazebo',
@@ -130,6 +149,61 @@ def test_matches_only_selected_scene_world_processes():
             pid=11003,
             kind='nav2_lifecycle_manager',
             command='/opt/ros/humble/lib/nav2_lifecycle_manager/lifecycle_manager --ros-args -r __node:=lifecycle_manager_navigation',
+        ),
+    ]
+
+
+def test_matches_ign_server_and_clock_bridge_residues():
+    processes = find_stale_processes(
+        IGN_AND_BRIDGE_PS_OUTPUT,
+        Path('/tmp/h2track/scenes/warehouse/warehouse.world'),
+    )
+
+    assert processes == [
+        MatchedProcess(
+            pid=13001,
+            kind='gazebo',
+            command='/usr/bin/ruby /usr/bin/ign gazebo server -r /home/user/h2track-xian/src/h2track_sim/scenes/warehouse/warehouse.world',
+        ),
+        MatchedProcess(
+            pid=13002,
+            kind='clock_bridge',
+            command='/opt/ros/humble/lib/ros_gz_bridge/parameter_bridge /clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock --ros-args -r __node:=clock_bridge',
+        ),
+    ]
+
+
+def test_matches_nav2_runtime_residues():
+    processes = find_stale_processes(
+        NAV2_RUNTIME_PS_OUTPUT,
+        Path('/tmp/h2track/scenes/warehouse/warehouse.world'),
+    )
+
+    assert processes == [
+        MatchedProcess(
+            pid=14001,
+            kind='nav2_runtime',
+            command='/opt/ros/humble/lib/nav2_controller/controller_server --ros-args -r __node:=controller_server',
+        ),
+        MatchedProcess(
+            pid=14002,
+            kind='nav2_runtime',
+            command='/opt/ros/humble/lib/nav2_planner/planner_server --ros-args -r __node:=planner_server',
+        ),
+        MatchedProcess(
+            pid=14003,
+            kind='nav2_runtime',
+            command='/opt/ros/humble/lib/nav2_bt_navigator/bt_navigator --ros-args -r __node:=bt_navigator',
+        ),
+        MatchedProcess(
+            pid=14004,
+            kind='nav2_runtime',
+            command='/opt/ros/humble/lib/nav2_behaviors/behavior_server --ros-args -r __node:=behavior_server',
+        ),
+        MatchedProcess(
+            pid=14005,
+            kind='nav2_runtime',
+            command='/opt/ros/humble/lib/slam_toolbox/sync_slam_toolbox_node --ros-args -r __node:=slam_toolbox',
         ),
     ]
 

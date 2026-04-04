@@ -124,15 +124,23 @@ def test_demo_profile_has_staged_patrol_path_for_live_demo():
 
     # First legs are pure patrol in upper aisle.
     first_leg = _distance(initial_pose, patrol_points[0])
-    assert first_leg >= 1.5
-    assert first_leg <= 1.6
-    assert patrol_points[0]["y"] > 2.0
-    assert patrol_points[1]["y"] > 2.0
+    assert first_leg >= 1.0
+    assert first_leg <= 1.8
+    assert patrol_points[0]["x"] >= 1.0
+    assert patrol_points[0]["y"] > 1.6
+    assert patrol_points[1]["y"] > 1.0
     assert _distance(patrol_points[0], source) > 4.0
+    # Avoid the known congestion hotspot around (2.6, 0.2) in the early route.
+    assert all(
+        not (2.2 <= point["x"] <= 2.9 and -0.1 <= point["y"] <= 0.6)
+        for point in patrol_points[:3]
+    )
 
-    # Later points should descend toward the source shelf.
-    assert patrol_points[2]["y"] < patrol_points[1]["y"]
-    assert patrol_points[3]["y"] < patrol_points[2]["y"]
+    # Later points should dip below the center clutter band before descending
+    # to source shelf depth. This avoids repeated planner stalls near y~0.
+    assert patrol_points[2]["y"] <= -0.6
+    assert patrol_points[3]["y"] < -1.5
+    assert patrol_points[-1]["y"] < patrol_points[3]["y"]
     assert _distance(patrol_points[-1], source) < 0.4
 
 
@@ -167,13 +175,13 @@ def test_demo_profile_approaches_source_from_above_obstacle_one():
     scene = _scene_profile(profile)
     patrol_points = [_point(x, y) for x, y in scene['mission_manager']['patrol_points']]
     source = _source_point(scene)
-    fourth_point = patrol_points[2]
+    pre_source_point = patrol_points[-2]
     final_point = patrol_points[-1]
 
-    assert fourth_point["y"] < 0.0
-    assert final_point["y"] < fourth_point["y"]
+    assert pre_source_point["y"] < -1.5
+    assert final_point["y"] < pre_source_point["y"]
     assert final_point["x"] <= 3.5
-    assert _distance(final_point, source) < _distance(fourth_point, source)
+    assert _distance(final_point, source) < _distance(pre_source_point, source)
     assert _distance(final_point, source) < 0.4
 
 

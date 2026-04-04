@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import csv
 from dataclasses import dataclass
+from collections import defaultdict
 import json
 from pathlib import Path
 import os
@@ -56,13 +57,17 @@ def extract_round_metrics(log_text: str) -> dict[str, int | bool]:
 def evaluate_round_success(
     *,
     failed_to_make_progress: int,
+    goal_succeeded: int,
     seek_track_seen: bool,
     source_found: bool,
+    require_seek_track: bool,
     require_source_found: bool,
 ) -> bool:
     if failed_to_make_progress > 0:
         return False
-    if not seek_track_seen:
+    if goal_succeeded <= 0:
+        return False
+    if require_seek_track and not seek_track_seen:
         return False
     if require_source_found and not source_found:
         return False
@@ -91,6 +96,36 @@ def summarize_rounds(rounds: list[RegressionRound]) -> dict[str, float | int | N
         "mean_goal_succeeded": mean_goal_succeeded,
         "mean_source_found_time": mean_time,
     }
+
+
+def extract_failure_hotspots(log_text: str, *, top_k: int = 5) -> list[dict[str, float | int]]:
+    pose_from_nav_re = re.compile(
+        r"Begin navigating from current location\s*\(\s*([-+]?\d+(?:\.\d+)?)\s*,\s*([-+]?\d+(?:\.\d+)?)\s*\)"
+    )
+    pose_from_mode_re = re.compile(
+        r"pose=\(\s*([-+]?\d+(?:\.\d+)?)\s*,\s*([-+]?\d+(?:\.\d+)?)\s*\)"
+    )
+    fail_re = re.compile(r"Failed to make progress")
+    counts: dict[tuple[float, float], int] = defaultdict(int)
+    last_pose: tuple[float, float] | None = None
+
+    for line in log_text.splitlines():
+        nav_match = pose_from_nav_re.search(line)
+        mode_match = pose_from_mode_re.search(line)
+        if nav_match:
+            last_pose = (float(nav_match.group(1)), float(nav_match.group(2)))
+        elif mode_match:
+            last_pose = (float(mode_match.group(1)), float(mode_match.group(2)))
+
+        if fail_re.search(line) and last_pose is not None:
+            key = (round(last_pose[0], 1), round(last_pose[1], 1))
+            counts[key] += 1
+
+    hotspots = [
+        {"x": xy[0], "y": xy[1], "count": count}
+        for xy, count in sorted(counts.items(), key=lambda item: (-item[1], item[0][0], item[0][1]))
+    ]
+    return hotspots[: max(1, top_k)]
 
 
 def write_rounds_csv(rounds: list[RegressionRound], csv_path: Path) -> None:
@@ -208,6 +243,7 @@ def _run_single_round(
     scene: str,
     use_gaden: str,
     use_slam: str,
+    require_seek_track: bool,
     require_source_found: bool,
     run_timeout_sec: float,
     warmup_sec: float,
@@ -238,8 +274,10 @@ def _run_single_round(
         notes.append("progress_fail")
     success = evaluate_round_success(
         failed_to_make_progress=int(metrics["failed_to_make_progress"]),
+        goal_succeeded=int(metrics["goal_succeeded"]),
         seek_track_seen=bool(metrics["seek_track_seen"]),
         source_found=source_found,
+        require_seek_track=require_seek_track,
         require_source_found=require_source_found,
     )
     return RegressionRound(
@@ -296,6 +334,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--rounds", type=int, default=20)
     parser.add_argument("--run-timeout-sec", type=float, default=240.0)
     parser.add_argument("--warmup-sec", type=float, default=4.0)
+    parser.add_argument("--require-seek-track", action="store_true")
     parser.add_argument("--require-source-found", action="store_true")
     parser.add_argument("--log-dir", default="/tmp/h2track_regression_logs")
     args = parser.parse_args(argv)
@@ -312,6 +351,7 @@ def main(argv: list[str] | None = None) -> int:
             scene=args.scene,
             use_gaden=args.use_gaden,
             use_slam=args.use_slam,
+            require_seek_track=bool(args.require_seek_track),
             require_source_found=bool(args.require_source_found),
             run_timeout_sec=float(args.run_timeout_sec),
             warmup_sec=float(args.warmup_sec),
@@ -337,6 +377,18 @@ def main(argv: list[str] | None = None) -> int:
             )
 
     summary = summarize_rounds(results)
+    hotspot_counts: dict[tuple[float, float], int] = defaultdict(int)
+    for i in range(1, args.rounds + 1):
+        round_log = log_dir / f"round_{i}.log"
+        if not round_log.exists():
+            continue
+        for spot in extract_failure_hotspots(round_log.read_text(encoding="utf-8", errors="replace"), top_k=20):
+            key = (float(spot["x"]), float(spot["y"]))
+            hotspot_counts[key] += int(spot["count"])
+    summary["failure_hotspots"] = [
+        {"x": xy[0], "y": xy[1], "count": count}
+        for xy, count in sorted(hotspot_counts.items(), key=lambda item: (-item[1], item[0][0], item[0][1]))[:5]
+    ]
     rounds_csv = log_dir / "rounds.csv"
     summary_json = log_dir / "summary.json"
     write_rounds_csv(results, rounds_csv)
