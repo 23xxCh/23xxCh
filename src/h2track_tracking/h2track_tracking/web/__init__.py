@@ -31,7 +31,8 @@ from .simulation_controller import (
     load_scene_thresholds,
     _candidate_scene_yaml_paths,
 )
-from .templates import HTML_PAGE, build_run_report_markdown
+from .templates import HTML_PAGE
+from .reports import build_run_report_markdown
 from .topic_collector import TopicMetricsCollector
 
 __all__ = [
