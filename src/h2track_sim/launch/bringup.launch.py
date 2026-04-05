@@ -90,6 +90,15 @@ def generate_launch_description():
     gaden_map_roll = LaunchConfiguration("gaden_map_roll")
     gaden_map_pitch = LaunchConfiguration("gaden_map_pitch")
     gaden_map_yaw = LaunchConfiguration("gaden_map_yaw")
+    use_particle_filter = LaunchConfiguration("use_particle_filter")
+    particle_filter_num_particles = LaunchConfiguration("particle_filter_num_particles")
+    particle_filter_motion_sigma = LaunchConfiguration("particle_filter_motion_sigma")
+    particle_filter_observation_sigma = LaunchConfiguration("particle_filter_observation_sigma")
+    particle_filter_plume_sigma = LaunchConfiguration("particle_filter_plume_sigma")
+    particle_filter_source_strength = LaunchConfiguration("particle_filter_source_strength")
+    particle_filter_bounds = LaunchConfiguration("particle_filter_bounds")
+    particle_filter_publish_rate = LaunchConfiguration("particle_filter_publish_rate")
+    particle_filter_resample_threshold = LaunchConfiguration("particle_filter_resample_threshold")
 
     declare_scene = DeclareLaunchArgument("scene", default_value="baseline")
     declare_use_sim_time = DeclareLaunchArgument("use_sim_time", default_value="true")
@@ -147,6 +156,15 @@ def generate_launch_description():
     declare_gaden_map_roll = DeclareLaunchArgument("gaden_map_roll", default_value="")
     declare_gaden_map_pitch = DeclareLaunchArgument("gaden_map_pitch", default_value="")
     declare_gaden_map_yaw = DeclareLaunchArgument("gaden_map_yaw", default_value="")
+    declare_use_particle_filter = DeclareLaunchArgument("use_particle_filter", default_value="true")
+    declare_particle_filter_num_particles = DeclareLaunchArgument("particle_filter_num_particles", default_value="500")
+    declare_particle_filter_motion_sigma = DeclareLaunchArgument("particle_filter_motion_sigma", default_value="0.3")
+    declare_particle_filter_observation_sigma = DeclareLaunchArgument("particle_filter_observation_sigma", default_value="0.5")
+    declare_particle_filter_plume_sigma = DeclareLaunchArgument("particle_filter_plume_sigma", default_value="2.0")
+    declare_particle_filter_source_strength = DeclareLaunchArgument("particle_filter_source_strength", default_value="")
+    declare_particle_filter_bounds = DeclareLaunchArgument("particle_filter_bounds", default_value="")
+    declare_particle_filter_publish_rate = DeclareLaunchArgument("particle_filter_publish_rate", default_value="2.0")
+    declare_particle_filter_resample_threshold = DeclareLaunchArgument("particle_filter_resample_threshold", default_value="0.5")
 
     def _scene_defaults(context):
         scene_name = scene.perform(context)
@@ -469,6 +487,27 @@ def generate_launch_description():
         actions=[mission_manager_node],
     )
 
+    particle_filter = Node(
+        condition=IfCondition(use_particle_filter),
+        package="h2track_tracking",
+        executable="particle_filter_node",
+        name="particle_filter_node",
+        output="screen",
+        parameters=[
+            {"use_sim_time": use_sim_time},
+            {
+                "num_particles": particle_filter_num_particles,
+                "motion_sigma": particle_filter_motion_sigma,
+                "observation_sigma": particle_filter_observation_sigma,
+                "plume_sigma": particle_filter_plume_sigma,
+                "source_strength": particle_filter_source_strength,
+                "bounds": ParameterValue(particle_filter_bounds, value_type=str),
+                "publish_rate": particle_filter_publish_rate,
+                "resample_threshold": particle_filter_resample_threshold,
+            },
+        ],
+    )
+
     rviz = Node(
         condition=IfCondition(use_rviz),
         package="rviz2",
@@ -537,6 +576,15 @@ def generate_launch_description():
             declare_gaden_map_roll,
             declare_gaden_map_pitch,
             declare_gaden_map_yaw,
+            declare_use_particle_filter,
+            declare_particle_filter_num_particles,
+            declare_particle_filter_motion_sigma,
+            declare_particle_filter_observation_sigma,
+            declare_particle_filter_plume_sigma,
+            declare_particle_filter_source_strength,
+            declare_particle_filter_bounds,
+            declare_particle_filter_publish_rate,
+            declare_particle_filter_resample_threshold,
             set_fastdds_udp,
             scene_defaults,
             sim,
@@ -550,6 +598,7 @@ def generate_launch_description():
             gaden_sensor_gate,
             gaden_adapter,
             mission_manager,
+            particle_filter,
             rviz,
         ]
     )

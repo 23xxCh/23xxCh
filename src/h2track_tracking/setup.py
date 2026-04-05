@@ -41,6 +41,7 @@ setup(
             "gaden_sensor_gate_node = h2track_tracking.gaden_sensor_gate_node:main",
             "nav2_startup_gate_node = h2track_tracking.nav2_startup_gate_node:main",
             "mission_manager_node = h2track_tracking.mission_manager_node:main",
+            "particle_filter_node = h2track_tracking.particle_filter.particle_filter_node:main",
             "demo_prep = h2track_tracking.demo_prep:main",
             "demo_selfcheck = h2track_tracking.demo_selfcheck:main",
             "demo_regression = h2track_tracking.demo_regression:main",
