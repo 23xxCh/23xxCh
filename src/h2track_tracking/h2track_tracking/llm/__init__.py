@@ -1,14 +1,16 @@
 """LLM assistant modules for H2Track web console."""
 
-from .client import OpenAICompatClient
-from .controller import (
+from .actions import (
     ALLOWED_COMMAND_PREFIXES,
     FORBIDDEN_COMMAND_PATTERNS,
-    SYSTEM_PROMPT,
-    LlmController,
-    _extract_json_block,
 )
+from .chat import SYSTEM_PROMPT, extract_json_block, normalize_actions
+from .client import OpenAICompatClient
+from .controller import LlmController
 from .profile_store import DEFAULT_PROFILE_PATH, LlmProfileStore
+
+# Backward compatibility: expose _extract_json_block as the internal name
+_extract_json_block = extract_json_block
 
 __all__ = [
     "ALLOWED_COMMAND_PREFIXES",
@@ -19,4 +21,7 @@ __all__ = [
     "OpenAICompatClient",
     "SYSTEM_PROMPT",
     "_extract_json_block",
+    # New exports
+    "extract_json_block",
+    "normalize_actions",
 ]
