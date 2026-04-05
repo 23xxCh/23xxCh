@@ -1,0 +1,17 @@
+[run]
+source = src/h2track_tracking/h2track_tracking
+omit =
+    */test/*
+    */__pycache__/*
+    */install/*
+
+[report]
+fail_under = 70
+show_missing = true
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+
+[html]
+directory = htmlcov
