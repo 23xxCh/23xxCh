@@ -12,6 +12,7 @@ from .simulation_controller import (
     SimulationController,
     load_scene_thresholds,
 )
+from .topic_collector import TopicMetricsCollector
 
 __all__ = [
     # config
@@ -25,4 +26,6 @@ __all__ = [
     "CommandResult",
     "SimulationController",
     "load_scene_thresholds",
+    # topic_collector
+    "TopicMetricsCollector",
 ]

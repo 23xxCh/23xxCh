@@ -36,6 +36,7 @@ from .web.metrics_store import (
     NAV_BEGIN_RE,
 )
 from .web.templates import HTML_PAGE, build_run_report_markdown
+from .web.topic_collector import TopicMetricsCollector
 
 
 try:
@@ -488,81 +489,6 @@ class SimulationController:
         json_path.write_text(json.dumps(report_payload, ensure_ascii=False, indent=2), encoding="utf-8")
         markdown_path.write_text(build_run_report_markdown(report_payload), encoding="utf-8")
         return {"json_path": str(json_path), "markdown_path": str(markdown_path)}
-
-
-class TopicMetricsCollector:
-    """Optional ROS topic collector for live dashboard metrics."""
-
-    def __init__(self, metrics_store: MetricsStore) -> None:
-        self._metrics = metrics_store
-        self._thread: threading.Thread | None = None
-        self._stop_event = threading.Event()
-
-    def start(self) -> None:
-        if self._thread is not None and self._thread.is_alive():
-            return
-        self._stop_event.clear()
-        self._thread = threading.Thread(target=self._worker, daemon=True)
-        self._thread.start()
-
-    def stop(self) -> None:
-        self._stop_event.set()
-        if self._thread is not None:
-            self._thread.join(timeout=1.0)
-
-    def _worker(self) -> None:
-        try:
-            from nav_msgs.msg import Odometry
-            try:
-                from olfaction_msgs.msg import GasSensor
-            except Exception:
-                GasSensor = None
-            import rclpy
-            from rclpy.node import Node
-            from std_msgs.msg import Bool, Float32, String
-        except Exception:
-            return
-
-        class _Probe(Node):
-            def __init__(self, metrics: MetricsStore) -> None:
-                super().__init__("demo_web_metrics_collector")
-                self._metrics = metrics
-                self.create_subscription(String, "/robot_mode", self._on_mode, 10)
-                self.create_subscription(Float32, "/gas_concentration", self._on_gas, 10)
-                self.create_subscription(Bool, "/source_found", self._on_source_found, 10)
-                self.create_subscription(Odometry, "/odom", self._on_odom, 10)
-                if GasSensor is not None:
-                    self.create_subscription(GasSensor, "/gaden/sensor_reading", self._on_gas_raw, 10)
-
-            def _on_mode(self, msg: Any) -> None:
-                self._metrics.set_mode(str(msg.data))
-
-            def _on_gas(self, msg: Any) -> None:
-                self._metrics.set_gas(float(msg.data))
-
-            def _on_source_found(self, msg: Any) -> None:
-                self._metrics.set_source_found(bool(msg.data))
-
-            def _on_odom(self, msg: Any) -> None:
-                pos = msg.pose.pose.position
-                self._metrics.observe_odom_tick(x=float(pos.x), y=float(pos.y))
-
-            def _on_gas_raw(self, msg: Any) -> None:
-                self._metrics.set_gas_raw(float(msg.raw))
-
-        started_here = not rclpy.ok()
-        if started_here:
-            rclpy.init(args=None)
-        node: Any | None = None
-        try:
-            node = _Probe(self._metrics)
-            while not self._stop_event.is_set():
-                rclpy.spin_once(node, timeout_sec=0.2)
-        finally:
-            if node is not None:
-                node.destroy_node()
-            if started_here and rclpy.ok():
-                rclpy.shutdown()
 
 
 def create_app(
