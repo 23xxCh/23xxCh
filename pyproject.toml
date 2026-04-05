@@ -1,0 +1,63 @@
+[project]
+name = "h2track-xian"
+version = "0.2.0"
+description = "ROS 2 Humble workspace for hydrogen gas source tracking simulation"
+requires-python = ">=3.10"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM"]
+exclude = [
+    "install/",
+    "build/",
+    "log/",
+    ".venv/",
+    "venv/",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+[tool.ruff.isort]
+known-first-party = ["h2track_tracking"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+exclude = [
+    "install/",
+    "build/",
+    "log/",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["src/h2track_tracking/test"]
+addopts = "-v --tb=short"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["src/h2track_tracking/h2track_tracking"]
+omit = [
+    "*/test/*",
+    "*/__pycache__/*",
+    "*/install/*",
+]
+
+[tool.coverage.report]
+fail_under = 70
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"

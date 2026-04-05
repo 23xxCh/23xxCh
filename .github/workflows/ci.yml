@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install linting tools
+        run: pip install ruff mypy
+
+      - name: Run Ruff linter
+        run: ruff check src/h2track_tracking/
+
+      - name: Run Ruff formatter check
+        run: ruff format --check src/h2track_tracking/
+
+      - name: Run MyPy type checker
+        run: mypy src/h2track_tracking/ --ignore-missing-imports
+
+  test:
+    runs-on: ubuntu-22.04
+    container:
+      image: ros:humble
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Python dependencies
+        run: |
+          apt-get update -qq
+          pip3 install pytest pytest-cov
+
+      - name: Build package
+        run: |
+          source /opt/ros/humble/setup.bash
+          colcon build --packages-select h2track_tracking
+
+      - name: Run tests with coverage
+        run: |
+          source /opt/ros/humble/setup.bash
+          source install/setup.bash
+          pytest src/h2track_tracking/test/ -v --cov --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: github.event_name == 'push'
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false
+
+  build:
+    runs-on: ubuntu-22.04
+    container:
+      image: ros:humble
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          apt-get update -qq
+          pip3 install setuptools
+
+      - name: Build workspace
+        run: |
+          source /opt/ros/humble/setup.bash
+          colcon build
+
+      - name: Verify package installation
+        run: |
+          source /opt/ros/humble/setup.bash
+          source install/setup.bash
+          python3 -c "import h2track_tracking; print('OK')"
