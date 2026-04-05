@@ -628,3 +628,179 @@ def test_llm_endpoints_use_controller_contract():
     r_audit = client.get("/api/llm/audit")
     assert r_audit.status_code == 200
     assert isinstance(r_audit.json()["rows"], list)
+
+
+@pytest.mark.skipif(not web.FASTAPI_AVAILABLE, reason="fastapi not installed")
+def test_protected_endpoints_require_auth_when_enabled(monkeypatch):
+    """Protected endpoints should reject requests without valid API key when auth is enabled."""
+    from fastapi.testclient import TestClient
+
+    from h2track_tracking.web.auth import AuthSettings
+
+    # Enable auth with a test key
+    monkeypatch.setattr(
+        "h2track_tracking.web.auth.settings",
+        AuthSettings(API_KEY="secret-test-key", AUTH_ENABLED=True),
+    )
+    # Reset the cached auth dependency
+    import h2track_tracking.web.auth as auth_module
+
+    auth_module._auth_dependency = None  # type: ignore[attr-defined]
+
+    class _Proc:
+        pid = 1234
+        stdout = None
+
+        def poll(self):
+            return None
+
+    def _run_prep(_cmd):
+        return web.CommandResult(returncode=0, stdout="DEMO PREP OK\n", stderr="")
+
+    def _launch(_cmd, _env):
+        return _Proc()
+
+    controller = web.SimulationController(run_command=_run_prep, launch_process=_launch)
+
+    class _FakeLLM:
+        def chat(self, payload):
+            return {"ok": True, "analysis": "test"}
+
+    app = web.create_app(controller=controller, llm_controller=_FakeLLM())
+    client = TestClient(app)
+
+    # Test POST /api/sim/start without auth header
+    r_start = client.post("/api/sim/start", json={})
+    assert r_start.status_code == 403
+    assert "Invalid API key" in r_start.json()["detail"]
+
+    # Test POST /api/sim/stop without auth header
+    r_stop = client.post("/api/sim/stop")
+    assert r_stop.status_code == 403
+
+    # Test POST /api/llm/chat without auth header
+    r_chat = client.post("/api/llm/chat", json={"message": "test"})
+    assert r_chat.status_code == 403
+
+
+@pytest.mark.skipif(not web.FASTAPI_AVAILABLE, reason="fastapi not installed")
+def test_protected_endpoints_accept_valid_auth_header(monkeypatch):
+    """Protected endpoints should accept requests with valid API key."""
+    import os
+
+    from fastapi.testclient import TestClient
+
+    from h2track_tracking.web.auth import AuthSettings
+
+    # Enable auth with a test key
+    monkeypatch.setattr(
+        "h2track_tracking.web.auth.settings",
+        AuthSettings(API_KEY="secret-test-key", AUTH_ENABLED=True),
+    )
+    # Reset the cached auth dependency
+    import h2track_tracking.web.auth as auth_module
+
+    auth_module._auth_dependency = None  # type: ignore[attr-defined]
+
+    class _Proc:
+        """Mock process that stays running."""
+
+        pid = os.getpid()  # Use current process PID to avoid "no such process" errors
+        stdout = None
+
+        def poll(self):
+            return None  # Process still running
+
+        def wait(self):
+            # Block forever to simulate running process
+            import threading
+
+            threading.Event().wait()
+
+    def _run_prep(_cmd):
+        return web.CommandResult(returncode=0, stdout="DEMO PREP OK\n", stderr="")
+
+    def _launch(_cmd, _env):
+        return _Proc()
+
+    controller = web.SimulationController(run_command=_run_prep, launch_process=_launch)
+
+    class _FakeLLM:
+        def chat(self, payload):
+            return {"ok": True, "analysis": "test"}
+
+    # Mock os.killpg to avoid actually killing the process
+    killed = {"called": False}
+
+    def _mock_killpg(pgid, sig):
+        killed["called"] = True
+
+    monkeypatch.setattr(os, "killpg", _mock_killpg)
+
+    app = web.create_app(controller=controller, llm_controller=_FakeLLM())
+    client = TestClient(app)
+
+    headers = {"X-API-Key": "secret-test-key"}
+
+    # Test POST /api/sim/start with valid auth header
+    r_start = client.post("/api/sim/start", json={}, headers=headers)
+    assert r_start.status_code == 202, f"start failed: {r_start.json()}"
+
+    # Check status to verify simulation is running
+    r_status = client.get("/api/sim/status")
+    status = r_status.json()
+    assert status["state"] == "running", f"expected running, got {status['state']}"
+
+    # Test POST /api/sim/stop with valid auth header
+    r_stop = client.post("/api/sim/stop", headers=headers)
+    assert r_stop.status_code == 202, f"stop failed: {r_stop.json()}"
+
+    # Verify kill was called
+    assert killed["called"], "killpg should have been called"
+
+    # Test POST /api/llm/chat with valid auth header
+    r_chat = client.post("/api/llm/chat", json={"message": "test"}, headers=headers)
+    assert r_chat.status_code == 200
+
+
+@pytest.mark.skipif(not web.FASTAPI_AVAILABLE, reason="fastapi not installed")
+def test_public_endpoints_do_not_require_auth(monkeypatch):
+    """Public endpoints should work without authentication when auth is enabled."""
+    from fastapi.testclient import TestClient
+
+    from h2track_tracking.web.auth import AuthSettings
+
+    # Enable auth with a test key
+    monkeypatch.setattr(
+        "h2track_tracking.web.auth.settings",
+        AuthSettings(API_KEY="secret-test-key", AUTH_ENABLED=True),
+    )
+    # Reset the cached auth dependency
+    import h2track_tracking.web.auth as auth_module
+
+    auth_module._auth_dependency = None  # type: ignore[attr-defined]
+
+    app = web.create_app(
+        controller=web.SimulationController(
+            run_command=lambda _cmd: web.CommandResult(returncode=0, stdout="", stderr=""),
+            launch_process=lambda _cmd, _env: object(),
+        )
+    )
+    client = TestClient(app)
+
+    # These endpoints should work without auth
+    r_ui_meta = client.get("/api/ui/meta")
+    assert r_ui_meta.status_code == 200
+
+    r_status = client.get("/api/sim/status")
+    assert r_status.status_code == 200
+
+    r_logs = client.get("/api/logs/recent")
+    assert r_logs.status_code == 200
+
+    r_metrics = client.get("/api/metrics/recent")
+    assert r_metrics.status_code == 200
+
+    r_health = client.get("/api/health/nodes")
+    assert r_health.status_code == 200
+

@@ -11,6 +11,12 @@ from .app import (
     _resolve_static_index_html,
     _resolve_ui_meta,
 )
+from .auth import (
+    AuthSettings,
+    get_auth_dependency,
+    settings as auth_settings,
+    verify_api_key,
+)
 from .config import (
     DEMO_PREP_COMMAND,
     DEFAULT_LAUNCH_PROFILE,
@@ -47,6 +53,11 @@ __all__ = [
     "_resolve_static_console_dir",
     "_resolve_static_index_html",
     "_resolve_ui_meta",
+    # auth
+    "AuthSettings",
+    "auth_settings",
+    "get_auth_dependency",
+    "verify_api_key",
     # config
     "DEMO_PREP_COMMAND",
     "DEFAULT_LAUNCH_PROFILE",

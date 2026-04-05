@@ -10,6 +10,8 @@ import asyncio
 import json
 from typing import Any
 
+from .auth import get_auth_dependency, settings as auth_settings
+
 try:
     from fastapi import HTTPException, Query, Request
     from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
@@ -75,6 +77,8 @@ def register_routes(
         resolve_static_index_html: Function to resolve static index.html path.
         html_page: HTML content for legacy inline mode.
     """
+    # Get auth dependency - None if auth disabled or FastAPI unavailable
+    auth_dep = get_auth_dependency()
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> Any:
@@ -90,7 +94,7 @@ def register_routes(
         return JSONResponse(content=ui_meta)
 
     @app.post("/api/sim/start")
-    async def start_sim(request: "RequestType") -> Any:  # type: ignore[valid-type]
+    async def start_sim(request: "RequestType", _auth: str = auth_dep) -> Any:  # type: ignore[valid-type]
         """Start simulation with optional launch profile."""
         payload = await _read_json_dict(request)
         ok, message = sim.start_with_profile(payload)
@@ -99,7 +103,7 @@ def register_routes(
         return JSONResponse(status_code=202, content={"ok": True, "message": message})
 
     @app.post("/api/sim/stop")
-    def stop_sim() -> Any:
+    def stop_sim(_auth: str = auth_dep) -> Any:
         """Stop running simulation."""
         ok, message = sim.stop()
         if not ok:
@@ -207,7 +211,7 @@ def register_routes(
         return JSONResponse(status_code=202, content=result)
 
     @app.post("/api/llm/chat")
-    async def llm_chat(request: "RequestType") -> Any:  # type: ignore[valid-type]
+    async def llm_chat(request: "RequestType", _auth: str = auth_dep) -> Any:  # type: ignore[valid-type]
         """Send a chat message to the LLM."""
         payload = await _read_json_dict(request)
         try:
