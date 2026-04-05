@@ -389,3 +389,35 @@ def register_routes(
                 ws_manager,
                 get_metrics=lambda: sim.metrics_snapshot(limit=120),
             )
+
+        # Heatmap WebSocket endpoint for real-time visualization
+        from .websocket import HeatmapDataProvider, heatmap_websocket_endpoint
+
+        # Create heatmap provider instance (to be populated by ROS callbacks)
+        heatmap_provider = HeatmapDataProvider()
+
+        @app.websocket("/ws/heatmap")
+        async def ws_heatmap(websocket: WebSocket) -> None:
+            """WebSocket endpoint for real-time heatmap visualization.
+
+            Streams concentration grid data, particle filter particles,
+            and source estimates at 2 Hz.
+
+            Message Format:
+                {
+                    "type": "heatmap_update",
+                    "timestamp": "2026-04-05T12:00:00.000Z",
+                    "grid": {...},
+                    "particles": {...},
+                    "estimate": {...}
+                }
+            """
+            await heatmap_websocket_endpoint(
+                websocket,
+                ws_manager,
+                heatmap_provider=heatmap_provider,
+                broadcast_interval_sec=0.5,  # 2 Hz
+            )
+
+        # Expose heatmap_provider for ROS integration
+        app.state.heatmap_provider = heatmap_provider

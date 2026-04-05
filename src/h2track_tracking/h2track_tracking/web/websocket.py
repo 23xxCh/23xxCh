@@ -3,6 +3,8 @@
 This module provides:
 - ConnectionManager: Manages WebSocket connections and broadcasting
 - WebSocket endpoint handler with client command support
+- HeatmapDataProvider: Provides heatmap data for WebSocket streaming
+- Heatmap WebSocket endpoint for real-time visualization
 
 Client Commands:
     - pause: Pause metrics stream
@@ -14,12 +16,14 @@ Client Commands:
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import threading
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Callable
+from typing import Any, Callable, Optional
+import numpy as np
 
 try:
     from fastapi import WebSocket, WebSocketDisconnect
@@ -444,3 +448,285 @@ async def websocket_endpoint(
         except asyncio.CancelledError:
             pass
         manager.disconnect(client_id)
+
+
+@dataclass
+class HeatmapData:
+    """Container for heatmap data to be sent via WebSocket."""
+
+    grid_data: Optional[dict[str, Any]] = None
+    particles: Optional[list[tuple[float, float, float]]] = None  # [(x, y, weight), ...]
+    estimate: Optional[dict[str, Any]] = None
+    timestamp: str = field(default_factory=_now_iso)
+
+
+class HeatmapDataProvider:
+    """Provider for heatmap data that collects from ROS topics.
+
+    This class provides a clean interface for WebSocket endpoints to access
+    heatmap data without direct ROS dependencies. The ROS integration is done
+    by setting the data from external callbacks.
+
+    Thread Safety:
+        All public methods are thread-safe.
+    """
+
+    def __init__(self) -> None:
+        """Initialize the heatmap data provider."""
+        self._lock = threading.Lock()
+        self._grid_data: Optional[dict[str, Any]] = None
+        self._particles: list[tuple[float, float, float]] = []
+        self._estimate: Optional[dict[str, Any]] = None
+
+    def set_grid_data(self, data: dict[str, Any]) -> None:
+        """Set the concentration grid data.
+
+        Args:
+            data: Dictionary with 'resolution', 'dimensions', 'origin', 'data' keys.
+                  The 'data' field should be base64-encoded float32 array.
+        """
+        with self._lock:
+            self._grid_data = data.copy() if data else None
+
+    def set_particles(
+        self,
+        positions: list[tuple[float, float]],
+        weights: list[float],
+    ) -> None:
+        """Set particle filter particle data.
+
+        Args:
+            positions: List of (x, y) position tuples.
+            weights: List of particle weights (same length as positions).
+        """
+        with self._lock:
+            if len(positions) == len(weights):
+                self._particles = [
+                    (float(p[0]), float(p[1]), float(w))
+                    for p, w in zip(positions, weights)
+                ]
+            else:
+                self._particles = []
+
+    def set_estimate(
+        self,
+        position: tuple[float, float],
+        confidence: float,
+    ) -> None:
+        """Set the source estimate data.
+
+        Args:
+            position: Estimated (x, y) position.
+            confidence: Confidence value [0, 1].
+        """
+        with self._lock:
+            self._estimate = {
+                "position": [float(position[0]), float(position[1])],
+                "confidence": float(confidence),
+            }
+
+    def get_heatmap_data(self) -> HeatmapData:
+        """Get all heatmap data.
+
+        Returns:
+            HeatmapData with current grid, particles, and estimate.
+        """
+        with self._lock:
+            return HeatmapData(
+                grid_data=self._grid_data.copy() if self._grid_data else None,
+                particles=list(self._particles) if self._particles else None,
+                estimate=self._estimate.copy() if self._estimate else None,
+            )
+
+    def has_data(self) -> bool:
+        """Check if any heatmap data is available.
+
+        Returns:
+            True if grid, particles, or estimate data is available.
+        """
+        with self._lock:
+            return (
+                self._grid_data is not None
+                or bool(self._particles)
+                or self._estimate is not None
+            )
+
+
+async def heatmap_websocket_endpoint(
+    websocket: Any,
+    manager: ConnectionManager,
+    *,
+    heatmap_provider: HeatmapDataProvider,
+    broadcast_interval_sec: float = 0.5,
+) -> None:
+    """Handle a WebSocket connection for heatmap data streaming.
+
+    This endpoint streams:
+    - ConcentrationGrid data for heatmap visualization
+    - Particle filter particles for visualization
+    - Source estimate with confidence
+
+    Message Format:
+        {
+            "type": "heatmap_update",
+            "timestamp": "2026-04-05T12:00:00.000Z",
+            "grid": {
+                "resolution": 0.5,
+                "origin": [-7.5, -10.8, 0.0],
+                "dimensions": [30, 22, 5],
+                "data": "base64_encoded_float32_array"
+            },
+            "particles": {
+                "positions": [[x1, y1], [x2, y2], ...],
+                "weights": [w1, w2, ...]
+            },
+            "estimate": {
+                "position": [3.6, -3.04],
+                "confidence": 0.85
+            }
+        }
+
+    Args:
+        websocket: The WebSocket connection.
+        manager: The ConnectionManager instance.
+        heatmap_provider: Provider for heatmap data.
+        broadcast_interval_sec: Interval between data broadcasts (default: 0.5s = 2 Hz).
+    """
+    if not WEBSOCKET_AVAILABLE:
+        raise RuntimeError("WebSocket support not available. Install fastapi.")
+
+    await websocket.accept()
+    client_id = manager.connect(websocket)
+
+    async def broadcast_heatmap() -> None:
+        """Background task to broadcast heatmap data to this client."""
+        while True:
+            try:
+                if not manager.is_paused(client_id) and heatmap_provider.has_data():
+                    heatmap_data = heatmap_provider.get_heatmap_data()
+
+                    message: dict[str, Any] = {
+                        "type": "heatmap_update",
+                        "timestamp": heatmap_data.timestamp,
+                    }
+
+                    # Add grid data if available
+                    if heatmap_data.grid_data:
+                        message["grid"] = heatmap_data.grid_data
+
+                    # Add particles if available
+                    if heatmap_data.particles:
+                        positions = [[p[0], p[1]] for p in heatmap_data.particles]
+                        weights = [p[2] for p in heatmap_data.particles]
+                        message["particles"] = {
+                            "positions": positions,
+                            "weights": weights,
+                        }
+
+                    # Add estimate if available
+                    if heatmap_data.estimate:
+                        message["estimate"] = heatmap_data.estimate
+
+                    await manager.send_to(client_id, message)
+
+                await asyncio.sleep(broadcast_interval_sec)
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                break
+
+    # Start broadcast task
+    broadcast_task = asyncio.create_task(broadcast_heatmap())
+
+    try:
+        while True:
+            # Receive and handle commands
+            try:
+                raw = await websocket.receive()
+            except Exception:
+                break
+
+            # Handle different message types
+            if "text" in raw:
+                command = parse_client_command(raw["text"])
+            elif "bytes" in raw:
+                try:
+                    text = raw["bytes"].decode("utf-8")
+                    command = parse_client_command(text)
+                except UnicodeDecodeError:
+                    command = None
+            elif "json" in raw:
+                command = parse_client_command(raw["json"])
+            else:
+                command = None
+
+            if command is not None:
+                action = command["action"]
+
+                if action == "pause":
+                    manager.set_paused(client_id, True)
+                    await manager.send_to(
+                        client_id,
+                        {"type": "status", "paused": True, "timestamp": _now_iso()},
+                    )
+
+                elif action == "resume":
+                    manager.set_paused(client_id, False)
+                    await manager.send_to(
+                        client_id,
+                        {"type": "status", "paused": False, "timestamp": _now_iso()},
+                    )
+
+                elif action == "subscribe":
+                    topic = command.get("topic", "")
+                    if topic:
+                        manager.subscribe(client_id, topic)
+                        await manager.send_to(
+                            client_id,
+                            {
+                                "type": "status",
+                                "subscribed": topic,
+                                "subscriptions": list(manager.get_subscriptions(client_id)),
+                                "timestamp": _now_iso(),
+                            },
+                        )
+
+                elif action == "unsubscribe":
+                    topic = command.get("topic", "")
+                    if topic:
+                        manager.unsubscribe(client_id, topic)
+                        await manager.send_to(
+                            client_id,
+                            {
+                                "type": "status",
+                                "unsubscribed": topic,
+                                "subscriptions": list(manager.get_subscriptions(client_id)),
+                                "timestamp": _now_iso(),
+                            },
+                        )
+
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        broadcast_task.cancel()
+        try:
+            await broadcast_task
+        except asyncio.CancelledError:
+            pass
+        manager.disconnect(client_id)
+
+
+def encode_grid_data(data: np.ndarray) -> str:
+    """Encode numpy grid data as base64 string.
+
+    Args:
+        data: Numpy array of concentration values.
+
+    Returns:
+        Base64-encoded string of float32 data.
+    """
+    if data.dtype != np.float32:
+        data = data.astype(np.float32)
+    return base64.b64encode(data.tobytes()).decode("ascii")
