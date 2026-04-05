@@ -1,9 +1,9 @@
 [run]
-source = src/h2track_tracking/h2track_tracking
+source = h2track_tracking
 omit =
     */test/*
     */__pycache__/*
-    */install/*
+    */site-packages/h2track_tracking/test/*
 
 [report]
 fail_under = 70
