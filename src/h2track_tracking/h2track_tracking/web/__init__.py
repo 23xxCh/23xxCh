@@ -1,5 +1,6 @@
 """Web console modules for H2Track simulation control."""
 
+from . import app
 from .app import (
     STATIC_CONSOLE_DIRNAME,
     UI_MODE_LEGACY,
@@ -34,7 +35,9 @@ from .templates import HTML_PAGE, build_run_report_markdown
 from .topic_collector import TopicMetricsCollector
 
 __all__ = [
-    # app
+    # app module
+    "app",
+    # app symbols
     "STATIC_CONSOLE_DIRNAME",
     "UI_MODE_LEGACY",
     "UI_MODE_STATIC",
