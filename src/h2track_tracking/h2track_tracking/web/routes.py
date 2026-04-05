@@ -13,18 +13,23 @@ from typing import Any
 from .auth import get_auth_dependency, settings as auth_settings
 
 try:
-    from fastapi import HTTPException, Query, Request
-    from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+    from fastapi import HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+    from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 
     FASTAPI_AVAILABLE = True
+    WEBSOCKET_AVAILABLE = True
 except Exception:
     FASTAPI_AVAILABLE = False
+    WEBSOCKET_AVAILABLE = False
     HTTPException = None  # type: ignore[misc,assignment]
     Query = None  # type: ignore[misc,assignment]
     Request = None  # type: ignore[misc,assignment]
+    WebSocket = None  # type: ignore[misc,assignment]
+    WebSocketDisconnect = None  # type: ignore[misc,assignment]
     FileResponse = None  # type: ignore[misc,assignment]
     HTMLResponse = None  # type: ignore[misc,assignment]
     JSONResponse = None  # type: ignore[misc,assignment]
+    Response = None  # type: ignore[misc,assignment]
     StreamingResponse = None  # type: ignore[misc,assignment]
 
 
@@ -63,9 +68,11 @@ def register_routes(
     *,
     sim: Any,
     llm: Any,
+    registry: Any = None,
     ui_meta: dict[str, Any],
     resolve_static_index_html: Any,
     html_page: str,
+    ws_manager: Any = None,
 ) -> None:
     """Register all FastAPI routes on the given app.
 
@@ -73,9 +80,11 @@ def register_routes(
         app: FastAPI application instance.
         sim: SimulationController instance.
         llm: LlmController instance.
+        registry: Optional RobotRegistry instance for fleet operations.
         ui_meta: UI metadata dict with mode, bundle_ready, bundle_path.
         resolve_static_index_html: Function to resolve static index.html path.
         html_page: HTML content for legacy inline mode.
+        ws_manager: Optional ConnectionManager for WebSocket support.
     """
     # Get auth dependency - None if auth disabled or FastAPI unavailable
     auth_dep = get_auth_dependency()
@@ -278,3 +287,105 @@ def register_routes(
                     await asyncio.sleep(1.0)
 
         return StreamingResponse(_events(), media_type="text/event-stream")
+
+    @app.get("/metrics")
+    def get_prometheus_metrics() -> Any:
+        """Prometheus metrics endpoint for external monitoring."""
+        from .metrics_export import PrometheusMetricsExporter, is_prometheus_available
+
+        if not is_prometheus_available():
+            raise HTTPException(
+                status_code=503,
+                detail="prometheus_client not installed. Install with: pip install prometheus_client",
+            )
+        exporter = PrometheusMetricsExporter(sim._metrics)
+        try:
+            content, content_type = exporter.get_metrics_response()
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f"failed to generate prometheus metrics: {exc}",
+            ) from exc
+        return Response(content=content, media_type=content_type)
+
+    # -----------------------------------------------------------------
+    # Fleet API endpoints (multi-robot monitoring)
+    # -----------------------------------------------------------------
+
+    if registry is not None:
+
+        @app.get("/api/fleet/overview")
+        def get_fleet_overview() -> Any:
+            """Get fleet summary with per-robot status."""
+            return JSONResponse(content=registry.get_fleet_overview())
+
+        @app.get("/api/fleet/metrics")
+        def get_fleet_metrics() -> Any:
+            """Get aggregate fleet metrics."""
+            return JSONResponse(content=registry.get_fleet_metrics())
+
+        @app.get("/api/fleet/history")
+        def get_fleet_history(limit: int = Query(default=100, ge=1, le=1000)) -> Any:  # type: ignore[valid-type]
+            """Get historical fleet data."""
+            return JSONResponse(content=registry.get_fleet_history(limit=limit))
+
+        @app.post("/api/fleet/record-navigation-success/{robot_id}")
+        def record_navigation_success(robot_id: str) -> Any:
+            """Record a successful navigation for a robot."""
+            try:
+                registry.record_navigation_success(robot_id)
+            except KeyError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            return JSONResponse(status_code=202, content={"ok": True, "robot_id": robot_id})
+
+        @app.post("/api/fleet/record-navigation-failure/{robot_id}")
+        def record_navigation_failure(robot_id: str) -> Any:
+            """Record a failed navigation for a robot."""
+            try:
+                registry.record_navigation_failure(robot_id)
+            except KeyError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            return JSONResponse(status_code=202, content={"ok": True, "robot_id": robot_id})
+
+        @app.post("/api/fleet/record-distance/{robot_id}")
+        async def record_distance(robot_id: str, request: "RequestType") -> Any:  # type: ignore[valid-type]
+            """Record distance traveled for a robot."""
+            payload = await _read_json_dict(request)
+            distance_m = payload.get("distance_m")
+            if distance_m is None:
+                raise HTTPException(status_code=400, detail="distance_m is required")
+            try:
+                distance_float = float(distance_m)
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(status_code=400, detail="distance_m must be a number") from exc
+            try:
+                registry.record_distance(robot_id, distance_float)
+            except KeyError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            return JSONResponse(status_code=202, content={"ok": True, "robot_id": robot_id, "distance_m": distance_float})
+
+        @app.post("/api/fleet/record-snapshot")
+        def record_fleet_snapshot() -> Any:
+            """Record a historical snapshot of the fleet state."""
+            registry.record_fleet_snapshot()
+            return JSONResponse(status_code=202, content={"ok": True})
+
+    # WebSocket endpoint for real-time metrics streaming
+    if WEBSOCKET_AVAILABLE and ws_manager is not None:
+        from .websocket import websocket_endpoint
+
+        @app.websocket("/ws")
+        async def ws_metrics(websocket: WebSocket) -> None:
+            """WebSocket endpoint for real-time metrics streaming.
+
+            Supports client commands:
+            - pause: Pause metrics stream
+            - resume: Resume metrics stream
+            - subscribe:topic: Subscribe to specific data topics
+            - unsubscribe:topic: Unsubscribe from topics
+            """
+            await websocket_endpoint(
+                websocket,
+                ws_manager,
+                get_metrics=lambda: sim.metrics_snapshot(limit=120),
+            )

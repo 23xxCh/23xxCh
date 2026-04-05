@@ -12,7 +12,7 @@ from typing import Any
 
 from .config import DEFAULT_LAUNCH_PROFILE
 from .metrics_store import MetricsStore
-from .routes import FASTAPI_AVAILABLE, register_routes
+from .routes import FASTAPI_AVAILABLE, WEBSOCKET_AVAILABLE, register_routes
 from .simulation_controller import SimulationController
 from .templates import HTML_PAGE
 from .topic_collector import TopicMetricsCollector
@@ -114,12 +114,16 @@ def create_app(
     from fastapi.staticfiles import StaticFiles
 
     from ..llm_agent import LlmController
+    from .websocket import ConnectionManager
 
     app = FastAPI(title="H2Track Web Console")
     sim = controller or SimulationController()
     llm = llm_controller or LlmController(sim=sim)
     ui_meta = _resolve_ui_meta()
     collector = TopicMetricsCollector(sim._metrics) if start_topic_collector else None
+
+    # Create WebSocket connection manager
+    ws_manager = ConnectionManager() if WEBSOCKET_AVAILABLE else None
 
     # Start collector eagerly so live metrics remain available even if startup hooks are skipped.
     if collector is not None:
@@ -141,6 +145,7 @@ def create_app(
         ui_meta=ui_meta,
         resolve_static_index_html=_resolve_static_index_html,
         html_page=HTML_PAGE,
+        ws_manager=ws_manager,
     )
 
     @app.on_event("startup")

@@ -4,16 +4,19 @@ This module provides the RobotRegistry class for managing:
 - Robot registration and unregistration
 - Robot state updates (pose, mode, gas reading)
 - Fleet-wide state queries
+- Fleet metrics aggregation
 
 All operations are thread-safe for use in concurrent ROS environments.
 """
 
 from __future__ import annotations
 
+import math
 import threading
-from dataclasses import dataclass
+from collections import deque
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Deque
 
 
 def _now_utc() -> datetime:
@@ -85,6 +88,21 @@ class RobotState:
         }
 
 
+@dataclass(frozen=True)
+class FleetMetrics:
+    """Per-robot fleet metrics.
+
+    Attributes:
+        total_distance_m: Total distance traveled in meters.
+        navigation_success: Number of successful navigations.
+        navigation_failure: Number of failed navigations.
+    """
+
+    total_distance_m: float = 0.0
+    navigation_success: int = 0
+    navigation_failure: int = 0
+
+
 class RobotRegistry:
     """Thread-safe registry for tracking multiple robots.
 
@@ -118,11 +136,17 @@ class RobotRegistry:
         registry.unregister("robot_1")
     """
 
-    def __init__(self) -> None:
-        """Initialize an empty robot registry."""
+    def __init__(self, max_history: int = 600) -> None:
+        """Initialize an empty robot registry.
+
+        Args:
+            max_history: Maximum number of fleet history entries to retain.
+        """
         self._lock = threading.Lock()
         self._robots: dict[str, RobotState] = {}
         self._namespaces: dict[str, str] = {}  # robot_id -> namespace mapping
+        self._robot_metrics: dict[str, FleetMetrics] = {}  # robot_id -> metrics
+        self._fleet_history: Deque[dict[str, Any]] = deque(maxlen=max_history)
         self._updated_at = _now_utc()
 
     def _touch(self) -> None:
@@ -178,6 +202,7 @@ class RobotRegistry:
 
             del self._robots[robot_id]
             del self._namespaces[robot_id]
+            self._robot_metrics.pop(robot_id, None)
             self._touch()
             return True
 
@@ -356,6 +381,8 @@ class RobotRegistry:
         with self._lock:
             self._robots.clear()
             self._namespaces.clear()
+            self._robot_metrics.clear()
+            self._fleet_history.clear()
             self._touch()
 
     @property
@@ -381,3 +408,202 @@ class RobotRegistry:
                 "count": len(self._robots),
                 "updated_at": self._updated_at.isoformat(),
             }
+
+    # -----------------------------------------------------------------
+    # Fleet-level operations
+    # -----------------------------------------------------------------
+
+    def get_fleet_overview(self) -> dict[str, Any]:
+        """Get aggregated fleet status summary.
+
+        Returns:
+            Dictionary with fleet overview including:
+            - total_robots: Total number of registered robots
+            - active_robots: Number of robots not in IDLE/INIT mode
+            - average_gas: Average gas concentration across fleet
+            - sources_found: Number of robots in SOURCE_FOUND mode
+            - robots: List of per-robot summaries
+        """
+        with self._lock:
+            robots = list(self._robots.values())
+
+            if not robots:
+                return {
+                    "total_robots": 0,
+                    "active_robots": 0,
+                    "average_gas": 0.0,
+                    "sources_found": 0,
+                    "robots": [],
+                    "updated_at": self._updated_at.isoformat(),
+                }
+
+            total = len(robots)
+            active = sum(1 for r in robots if r.mode not in {"INIT", "IDLE"})
+            gas_readings = [r.gas_reading for r in robots]
+            avg_gas = sum(gas_readings) / len(gas_readings) if gas_readings else 0.0
+            sources = sum(1 for r in robots if r.mode == "SOURCE_FOUND")
+
+            robot_summaries = [
+                {
+                    "id": r.robot_id,
+                    "mode": r.mode,
+                    "gas": round(r.gas_reading, 3),
+                    "pose": r.pose.to_dict(),
+                }
+                for r in robots
+            ]
+
+            return {
+                "total_robots": total,
+                "active_robots": active,
+                "average_gas": round(avg_gas, 3),
+                "sources_found": sources,
+                "robots": robot_summaries,
+                "updated_at": self._updated_at.isoformat(),
+            }
+
+    def get_fleet_metrics(self) -> dict[str, Any]:
+        """Get aggregate fleet metrics.
+
+        Returns:
+            Dictionary with aggregated metrics including:
+            - total_distance_m: Total distance traveled by all robots
+            - total_navigation_success: Total successful navigations
+            - total_navigation_failure: Total failed navigations
+            - average_concentration: Average gas concentration
+            - max_concentration: Maximum gas concentration observed
+        """
+        with self._lock:
+            robots = list(self._robots.values())
+
+            # Aggregate distance and navigation stats from per-robot metrics
+            total_distance = sum(
+                self._robot_metrics.get(r.robot_id, FleetMetrics()).total_distance_m
+                for r in robots
+            )
+            total_nav_success = sum(
+                self._robot_metrics.get(r.robot_id, FleetMetrics()).navigation_success
+                for r in robots
+            )
+            total_nav_failure = sum(
+                self._robot_metrics.get(r.robot_id, FleetMetrics()).navigation_failure
+                for r in robots
+            )
+
+            # Gas statistics from current readings
+            gas_readings = [r.gas_reading for r in robots if r.gas_reading > 0]
+            avg_gas = sum(gas_readings) / len(gas_readings) if gas_readings else 0.0
+            max_gas = max(gas_readings) if gas_readings else 0.0
+
+            return {
+                "total_distance_m": round(total_distance, 2),
+                "total_navigation_success": total_nav_success,
+                "total_navigation_failure": total_nav_failure,
+                "average_concentration": round(avg_gas, 3),
+                "max_concentration": round(max_gas, 3),
+                "updated_at": self._updated_at.isoformat(),
+            }
+
+    def get_fleet_history(self, limit: int = 100) -> dict[str, Any]:
+        """Get historical fleet data.
+
+        Args:
+            limit: Maximum number of history entries to return.
+
+        Returns:
+            Dictionary with historical fleet snapshots.
+        """
+        with self._lock:
+            history = list(self._fleet_history)[-limit:]
+            return {
+                "history": history,
+                "count": len(history),
+                "updated_at": self._updated_at.isoformat(),
+            }
+
+    def record_navigation_success(self, robot_id: str) -> None:
+        """Record a successful navigation for a robot.
+
+        Args:
+            robot_id: The robot that completed navigation.
+
+        Raises:
+            KeyError: If robot is not registered.
+        """
+        with self._lock:
+            if robot_id not in self._robots:
+                raise KeyError(f"Robot '{robot_id}' is not registered")
+
+            metrics = self._robot_metrics.get(robot_id, FleetMetrics())
+            self._robot_metrics[robot_id] = FleetMetrics(
+                total_distance_m=metrics.total_distance_m,
+                navigation_success=metrics.navigation_success + 1,
+                navigation_failure=metrics.navigation_failure,
+            )
+            self._touch()
+
+    def record_navigation_failure(self, robot_id: str) -> None:
+        """Record a failed navigation for a robot.
+
+        Args:
+            robot_id: The robot that failed navigation.
+
+        Raises:
+            KeyError: If robot is not registered.
+        """
+        with self._lock:
+            if robot_id not in self._robots:
+                raise KeyError(f"Robot '{robot_id}' is not registered")
+
+            metrics = self._robot_metrics.get(robot_id, FleetMetrics())
+            self._robot_metrics[robot_id] = FleetMetrics(
+                total_distance_m=metrics.total_distance_m,
+                navigation_success=metrics.navigation_success,
+                navigation_failure=metrics.navigation_failure + 1,
+            )
+            self._touch()
+
+    def record_distance(self, robot_id: str, distance_m: float) -> None:
+        """Record distance traveled for a robot.
+
+        Args:
+            robot_id: The robot that traveled.
+            distance_m: Distance in meters.
+
+        Raises:
+            KeyError: If robot is not registered.
+        """
+        with self._lock:
+            if robot_id not in self._robots:
+                raise KeyError(f"Robot '{robot_id}' is not registered")
+
+            metrics = self._robot_metrics.get(robot_id, FleetMetrics())
+            self._robot_metrics[robot_id] = FleetMetrics(
+                total_distance_m=metrics.total_distance_m + distance_m,
+                navigation_success=metrics.navigation_success,
+                navigation_failure=metrics.navigation_failure,
+            )
+            self._touch()
+
+    def record_fleet_snapshot(self) -> None:
+        """Record a historical snapshot of the fleet state.
+
+        This should be called periodically to build fleet history.
+        """
+        with self._lock:
+            robots = list(self._robots.values())
+            snapshot = {
+                "timestamp": _now_utc().isoformat(),
+                "total_robots": len(robots),
+                "active_robots": sum(1 for r in robots if r.mode not in {"INIT", "IDLE"}),
+                "average_gas": round(
+                    sum(r.gas_reading for r in robots) / len(robots) if robots else 0.0, 3
+                ),
+                "sources_found": sum(1 for r in robots if r.mode == "SOURCE_FOUND"),
+                "modes": {
+                    mode: sum(1 for r in robots if r.mode == mode)
+                    for mode in {r.mode for r in robots}
+                },
+            }
+            self._fleet_history.append(snapshot)
+            self._touch()
