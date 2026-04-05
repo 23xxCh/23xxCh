@@ -18,12 +18,10 @@ from ament_index_python.packages import (
 )
 import yaml
 
-
-BASELINE_WORLD_PATH = Path(
-    "/home/user/h2track-xian/install/h2track_sim/share/h2track_sim/worlds/h2track_lab.world"
-)
-WAREHOUSE_WORLD_PATH = Path(
-    "/home/user/h2track-xian/install/h2track_sim/share/h2track_sim/scenes/warehouse/warehouse.world"
+from h2track_tracking.paths import (
+    BASELINE_WORLD_PATH,
+    SHM_DIR,
+    WAREHOUSE_WORLD_PATH,
 )
 CORE_REQUIRED_PACKAGES = (
     "h2track_sim",
@@ -97,7 +95,7 @@ def find_stale_processes(ps_output: str, demo_world_path: Path = BASELINE_WORLD_
     return matches
 
 
-def find_fastdds_lock_files(shm_dir: Path = Path("/dev/shm")) -> list[Path]:
+def find_fastdds_lock_files(shm_dir: Path = SHM_DIR) -> list[Path]:
     if not shm_dir.exists():
         return []
     matched: dict[Path, None] = {}
