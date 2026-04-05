@@ -3,6 +3,8 @@ from pathlib import Path
 import pytest
 
 from h2track_tracking import demo_web_server as web
+from h2track_tracking.web import app as web_app
+from h2track_tracking.web import simulation_controller as web_sim
 from h2track_tracking.web.config import (
     build_demo_launch_command,
     DEFAULT_LAUNCH_PROFILE,
@@ -75,7 +77,7 @@ def test_load_scene_thresholds_reads_mission_thresholds(tmp_path, monkeypatch):
 
 def test_metrics_snapshot_includes_profile_thresholds_and_goal_durations(monkeypatch):
     monkeypatch.setattr(
-        web,
+        web_sim,
         "load_scene_thresholds",
         lambda scene: {"enter_threshold": 0.7, "exit_threshold": 0.4, "source_threshold": 3.3}
         if scene == "warehouse"
@@ -183,8 +185,8 @@ def test_create_app_exposes_required_routes():
 
 
 def test_resolve_ui_meta_defaults_to_legacy_without_bundle(monkeypatch):
-    monkeypatch.setattr(web, "_resolve_static_console_dir", lambda: None)
-    monkeypatch.setattr(web, "_resolve_static_index_html", lambda: None)
+    monkeypatch.setattr(web_app, "_resolve_static_console_dir", lambda: None)
+    monkeypatch.setattr(web_app, "_resolve_static_index_html", lambda: None)
 
     payload = web._resolve_ui_meta()
     assert payload["mode"] == web.UI_MODE_LEGACY
@@ -215,8 +217,8 @@ def test_index_prefers_static_bundle_when_available(tmp_path, monkeypatch):
     assets = static_dir / "assets"
     assets.mkdir(exist_ok=True)
 
-    monkeypatch.setattr(web, "_resolve_static_console_dir", lambda: static_dir)
-    monkeypatch.setattr(web, "_resolve_static_index_html", lambda: index_path)
+    monkeypatch.setattr(web_app, "_resolve_static_console_dir", lambda: static_dir)
+    monkeypatch.setattr(web_app, "_resolve_static_index_html", lambda: index_path)
 
     app = web.create_app()
     client = TestClient(app)
@@ -240,7 +242,7 @@ def test_create_app_starts_topic_collector_eagerly(monkeypatch):
         def stop(self):
             return None
 
-    monkeypatch.setattr(web, "TopicMetricsCollector", _FakeCollector)
+    monkeypatch.setattr(web_app, "TopicMetricsCollector", _FakeCollector)
     _ = web.create_app(start_topic_collector=True)
 
     assert started["count"] == 1
