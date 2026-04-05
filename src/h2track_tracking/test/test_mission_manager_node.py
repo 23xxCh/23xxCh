@@ -5,8 +5,8 @@ from geometry_msgs.msg import PoseWithCovarianceStamped
 import rclpy
 
 from h2track_tracking.gas_model import GasFieldModel, GasFieldParams, Pose2D
-from h2track_tracking.mission_manager_node import (
-    MissionManagerNode,
+from h2track_tracking.mission_manager_node import MissionManagerNode
+from h2track_tracking.navigation_executor import (
     map_pose_from_amcl,
     select_tracking_target,
 )

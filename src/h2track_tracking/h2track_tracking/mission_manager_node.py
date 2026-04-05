@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import ast
 import math
 
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
@@ -15,58 +14,13 @@ from tf2_ros import Buffer, TransformException, TransformListener
 
 from .gas_model import GasFieldModel, GasFieldParams, Pose2D
 from .mission_logic import MissionConfig, MissionMode, MissionStateMachine
-
-
-def map_pose_from_amcl(msg: PoseWithCovarianceStamped) -> tuple[Pose2D, float]:
-    position = msg.pose.pose.position
-    orientation = msg.pose.pose.orientation
-    yaw = math.atan2(
-        2.0 * (orientation.w * orientation.z + orientation.x * orientation.y),
-        1.0 - 2.0 * (orientation.y * orientation.y + orientation.z * orientation.z),
-    )
-    return Pose2D(position.x, position.y), yaw
-
-
-def select_tracking_target(
-    gas_model: GasFieldModel,
-    current_pose: Pose2D,
-    current_yaw: float,
-    history: list[tuple[Pose2D, float]],
-    step_size: float,
-    sweep_angle: float,
-    source_threshold: float,
-) -> Pose2D:
-    if history:
-        strongest_index, (strongest_pose, strongest_concentration) = max(
-            enumerate(history),
-            key=lambda sample: sample[1][1],
-        )
-        if strongest_concentration >= source_threshold and strongest_index < len(history) - 1:
-            return strongest_pose
-
-    return gas_model.next_search_target(
-        current_pose=current_pose,
-        current_yaw=current_yaw,
-        history=history,
-        step_size=step_size,
-        sweep_angle=sweep_angle,
-    )
-
-
-def _coerce_patrol_points(raw_value: object) -> list[tuple[float, float]]:
-    if isinstance(raw_value, str):
-        parsed = ast.literal_eval(raw_value)
-    else:
-        parsed = raw_value
-
-    if not isinstance(parsed, list):
-        raise ValueError(f"Unsupported patrol_points value: {parsed!r}")
-
-    if parsed and isinstance(parsed[0], (list, tuple)):
-        return [(float(x), float(y)) for x, y in parsed]
-
-    flat_points = [float(v) for v in parsed]
-    return list(zip(flat_points[0::2], flat_points[1::2]))
+from .navigation_executor import (
+    coerce_patrol_points,
+    determine_nav_action_on_result,
+    map_pose_from_amcl,
+    select_tracking_target,
+    should_skip_patrol_goal,
+)
 
 
 class MissionManagerNode(Node):
@@ -93,7 +47,7 @@ class MissionManagerNode(Node):
         self.declare_parameter("use_slam", False)
         self.declare_parameter("publish_initial_pose", True)
 
-        patrol_points = _coerce_patrol_points(self.get_parameter("patrol_points").value)
+        patrol_points = coerce_patrol_points(self.get_parameter("patrol_points").value)
         config = MissionConfig(
             patrol_points=patrol_points,
             enter_threshold=float(self.get_parameter("enter_threshold").value),
