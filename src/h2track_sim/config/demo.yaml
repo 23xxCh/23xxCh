@@ -4,6 +4,6 @@ scene: warehouse
 use_rviz: true
 headless: false
 scene_config: scenes/warehouse/scene.yaml
-mission_manager_delay: 10.0
-gaden_sensor_gate_timeout: 30.0
+mission_manager_delay: 15.0
+gaden_sensor_gate_timeout: 60.0
 gaden_sensor_gate_poll_period: 0.5

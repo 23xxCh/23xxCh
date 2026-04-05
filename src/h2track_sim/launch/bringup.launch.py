@@ -370,6 +370,26 @@ def generate_launch_description():
         ],
     )
 
+    # Static map->odom transform for non-SLAM mode with GADEN
+    # When use_slam=false, we need map->odom to connect the TF tree
+    map_to_odom_tf = Node(
+        condition=IfCondition(PythonExpression(["'", use_gaden, "'.lower() in ('1', 'true', 'yes', 'on') and '", use_slam, "'.lower() not in ('1', 'true', 'yes', 'on')"])),
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="map_to_odom_tf",
+        output="screen",
+        arguments=[
+            "--x", "0.0",
+            "--y", "0.0",
+            "--z", "0.0",
+            "--roll", "0.0",
+            "--pitch", "0.0",
+            "--yaw", "0.0",
+            "--frame-id", "map",
+            "--child-frame-id", "odom",
+        ],
+    )
+
     gaden_sensor_gate = Node(
         condition=IfCondition(use_gaden),
         package="h2track_tracking",
@@ -526,6 +546,7 @@ def generate_launch_description():
             gaden_environment,
             gaden_player,
             gaden_map_tf,
+            map_to_odom_tf,
             gaden_sensor_gate,
             gaden_adapter,
             mission_manager,
