@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 import pytest
 
 from h2track_tracking.robot_registry import (
+    FleetMetrics,
     Pose2D,
     RobotRegistry,
     RobotState,
@@ -710,3 +711,300 @@ class TestRobotRegistryIntegration:
         state = registry.get_state("robot_1")
         assert state is not None
         assert state.mode == "INIT"  # Reset to initial state
+
+
+class TestFleetOverview:
+    """Tests for get_fleet_overview method."""
+
+    def test_empty_fleet_overview(self):
+        registry = RobotRegistry()
+        result = registry.get_fleet_overview()
+        assert result["total_robots"] == 0
+        assert result["active_robots"] == 0
+        assert result["average_gas"] == pytest.approx(0.0, abs=1e-9)
+        assert result["sources_found"] == 0
+        assert result["robots"] == []
+
+    def test_single_robot_overview(self):
+        registry = RobotRegistry()
+        registry.register("robot_0", "/robot_0")
+        registry.update_mode("robot_0", "PATROL")
+        registry.update_gas_reading("robot_0", 1.5)
+
+        result = registry.get_fleet_overview()
+        assert result["total_robots"] == 1
+        assert result["active_robots"] == 1  # PATROL is active
+        assert result["average_gas"] == pytest.approx(1.5, abs=1e-3)
+        assert result["sources_found"] == 0
+        assert len(result["robots"]) == 1
+        assert result["robots"][0]["id"] == "robot_0"
+        assert result["robots"][0]["mode"] == "PATROL"
+        assert result["robots"][0]["gas"] == pytest.approx(1.5, abs=1e-3)
+
+    def test_multi_robot_overview(self):
+        registry = RobotRegistry()
+        registry.register("robot_0", "/robot_0")
+        registry.register("robot_1", "/robot_1")
+        registry.register("robot_2", "/robot_2")
+
+        registry.update_mode("robot_0", "PATROL")
+        registry.update_gas_reading("robot_0", 0.8)
+
+        registry.update_mode("robot_1", "SEEK_TRACK")
+        registry.update_gas_reading("robot_1", 2.2)
+
+        registry.update_mode("robot_2", "SOURCE_FOUND")
+        registry.update_gas_reading("robot_2", 3.5)
+
+        result = registry.get_fleet_overview()
+        assert result["total_robots"] == 3
+        assert result["active_robots"] == 3
+        assert result["average_gas"] == pytest.approx((0.8 + 2.2 + 3.5) / 3, abs=1e-3)
+        assert result["sources_found"] == 1
+
+    def test_inactive_robots_not_counted(self):
+        registry = RobotRegistry()
+        registry.register("robot_0", "/robot_0")
+        registry.register("robot_1", "/robot_1")
+
+        registry.update_mode("robot_0", "INIT")  # Inactive
+        registry.update_mode("robot_1", "PATROL")  # Active
+
+        result = registry.get_fleet_overview()
+        assert result["total_robots"] == 2
+        assert result["active_robots"] == 1
+
+    def test_overview_includes_pose(self):
+        registry = RobotRegistry()
+        registry.register("robot_0", "/robot_0")
+        registry.update_pose("robot_0", Pose2D(x=1.5, y=2.5, yaw=0.5))
+
+        result = registry.get_fleet_overview()
+        assert result["robots"][0]["pose"]["x"] == pytest.approx(1.5, abs=1e-9)
+        assert result["robots"][0]["pose"]["y"] == pytest.approx(2.5, abs=1e-9)
+
+
+class TestFleetMetrics:
+    """Tests for get_fleet_metrics method."""
+
+    def test_empty_fleet_metrics(self):
+        registry = RobotRegistry()
+        result = registry.get_fleet_metrics()
+        assert result["total_distance_m"] == pytest.approx(0.0, abs=1e-9)
+        assert result["total_navigation_success"] == 0
+        assert result["total_navigation_failure"] == 0
+        assert result["average_concentration"] == pytest.approx(0.0, abs=1e-9)
+        assert result["max_concentration"] == pytest.approx(0.0, abs=1e-9)
+
+    def test_fleet_metrics_with_navigation(self):
+        registry = RobotRegistry()
+        registry.register("robot_0", "/robot_0")
+        registry.register("robot_1", "/robot_1")
+
+        registry.record_navigation_success("robot_0")
+        registry.record_navigation_success("robot_0")
+        registry.record_navigation_failure("robot_1")
+
+        result = registry.get_fleet_metrics()
+        assert result["total_navigation_success"] == 2
+        assert result["total_navigation_failure"] == 1
+
+    def test_fleet_metrics_with_distance(self):
+        registry = RobotRegistry()
+        registry.register("robot_0", "/robot_0")
+        registry.register("robot_1", "/robot_1")
+
+        registry.record_distance("robot_0", 10.5)
+        registry.record_distance("robot_1", 20.3)
+
+        result = registry.get_fleet_metrics()
+        assert result["total_distance_m"] == pytest.approx(30.8, abs=1e-2)
+
+    def test_fleet_metrics_gas_statistics(self):
+        registry = RobotRegistry()
+        registry.register("robot_0", "/robot_0")
+        registry.register("robot_1", "/robot_1")
+
+        registry.update_gas_reading("robot_0", 1.2)
+        registry.update_gas_reading("robot_1", 3.5)
+
+        result = registry.get_fleet_metrics()
+        assert result["average_concentration"] == pytest.approx(2.35, abs=1e-3)
+        assert result["max_concentration"] == pytest.approx(3.5, abs=1e-3)
+
+    def test_fleet_metrics_ignores_zero_gas(self):
+        registry = RobotRegistry()
+        registry.register("robot_0", "/robot_0")
+        registry.register("robot_1", "/robot_1")
+
+        registry.update_gas_reading("robot_0", 0.0)
+        registry.update_gas_reading("robot_1", 2.0)
+
+        result = registry.get_fleet_metrics()
+        # Only robot_1 has non-zero gas
+        assert result["average_concentration"] == pytest.approx(2.0, abs=1e-3)
+        assert result["max_concentration"] == pytest.approx(2.0, abs=1e-3)
+
+
+class TestFleetHistory:
+    """Tests for get_fleet_history and record_fleet_snapshot methods."""
+
+    def test_empty_history(self):
+        registry = RobotRegistry()
+        result = registry.get_fleet_history()
+        assert result["history"] == []
+        assert result["count"] == 0
+
+    def test_record_single_snapshot(self):
+        registry = RobotRegistry()
+        registry.register("robot_0", "/robot_0")
+        registry.update_mode("robot_0", "PATROL")
+
+        registry.record_fleet_snapshot()
+
+        result = registry.get_fleet_history()
+        assert result["count"] == 1
+        snapshot = result["history"][0]
+        assert snapshot["total_robots"] == 1
+        assert snapshot["active_robots"] == 1
+        assert "timestamp" in snapshot
+        assert "modes" in snapshot
+
+    def test_history_limit(self):
+        registry = RobotRegistry()
+        registry.register("robot_0", "/robot_0")
+
+        for _ in range(150):
+            registry.record_fleet_snapshot()
+
+        result = registry.get_fleet_history(limit=50)
+        assert result["count"] == 50
+
+    def test_history_tracks_modes(self):
+        registry = RobotRegistry()
+        registry.register("robot_0", "/robot_0")
+        registry.register("robot_1", "/robot_1")
+
+        registry.update_mode("robot_0", "PATROL")
+        registry.update_mode("robot_1", "SEEK_TRACK")
+
+        registry.record_fleet_snapshot()
+
+        result = registry.get_fleet_history()
+        snapshot = result["history"][0]
+        assert snapshot["modes"]["PATROL"] == 1
+        assert snapshot["modes"]["SEEK_TRACK"] == 1
+
+
+class TestRecordNavigation:
+    """Tests for record_navigation_success and record_navigation_failure methods."""
+
+    def test_record_navigation_success(self):
+        registry = RobotRegistry()
+        registry.register("robot_0", "/robot_0")
+
+        registry.record_navigation_success("robot_0")
+        registry.record_navigation_success("robot_0")
+
+        metrics = registry.get_fleet_metrics()
+        assert metrics["total_navigation_success"] == 2
+
+    def test_record_navigation_failure(self):
+        registry = RobotRegistry()
+        registry.register("robot_0", "/robot_0")
+
+        registry.record_navigation_failure("robot_0")
+
+        metrics = registry.get_fleet_metrics()
+        assert metrics["total_navigation_failure"] == 1
+
+    def test_record_navigation_nonexistent_raises(self):
+        registry = RobotRegistry()
+        with pytest.raises(KeyError, match="not registered"):
+            registry.record_navigation_success("nonexistent")
+        with pytest.raises(KeyError, match="not registered"):
+            registry.record_navigation_failure("nonexistent")
+
+
+class TestRecordDistance:
+    """Tests for record_distance method."""
+
+    def test_record_distance(self):
+        registry = RobotRegistry()
+        registry.register("robot_0", "/robot_0")
+
+        registry.record_distance("robot_0", 15.5)
+
+        metrics = registry.get_fleet_metrics()
+        assert metrics["total_distance_m"] == pytest.approx(15.5, abs=1e-2)
+
+    def test_record_distance_accumulates(self):
+        registry = RobotRegistry()
+        registry.register("robot_0", "/robot_0")
+
+        registry.record_distance("robot_0", 10.0)
+        registry.record_distance("robot_0", 5.5)
+
+        metrics = registry.get_fleet_metrics()
+        assert metrics["total_distance_m"] == pytest.approx(15.5, abs=1e-2)
+
+    def test_record_distance_nonexistent_raises(self):
+        registry = RobotRegistry()
+        with pytest.raises(KeyError, match="not registered"):
+            registry.record_distance("nonexistent", 10.0)
+
+
+class TestFleetMetricsDataclass:
+    """Tests for FleetMetrics dataclass."""
+
+    def test_default_values(self):
+        metrics = FleetMetrics()
+        assert metrics.total_distance_m == pytest.approx(0.0, abs=1e-9)
+        assert metrics.navigation_success == 0
+        assert metrics.navigation_failure == 0
+
+    def test_custom_values(self):
+        metrics = FleetMetrics(total_distance_m=100.5, navigation_success=10, navigation_failure=2)
+        assert metrics.total_distance_m == pytest.approx(100.5, abs=1e-9)
+        assert metrics.navigation_success == 10
+        assert metrics.navigation_failure == 2
+
+    def test_frozen(self):
+        metrics = FleetMetrics()
+        with pytest.raises(AttributeError):
+            metrics.total_distance_m = 50.0  # type: ignore[misc]
+
+
+class TestUnregisterCleansMetrics:
+    """Tests that unregistering removes robot metrics."""
+
+    def test_unregister_removes_metrics(self):
+        registry = RobotRegistry()
+        registry.register("robot_0", "/robot_0")
+        registry.record_navigation_success("robot_0")
+        registry.record_distance("robot_0", 10.0)
+
+        registry.unregister("robot_0")
+
+        # Re-register and verify metrics are reset
+        registry.register("robot_0", "/robot_0")
+        metrics = registry.get_fleet_metrics()
+        assert metrics["total_navigation_success"] == 0
+        assert metrics["total_distance_m"] == pytest.approx(0.0, abs=1e-9)
+
+
+class TestClearResetsFleet:
+    """Tests that clear resets all fleet data."""
+
+    def test_clear_resets_metrics_and_history(self):
+        registry = RobotRegistry()
+        registry.register("robot_0", "/robot_0")
+        registry.record_navigation_success("robot_0")
+        registry.record_fleet_snapshot()
+
+        registry.clear()
+
+        assert registry.get_fleet_history()["count"] == 0
+        metrics = registry.get_fleet_metrics()
+        assert metrics["total_navigation_success"] == 0
+
