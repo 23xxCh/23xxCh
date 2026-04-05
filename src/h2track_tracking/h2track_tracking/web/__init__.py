@@ -30,7 +30,7 @@ from .metrics_store import (
     MetricsStore,
     summarize_gas_signal,
 )
-from .routes import FASTAPI_AVAILABLE
+from .routes import FASTAPI_AVAILABLE, WEBSOCKET_AVAILABLE
 from .simulation_controller import (
     CommandResult,
     SimulationController,
@@ -40,6 +40,12 @@ from .simulation_controller import (
 from .templates import HTML_PAGE
 from .reports import build_run_report_markdown
 from .topic_collector import TopicMetricsCollector
+from .websocket import (
+    ConnectionManager,
+    ClientState,
+    parse_client_command,
+    websocket_endpoint,
+)
 
 __all__ = [
     # app module
@@ -71,6 +77,7 @@ __all__ = [
     "summarize_gas_signal",
     # routes
     "FASTAPI_AVAILABLE",
+    "WEBSOCKET_AVAILABLE",
     # simulation_controller
     "CommandResult",
     "SimulationController",
@@ -80,4 +87,9 @@ __all__ = [
     "build_run_report_markdown",
     # topic_collector
     "TopicMetricsCollector",
+    # websocket
+    "ConnectionManager",
+    "ClientState",
+    "parse_client_command",
+    "websocket_endpoint",
 ]
