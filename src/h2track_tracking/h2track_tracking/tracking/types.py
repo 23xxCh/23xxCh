@@ -38,22 +38,25 @@ class TrackingAction:
 
 @dataclass(frozen=True)
 class SurgeCastConfig:
-    """Configuration for Surge-Cast algorithm."""
-    # Plume detection thresholds
-    plume_found_threshold: float = 5.0  # Concentration to enter SURGE
-    plume_lost_threshold: float = 2.0   # Concentration to enter CAST
+    """Configuration for Surge-Cast algorithm.
+
+    Thresholds should match the mission_manager's enter/exit/source thresholds.
+    """
+    # Plume detection thresholds (should match mission config)
+    plume_found_threshold: float = 5.0  # Concentration to enter SURGE (enter_threshold)
+    plume_lost_threshold: float = 2.0   # Concentration to enter CAST (exit_threshold)
     source_threshold: float = 20.0      # Concentration to confirm source
 
     # Movement parameters
-    surge_step: float = 0.5             # Step size during SURGE
-    cast_step: float = 0.3              # Step size during CAST
-    cast_distance_limit: float = 3.0    # Max distance per CAST phase
+    surge_step: float = 0.5             # Step size during SURGE (meters)
+    cast_step: float = 0.3              # Step size during CAST (meters)
+    cast_distance_limit: float = 3.0    # Max distance per CAST phase (meters)
 
     # Particle filter integration
     use_particle_filter: bool = True
     min_pf_confidence: float = 0.3      # Minimum PF confidence to use estimate
 
-    # Wind parameters
+    # Wind parameters (m/s)
     wind_x: float = 0.4                 # Wind X component
     wind_y: float = 0.0                 # Wind Y component
 
@@ -62,7 +65,7 @@ class SurgeCastConfig:
     plume_confirm_samples: int = 3      # Samples to confirm plume state
 
     # Source confirmation
-    source_radius: float = 1.0          # Distance to confirm source
+    source_radius: float = 1.0          # Distance to confirm source (meters)
     source_hold_steps: int = 2          # Consecutive detections needed
 
     @property

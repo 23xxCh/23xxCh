@@ -57,8 +57,6 @@ class MissionManagerNode(Node):
 
         # Surge-Cast parameters
         self.declare_parameter("use_surge_cast", True)
-        self.declare_parameter("plume_found_threshold", 5.0)
-        self.declare_parameter("plume_lost_threshold", 2.0)
         self.declare_parameter("surge_step", 0.5)
         self.declare_parameter("cast_step", 0.3)
         self.declare_parameter("cast_distance_limit", 3.0)
@@ -126,11 +124,11 @@ class MissionManagerNode(Node):
         self._particle_filter_estimate: Pose2D | None = None
         self._particle_filter_confidence: float = 0.0
 
-        # Surge-Cast tracker
+        # Surge-Cast tracker - uses enter/exit thresholds from mission config
         self._use_surge_cast = bool(self.get_parameter("use_surge_cast").value)
         self._surge_cast_config = SurgeCastConfig(
-            plume_found_threshold=float(self.get_parameter("plume_found_threshold").value),
-            plume_lost_threshold=float(self.get_parameter("plume_lost_threshold").value),
+            plume_found_threshold=float(self.get_parameter("enter_threshold").value),
+            plume_lost_threshold=float(self.get_parameter("exit_threshold").value),
             source_threshold=float(self.get_parameter("source_threshold").value),
             surge_step=float(self.get_parameter("surge_step").value),
             cast_step=float(self.get_parameter("cast_step").value),

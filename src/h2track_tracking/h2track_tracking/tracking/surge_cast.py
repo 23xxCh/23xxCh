@@ -219,7 +219,7 @@ class SurgeCastTracker:
             )
 
         elif self.state == TrackingState.CAST:
-            # Move perpendicular to wind
+            # Move perpendicular to wind, but bias toward best historical position
             wind_norm = math.hypot(wind_x, wind_y)
             if wind_norm > 0.1:
                 # Cast perpendicular to wind direction
@@ -228,6 +228,18 @@ class SurgeCastTracker:
             else:
                 # No wind, cast perpendicular to current heading
                 cast_heading = robot_yaw + math.pi / 2 * self._cast_direction
+
+            # Bias toward best historical position if available
+            best = self._history.get_best_position()
+            if best and best[1] > 0:
+                best_pose = best[0]
+                dx = best_pose.x - robot_pose.x
+                dy = best_pose.y - robot_pose.y
+                dist = math.hypot(dx, dy)
+                if dist > 0.5:  # Only bias if significantly far
+                    best_heading = math.atan2(dy, dx)
+                    # Blend cast heading with direction to best position
+                    cast_heading = 0.6 * cast_heading + 0.4 * best_heading
 
             target = Pose2D(
                 robot_pose.x + self.config.cast_step * math.cos(cast_heading),
