@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ROS 2 Humble workspace for hydrogen (H2) gas source tracking simulation. The robot patrols a Gazebo environment, detects gas concentration changes, and locates the hydrogen source using gradient-based tracking.
+ROS 2 Humble workspace for hydrogen (H2) gas source tracking simulation. The robot patrols a Gazebo environment, detects gas concentration changes, and locates the hydrogen source using gradient-based tracking and particle filter-based source localization.
 
 ## Build Commands
 
@@ -20,6 +20,7 @@ pytest src/h2track_tracking/test/ -v
 # Run single test file
 pytest src/h2track_tracking/test/test_mission_logic.py -v
 pytest src/h2track_tracking/test/test_gas_model.py -v
+pytest src/h2track_tracking/test/test_particle_filter_node.py -v
 ```
 
 ## Package Structure
@@ -55,6 +56,7 @@ PATROL → SEEK_CONFIRM → SEEK_TRACK → SOURCE_FOUND
 | `gaden_adapter_node` | `gaden_adapter_node.py` | Converts GADEN sensor readings to `/gas_concentration` |
 | `gaden_sensor_gate_node` | `gaden_sensor_gate.py` | Waits for TF before launching simulated_gas_sensor |
 | `nav2_startup_gate_node` | `nav2_startup_gate.py` | Waits for Nav2 lifecycle readiness |
+| `particle_filter_node` | `particle_filter/particle_filter_node.py` | Probabilistic gas source localization |
 
 ### Gas Simulation
 
@@ -62,6 +64,23 @@ Two modes:
 
 1. **Simplified** (`use_gaden:=false`): `gas_field_node` publishes synthetic plume data based on `GasFieldModel` in `gas_model.py`
 2. **GADEN** (`use_gaden:=true`): Uses external GADEN workspace for realistic filament-based gas dispersion
+
+### Particle Filter
+
+Probabilistic gas source localization using `particle_filter/` module:
+
+- **ParticleFilter**: Core filter with predict/update/resample steps
+- **GaussianPlumeObservationModel**: Weights particles based on gas concentration
+- **RandomWalkMotionModel**: Adds noise to particle positions
+- **ParticleFilterNode**: ROS wrapper, publishes to `/estimated_source` and `/particle_cloud`
+
+### Heatmap System
+
+Concentration visualization using `heatmap/` module:
+
+- **ConcentrationGrid**: 3D grid for gas concentration storage
+- **TimeSeriesStore**: Historical grid snapshots for playback
+- **HeatmapDataProvider**: Bridges ROS data to WebSocket streaming
 
 ### Scene Configuration
 
@@ -127,6 +146,8 @@ ros2 run h2track_tracking demo_selfcheck --timeout 5.0
 | `/source_found` | `Bool` | Source detection signal |
 | `/amcl_pose` | `PoseWithCovarianceStamped` | Robot pose from localization |
 | `/estimated_source_pose` | `PoseStamped` | Estimated source position |
+| `/estimated_source` | `PoseWithCovarianceStamped` | Particle filter source estimate with covariance |
+| `/particle_cloud` | `PoseArray` | Particle positions for visualization |
 
 ## External Dependencies
 
@@ -142,6 +163,29 @@ ros2 run h2track_tracking demo_selfcheck --timeout 5.0
 - State machine in `MissionStateMachine` class uses dataclass config
 - `MissionConfig` and `GasFieldParams` are frozen dataclasses for immutability
 
+### Module Organization
+
+```
+h2track_tracking/
+├── particle_filter/      # Probabilistic source localization
+│   ├── types.py          # Particle, SourceEstimate dataclasses
+│   ├── filter.py         # Core particle filter logic
+│   ├── motion_model.py   # Random walk motion model
+│   └── observation_model.py  # Gaussian plume observation model
+├── heatmap/              # Concentration visualization
+│   ├── grid.py           # 3D concentration grid
+│   └── history_store.py  # Time series snapshots
+├── llm/                  # LLM assistant backend
+│   ├── client.py         # OpenAI-compatible client
+│   ├── controller.py     # Chat and action execution
+│   └── profile_store.py  # Profile management
+└── web/                  # FastAPI web console
+    ├── app.py            # Application factory
+    ├── routes.py         # REST and WebSocket endpoints
+    ├── websocket.py      # Connection manager, heatmap streaming
+    └── simulation_controller.py  # Simulation lifecycle
+```
+
 ## Web Console
 
 One-click demo launcher available at `http://<host>:18080`:
@@ -149,6 +193,25 @@ One-click demo launcher available at `http://<host>:18080`:
 ```bash
 ros2 run h2track_tracking demo_web_server --host 0.0.0.0 --port 18080
 ```
+
+### WebSocket Endpoints
+
+| Endpoint | Purpose |
+|----------|---------|
+| `/ws` | Real-time metrics streaming |
+| `/ws/heatmap` | Real-time heatmap visualization (grid, particles, estimate) |
+
+### API Endpoints
+
+Key REST endpoints:
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/sim/start` | POST | Start simulation with profile |
+| `/api/sim/stop` | POST | Stop running simulation |
+| `/api/sim/status` | GET | Current simulation status |
+| `/api/metrics/recent` | GET | Recent metrics snapshot |
+| `/api/llm/chat` | POST | Chat with LLM assistant |
 
 ## Demo Regression Testing
 

@@ -5,18 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 
-DEMO_PREP_COMMAND = [
-    "ros2",
-    "run",
-    "h2track_tracking",
-    "demo_prep",
-    "--scene",
-    "warehouse",
-    "--use-gaden",
-    "true",
-]
-
-
 DEFAULT_LAUNCH_PROFILE = {
     "scene": "warehouse",
     "use_gaden": "true",
@@ -55,6 +43,28 @@ def normalize_launch_profile(profile: dict[str, Any] | None) -> dict[str, str]:
         "use_rviz": _coerce_bool_token(source.get("use_rviz"), default=DEFAULT_LAUNCH_PROFILE["use_rviz"]),
         "headless": _coerce_bool_token(source.get("headless"), default=DEFAULT_LAUNCH_PROFILE["headless"]),
     }
+
+
+def build_demo_prep_command(profile: dict[str, Any] | None = None) -> list[str]:
+    """Build the demo_prep command based on profile.
+
+    Args:
+        profile: Launch profile configuration. If None, uses defaults.
+
+    Returns:
+        List of command arguments for demo_prep.
+    """
+    p = normalize_launch_profile(profile)
+    return [
+        "ros2",
+        "run",
+        "h2track_tracking",
+        "demo_prep",
+        "--scene",
+        p["scene"],
+        "--use-gaden",
+        p["use_gaden"],
+    ]
 
 
 def build_demo_launch_command(profile: dict[str, Any] | None = None) -> list[str]:

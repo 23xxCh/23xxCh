@@ -6,6 +6,7 @@ import math
 
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
+import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.time import Time
@@ -18,8 +19,13 @@ from .navigation_executor import (
     coerce_patrol_points,
     determine_nav_action_on_result,
     map_pose_from_amcl,
-    select_tracking_target,
     should_skip_patrol_goal,
+)
+from .tracking import (
+    SurgeCastConfig,
+    SurgeCastTracker,
+    TrackingState,
+    ParticleFilterIntegrator,
 )
 
 
@@ -46,6 +52,18 @@ class MissionManagerNode(Node):
         self.declare_parameter("localizer_node", "amcl")
         self.declare_parameter("use_slam", False)
         self.declare_parameter("publish_initial_pose", True)
+        self.declare_parameter("use_particle_filter_estimate", True)
+        self.declare_parameter("particle_filter_min_confidence", 0.3)
+
+        # Surge-Cast parameters
+        self.declare_parameter("use_surge_cast", True)
+        self.declare_parameter("plume_found_threshold", 5.0)
+        self.declare_parameter("plume_lost_threshold", 2.0)
+        self.declare_parameter("surge_step", 0.5)
+        self.declare_parameter("cast_step", 0.3)
+        self.declare_parameter("cast_distance_limit", 3.0)
+        self.declare_parameter("wind_x", 0.4)
+        self.declare_parameter("wind_y", 0.0)
 
         patrol_points = coerce_patrol_points(self.get_parameter("patrol_points").value)
         config = MissionConfig(
@@ -103,8 +121,32 @@ class MissionManagerNode(Node):
         self._retry_goal_kind: str | None = None
         self._retry_goal_at_sec: float | None = None
         self._source_announced = False
+        self._use_particle_filter_estimate = bool(self.get_parameter("use_particle_filter_estimate").value)
+        self._particle_filter_min_confidence = float(self.get_parameter("particle_filter_min_confidence").value)
+        self._particle_filter_estimate: Pose2D | None = None
+        self._particle_filter_confidence: float = 0.0
+
+        # Surge-Cast tracker
+        self._use_surge_cast = bool(self.get_parameter("use_surge_cast").value)
+        self._surge_cast_config = SurgeCastConfig(
+            plume_found_threshold=float(self.get_parameter("plume_found_threshold").value),
+            plume_lost_threshold=float(self.get_parameter("plume_lost_threshold").value),
+            source_threshold=float(self.get_parameter("source_threshold").value),
+            surge_step=float(self.get_parameter("surge_step").value),
+            cast_step=float(self.get_parameter("cast_step").value),
+            cast_distance_limit=float(self.get_parameter("cast_distance_limit").value),
+            wind_x=float(self.get_parameter("wind_x").value),
+            wind_y=float(self.get_parameter("wind_y").value),
+            use_particle_filter=self._use_particle_filter_estimate,
+            min_pf_confidence=self._particle_filter_min_confidence,
+            source_radius=float(self.get_parameter("source_radius").value),
+            source_hold_steps=int(self.get_parameter("source_hold_steps").value),
+        )
+        self._surge_cast_tracker = SurgeCastTracker(self._surge_cast_config)
+        self._pf_integrator = ParticleFilterIntegrator()
 
         self.create_subscription(PoseWithCovarianceStamped, "/amcl_pose", self._amcl_pose_callback, 10)
+        self.create_subscription(PoseWithCovarianceStamped, "/estimated_source", self._particle_filter_callback, 10)
         self.create_subscription(Float32, "/gas_concentration", self._concentration_callback, 10)
         self._mode_pub = self.create_publisher(String, "/robot_mode", 10)
         self._source_pub = self.create_publisher(Bool, "/source_found", 10)
@@ -117,7 +159,29 @@ class MissionManagerNode(Node):
     def _concentration_callback(self, msg: Float32) -> None:
         self._current_concentration = float(msg.data)
         self._history.append((self._current_pose, self._current_concentration))
-        self._history = self._history[-8:]
+        self._history = self._history[-50:]  # Keep more history for better tracking
+
+    def _particle_filter_callback(self, msg: PoseWithCovarianceStamped) -> None:
+        """Handle particle filter source estimate."""
+        self._particle_filter_estimate = Pose2D(
+            msg.pose.pose.position.x,
+            msg.pose.pose.position.y,
+        )
+        # Extract confidence from covariance (inverse of variance)
+        cov_x = msg.pose.covariance[0]
+        cov_y = msg.pose.covariance[7]
+        if cov_x > 0 and cov_y > 0:
+            # Lower covariance = higher confidence
+            self._particle_filter_confidence = min(1.0, 1.0 / (np.sqrt(cov_x * cov_y) + 0.1))
+        else:
+            self._particle_filter_confidence = 0.0
+
+        # Update particle filter integrator
+        self._pf_integrator.update(
+            position=(msg.pose.pose.position.x, msg.pose.pose.position.y),
+            confidence=self._particle_filter_confidence,
+            covariance=(cov_x, cov_y, msg.pose.covariance[1], msg.pose.covariance[6]),
+        )
 
     def _make_goal(self, x: float, y: float, yaw: float = 0.0) -> PoseStamped:
         goal = PoseStamped()
@@ -146,16 +210,53 @@ class MissionManagerNode(Node):
         return True
 
     def _send_tracking_goal(self) -> bool:
-        next_target = select_tracking_target(
-            gas_model=self._gas_model,
-            current_pose=self._current_pose,
-            current_yaw=self._current_yaw,
-            history=self._history,
-            step_size=float(self.get_parameter("track_step").value),
-            sweep_angle=math.radians(float(self.get_parameter("sweep_angle_deg").value)),
-            source_threshold=float(self.get_parameter("source_threshold").value),
-        )
-        accepted = self._navigator.goToPose(self._make_goal(next_target.x, next_target.y))
+        # Use Surge-Cast algorithm if enabled
+        if self._use_surge_cast:
+            action = self._surge_cast_tracker.update(
+                concentration=self._current_concentration,
+                robot_pose=Pose2D(self._current_pose.x, self._current_pose.y),
+                robot_yaw=self._current_yaw,
+            )
+
+            # Check for source found
+            if action.state == TrackingState.SOURCE_FOUND:
+                self.get_logger().info("Source found via Surge-Cast!")
+                # Don't send new goal, let the state machine handle it
+                return True
+
+            target = action.target
+            self.get_logger().info(
+                f"Surge-Cast {action.state.name}: target=({target.x:.2f}, {target.y:.2f}), "
+                f"conc={self._current_concentration:.2f}"
+            )
+        else:
+            # Legacy tracking with particle filter integration
+            use_pf = (
+                self._use_particle_filter_estimate
+                and self._particle_filter_estimate is not None
+                and self._particle_filter_confidence >= self._particle_filter_min_confidence
+            )
+
+            if use_pf:
+                # Navigate toward particle filter estimated source
+                target_x = self._particle_filter_estimate.x
+                target_y = self._particle_filter_estimate.y
+                self.get_logger().info(
+                    f"Using particle filter estimate: ({target_x:.2f}, {target_y:.2f}) "
+                    f"confidence={self._particle_filter_confidence:.2f}"
+                )
+                target = Pose2D(target_x, target_y)
+            else:
+                # Fall back to gradient-based tracking
+                target = self._gas_model.next_search_target(
+                    current_pose=self._current_pose,
+                    current_yaw=self._current_yaw,
+                    history=self._history,
+                    step_size=float(self.get_parameter("track_step").value),
+                    sweep_angle=math.radians(float(self.get_parameter("sweep_angle_deg").value)),
+                )
+
+        accepted = self._navigator.goToPose(self._make_goal(target.x, target.y))
         if not accepted:
             self.get_logger().warning(
                 f"Tracking goal rejected; retrying in {self._goal_reject_retry_sec:.1f}s."
@@ -322,6 +423,18 @@ class MissionManagerNode(Node):
                 self._send_patrol_goal()
         elif mode is MissionMode.SEEK_TRACK and task_complete:
             if nav_result == TaskResult.SUCCEEDED:
+                # Check for Surge-Cast source found
+                if self._use_surge_cast and self._surge_cast_tracker.current_state == TrackingState.SOURCE_FOUND:
+                    self.get_logger().info("Source confirmed by Surge-Cast!")
+                    # Trigger source found
+                    self._navigator.cancelTask()
+                    self._source_pub.publish(Bool(data=True))
+                    source_estimate = self._surge_cast_tracker.source_estimate
+                    if source_estimate:
+                        estimate_msg = self._make_goal(source_estimate.x, source_estimate.y)
+                        self._estimate_pub.publish(estimate_msg)
+                    self._source_announced = True
+                    return
                 self._send_tracking_goal()
             elif nav_result in (TaskResult.FAILED, TaskResult.CANCELED):
                 if self._retry_goal_kind is None:

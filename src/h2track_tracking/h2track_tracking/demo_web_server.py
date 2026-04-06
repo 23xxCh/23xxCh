@@ -19,9 +19,9 @@ from .web import (
     _resolve_static_index_html,
     _resolve_ui_meta,
     # Config exports
-    DEMO_PREP_COMMAND,
     DEFAULT_LAUNCH_PROFILE,
     build_demo_launch_command,
+    build_demo_prep_command,
     normalize_launch_profile,
     # MetricsStore exports
     CONCENTRATION_RE,
@@ -54,9 +54,9 @@ __all__ = [
     "_resolve_static_index_html",
     "_resolve_ui_meta",
     # Config
-    "DEMO_PREP_COMMAND",
     "DEFAULT_LAUNCH_PROFILE",
     "build_demo_launch_command",
+    "build_demo_prep_command",
     "normalize_launch_profile",
     # MetricsStore
     "CONCENTRATION_RE",

@@ -29,6 +29,7 @@ setup(
         f"{package_name}.recovery",
         f"{package_name}.heatmap",
         f"{package_name}.particle_filter",
+        f"{package_name}.tracking",
     ],
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
@@ -54,6 +55,7 @@ setup(
             "demo_regression = h2track_tracking.demo_regression:main",
             "slam_save_map = h2track_tracking.slam_save_map:main",
             "demo_web_server = h2track_tracking.demo_web_server:main",
+            "activate_localization = h2track_tracking.activate_localization:main",
         ],
     },
 )

@@ -1,0 +1,118 @@
+{
+  "scene": "warehouse",
+  "exported_at": "2026-03-30T07:21:24.051388+00:00",
+  "status": {
+    "state": "idle",
+    "pid": null,
+    "last_error": "",
+    "latest_log_id": 1,
+    "launch_profile": {
+      "scene": "warehouse",
+      "use_gaden": "true",
+      "use_slam": "true",
+      "use_rviz": "true",
+      "headless": "false"
+    }
+  },
+  "metrics": {
+    "phase": {
+      "current": "INIT",
+      "started_at": "2026-03-30T07:21:24.029153+00:00",
+      "timeline": [
+        {
+          "phase": "INIT",
+          "start_ts": "2026-03-30T07:21:24.029153+00:00",
+          "end_ts": null,
+          "duration_ms": null,
+          "reason": "init"
+        }
+      ]
+    },
+    "mode": {
+      "current": null,
+      "history": []
+    },
+    "gas": {
+      "current": null,
+      "history": []
+    },
+    "source_found": {
+      "current": null
+    },
+    "nav": {
+      "goal_succeeded": 0,
+      "failed_to_make_progress": 0,
+      "goal_canceled": 0,
+      "mean_goal_time_sec": null,
+      "current_goal_age_sec": null,
+      "goal_durations_sec": []
+    },
+    "topic_health": {
+      "/gas_concentration": {
+        "status": "stale",
+        "hz": 0.0,
+        "stale_sec": null,
+        "last_value": null,
+        "threshold_sec": 2.5
+      },
+      "/robot_mode": {
+        "status": "stale",
+        "hz": 0.0,
+        "stale_sec": null,
+        "last_value": null,
+        "threshold_sec": 20.0
+      },
+      "/source_found": {
+        "status": "stale",
+        "hz": 0.0,
+        "stale_sec": null,
+        "last_value": null,
+        "threshold_sec": 20.0
+      },
+      "/odom": {
+        "status": "stale",
+        "hz": 0.0,
+        "stale_sec": null,
+        "last_value": null,
+        "threshold_sec": 1.5
+      }
+    },
+    "node_health": {
+      "updated_at": "2026-03-30T07:21:24.029185+00:00",
+      "nodes": []
+    },
+    "updated_at": "2026-03-30T07:21:24.029218+00:00",
+    "launch_profile": {
+      "scene": "warehouse",
+      "use_gaden": "true",
+      "use_slam": "true",
+      "use_rviz": "true",
+      "headless": "false"
+    },
+    "mission_thresholds": {
+      "enter_threshold": 0.65,
+      "exit_threshold": 0.4,
+      "source_threshold": 3.4
+    }
+  },
+  "mission_thresholds": {
+    "enter_threshold": 0.65,
+    "exit_threshold": 0.4,
+    "source_threshold": 3.4
+  },
+  "launch_profile": {
+    "scene": "warehouse",
+    "use_gaden": "true",
+    "use_slam": "true",
+    "use_rviz": "true",
+    "headless": "false"
+  },
+  "logs": [
+    {
+      "id": 1,
+      "timestamp": "2026-03-30T07:21:24.029227+00:00",
+      "source": "system",
+      "line": "controller initialized"
+    }
+  ]
+}

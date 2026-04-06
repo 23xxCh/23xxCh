@@ -26,13 +26,21 @@ UI_MODE_LEGACY = "legacy_inline"
 def _resolve_static_console_dir() -> Path | None:
     """Resolve the static console bundle directory.
 
-    Checks both module directory and ROS package share directory.
+    Checks package root directory (h2track_tracking), module directory (web),
+    and ROS package share directory.
 
     Returns:
         Path to static_console directory, or None if not found.
     """
-    module_dir = Path(__file__).resolve().parent
-    candidates = [module_dir / STATIC_CONSOLE_DIRNAME]
+    # web module directory (this file's parent)
+    web_module_dir = Path(__file__).resolve().parent
+    # Package root directory (h2track_tracking) - one level up from web
+    package_root_dir = web_module_dir.parent
+
+    candidates = [
+        package_root_dir / STATIC_CONSOLE_DIRNAME,  # h2track_tracking/static_console
+        web_module_dir / STATIC_CONSOLE_DIRNAME,    # h2track_tracking/web/static_console
+    ]
     try:
         from ament_index_python.packages import get_package_share_directory
 

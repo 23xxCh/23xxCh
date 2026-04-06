@@ -24,10 +24,10 @@ from typing import Any, Callable, Deque
 import zipfile
 
 from .config import (
-    DEMO_PREP_COMMAND,
     DEFAULT_LAUNCH_PROFILE,
     normalize_launch_profile,
     build_demo_launch_command,
+    build_demo_prep_command,
 )
 from .metrics_store import MetricsStore, _now_iso
 from .reports import build_run_report_markdown
@@ -226,7 +226,8 @@ class SimulationController:
 
         self._append_log("running demo_prep...", source="control")
         try:
-            prep_result = self._run_command(list(DEMO_PREP_COMMAND))
+            prep_cmd = build_demo_prep_command(profile)
+            prep_result = self._run_command(prep_cmd)
         except Exception as exc:
             with self._lock:
                 self._state = "error"

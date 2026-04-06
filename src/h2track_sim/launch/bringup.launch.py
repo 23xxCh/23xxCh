@@ -6,7 +6,7 @@ from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, SetEnvironmentVariable, SetLaunchConfiguration, TimerAction
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription, OpaqueFunction, SetEnvironmentVariable, SetLaunchConfiguration, TimerAction
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
@@ -186,9 +186,13 @@ def generate_launch_description():
         resolved_world = world.perform(context).strip() or resolve_scene_world(pkg_share, scene_name)
         resolved_model_path = gazebo_model_path.perform(context).strip() or resolve_scene_model_path(pkg_share, scene_name)
         resolved_nav2_params_file = nav2_params_file.perform(context).strip() or resolve_scene_nav2_params(pkg_share, scene_name)
-        resolved_localizer_node = localizer_node.perform(context).strip() or str(
-            scene_profile.get("localizer_node", "none" if use_slam_enabled else "amcl")
-        )
+        # When use_slam is false, always use amcl regardless of scene config
+        if not use_slam_enabled:
+            resolved_localizer_node = "amcl"
+        else:
+            resolved_localizer_node = localizer_node.perform(context).strip() or str(
+                scene_profile.get("localizer_node", "none")
+            )
         requested_publish_initial_pose = publish_initial_pose.perform(context).strip().lower()
         if requested_publish_initial_pose:
             resolved_publish_initial_pose = requested_publish_initial_pose in ("1", "true", "yes", "on")
@@ -213,6 +217,8 @@ def generate_launch_description():
         resolved_gas_wind_y = gas_wind_y.perform(context).strip() or str(gas_field.get("wind_y", 0.0))
         resolved_gas_noise_stddev = gas_noise_stddev.perform(context).strip() or str(gas_field.get("noise_stddev", 0.05))
         resolved_gas_publish_rate_hz = gas_publish_rate_hz.perform(context).strip() or str(gas_field.get("publish_rate_hz", 5.0))
+        # Resolve particle filter bounds - use default warehouse bounds
+        resolved_particle_filter_bounds = particle_filter_bounds.perform(context).strip() or "[-6.0, -6.0, 6.0, 6.0]"
         if use_gaden_enabled:
             if not gaden:
                 raise RuntimeError(f"Scene '{scene_name}' is missing a gaden configuration block")
@@ -262,6 +268,7 @@ def generate_launch_description():
             SetLaunchConfiguration("gaden_map_roll", resolved_gaden_map_roll),
             SetLaunchConfiguration("gaden_map_pitch", resolved_gaden_map_pitch),
             SetLaunchConfiguration("gaden_map_yaw", resolved_gaden_map_yaw),
+            SetLaunchConfiguration("particle_filter_bounds", resolved_particle_filter_bounds),
         ]
 
     scene_defaults = OpaqueFunction(function=_scene_defaults)
@@ -487,6 +494,18 @@ def generate_launch_description():
         actions=[mission_manager_node],
     )
 
+    # Activate localization nodes (AMCL, map_server) when not using SLAM
+    activate_localization = TimerAction(
+        period=PythonExpression([nav2_launch_delay, " + 5.0"]),
+        condition=UnlessCondition(use_slam),
+        actions=[
+            ExecuteProcess(
+                cmd=["ros2", "run", "h2track_tracking", "activate_localization"],
+                output="screen",
+            )
+        ],
+    )
+
     particle_filter = Node(
         condition=IfCondition(use_particle_filter),
         package="h2track_tracking",
@@ -500,8 +519,8 @@ def generate_launch_description():
                 "motion_sigma": particle_filter_motion_sigma,
                 "observation_sigma": particle_filter_observation_sigma,
                 "plume_sigma": particle_filter_plume_sigma,
-                "source_strength": particle_filter_source_strength,
-                "bounds": ParameterValue(particle_filter_bounds, value_type=str),
+                "source_strength": gas_source_strength,
+                "bounds": particle_filter_bounds,
                 "publish_rate": particle_filter_publish_rate,
                 "resample_threshold": particle_filter_resample_threshold,
             },

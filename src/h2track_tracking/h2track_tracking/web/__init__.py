@@ -18,9 +18,9 @@ from .auth import (
     verify_api_key,
 )
 from .config import (
-    DEMO_PREP_COMMAND,
     DEFAULT_LAUNCH_PROFILE,
     build_demo_launch_command,
+    build_demo_prep_command,
     normalize_launch_profile,
 )
 from .metrics_store import (
@@ -65,9 +65,9 @@ __all__ = [
     "get_auth_dependency",
     "verify_api_key",
     # config
-    "DEMO_PREP_COMMAND",
     "DEFAULT_LAUNCH_PROFILE",
     "build_demo_launch_command",
+    "build_demo_prep_command",
     "normalize_launch_profile",
     # metrics_store
     "CONCENTRATION_RE",

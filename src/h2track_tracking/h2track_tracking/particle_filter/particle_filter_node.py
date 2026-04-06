@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import ast
+
 from geometry_msgs.msg import Pose, PoseArray, PoseWithCovarianceStamped
 from nav_msgs.msg import Odometry
 import numpy as np
@@ -54,13 +56,23 @@ class ParticleFilterNode(Node):
         observation_sigma = float(self.get_parameter("observation_sigma").value)
         plume_sigma = float(self.get_parameter("plume_sigma").value)
         source_strength = float(self.get_parameter("source_strength").value)
-        bounds = self.get_parameter("bounds").value
+        bounds_raw = self.get_parameter("bounds").value
         publish_rate = float(self.get_parameter("publish_rate").value)
         resample_threshold = float(self.get_parameter("resample_threshold").value)
 
+        # Parse bounds - handle both string and list formats
+        if isinstance(bounds_raw, str):
+            try:
+                bounds = ast.literal_eval(bounds_raw)
+            except (ValueError, SyntaxError):
+                self.get_logger().warning(f"Failed to parse bounds string: {bounds_raw}, using defaults")
+                bounds = [-10.0, -10.0, 10.0, 10.0]
+        else:
+            bounds = bounds_raw
+
         # Validate bounds
-        if len(bounds) < 4:
-            self.get_logger().warning("Invalid bounds parameter, using defaults")
+        if not isinstance(bounds, (list, tuple)) or len(bounds) < 4:
+            self.get_logger().warning(f"Invalid bounds parameter: {bounds}, using defaults")
             bounds = [-10.0, -10.0, 10.0, 10.0]
 
         self._bounds = (float(bounds[0]), float(bounds[1]), float(bounds[2]), float(bounds[3]))
