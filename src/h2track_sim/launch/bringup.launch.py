@@ -375,6 +375,7 @@ def generate_launch_description():
         executable="static_transform_publisher",
         name="gaden_map_tf",
         output="screen",
+        parameters=[{"use_sim_time": use_sim_time}],
         arguments=[
             "--x",
             gaden_map_offset_x,
@@ -403,6 +404,7 @@ def generate_launch_description():
         executable="static_transform_publisher",
         name="map_to_odom_tf",
         output="screen",
+        parameters=[{"use_sim_time": use_sim_time}],
         arguments=[
             "--x", "0.0",
             "--y", "0.0",
