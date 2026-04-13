@@ -175,7 +175,7 @@ def register_routes(
         return JSONResponse(content=payload)
 
     @app.post("/api/llm/profiles")
-    async def save_llm_profile(request: "RequestType") -> Any:  # type: ignore[valid-type]
+    async def save_llm_profile(request: "RequestType", _auth: str = auth_dep) -> Any:  # type: ignore[valid-type]
         """Save or update an LLM profile."""
         payload = await _read_json_dict(request)
         try:
@@ -187,7 +187,7 @@ def register_routes(
         return JSONResponse(status_code=202, content=result)
 
     @app.post("/api/llm/profiles/{profile_id}/activate")
-    def activate_llm_profile(profile_id: str) -> Any:
+    def activate_llm_profile(profile_id: str, _auth: str = auth_dep) -> Any:
         """Activate an LLM profile by ID."""
         try:
             result = llm.activate_profile(profile_id)
@@ -198,7 +198,7 @@ def register_routes(
         return JSONResponse(status_code=202, content=result)
 
     @app.post("/api/llm/profiles/{profile_id}/check")
-    def check_llm_profile(profile_id: str) -> Any:
+    def check_llm_profile(profile_id: str, _auth: str = auth_dep) -> Any:
         """Check connectivity for an LLM profile."""
         try:
             result = llm.check_profile(profile_id)
@@ -209,7 +209,7 @@ def register_routes(
         return JSONResponse(content=result)
 
     @app.delete("/api/llm/profiles/{profile_id}")
-    def delete_llm_profile(profile_id: str) -> Any:
+    def delete_llm_profile(profile_id: str, _auth: str = auth_dep) -> Any:
         """Delete an LLM profile by ID."""
         try:
             result = llm.delete_profile(profile_id)
@@ -232,7 +232,7 @@ def register_routes(
         return JSONResponse(content=result)
 
     @app.post("/api/llm/action/execute")
-    async def execute_llm_action(request: "RequestType") -> Any:  # type: ignore[valid-type]
+    async def execute_llm_action(request: "RequestType", _auth: str = auth_dep) -> Any:  # type: ignore[valid-type]
         """Execute an LLM-suggested action."""
         payload = await _read_json_dict(request)
         action = payload.get("action")
@@ -246,7 +246,7 @@ def register_routes(
         return JSONResponse(status_code=status_code, content=result)
 
     @app.post("/api/llm/loop/run-once")
-    async def llm_loop_run_once(request: "RequestType") -> Any:  # type: ignore[valid-type]
+    async def llm_loop_run_once(request: "RequestType", _auth: str = auth_dep) -> Any:  # type: ignore[valid-type]
         """Run a single LLM autonomous loop iteration."""
         payload = await _read_json_dict(request)
         try:

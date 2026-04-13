@@ -43,10 +43,10 @@ def test_extract_json_block_fallback():
 
 def test_openai_compat_endpoint_building():
     client = llm_agent.OpenAICompatClient()
-    assert client._endpoint_for("http://127.0.0.1:8000", "chat") == "http://127.0.0.1:8000/v1/chat/completions"
-    assert client._endpoint_for("http://127.0.0.1:8000/v1", "chat") == "http://127.0.0.1:8000/v1/chat/completions"
-    assert client._endpoint_for("http://127.0.0.1:8000/v2", "chat") == "http://127.0.0.1:8000/v2/chat/completions"
-    assert client._endpoint_for("http://127.0.0.1:8000/v2", "responses") == "http://127.0.0.1:8000/v2/responses"
+    assert client._endpoint_for("https://api.example.com", "chat") == "https://api.example.com/v1/chat/completions"
+    assert client._endpoint_for("https://api.example.com/v1", "chat") == "https://api.example.com/v1/chat/completions"
+    assert client._endpoint_for("https://api.example.com/v2", "chat") == "https://api.example.com/v2/chat/completions"
+    assert client._endpoint_for("https://api.example.com/v2", "responses") == "https://api.example.com/v2/responses"
 
 
 class _FakeSim:

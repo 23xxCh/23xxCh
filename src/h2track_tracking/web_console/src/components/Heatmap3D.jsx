@@ -5,7 +5,7 @@
  * Displays concentration values as colored voxels with color scale:
  * blue (low) -> yellow -> red (high)
  */
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Grid } from "@react-three/drei";
 import * as THREE from "three";
@@ -76,19 +76,41 @@ function getColor(value) {
 }
 
 /**
+ * Simple box component for demo/empty state
+ */
+function DemoBox() {
+  const meshRef = useRef();
+
+  useFrame((state) => {
+    if (meshRef.current) {
+      meshRef.current.rotation.x += 0.01;
+      meshRef.current.rotation.y += 0.02;
+    }
+  });
+
+  return (
+    <mesh ref={meshRef}>
+      <boxGeometry args={[2, 2, 2]} />
+      <meshStandardMaterial color="#6366f1" wireframe />
+    </mesh>
+  );
+}
+
+/**
  * Voxel grid component for concentration visualization.
  */
 function VoxelGrid({ grid, opacity = 0.6, threshold = 0.0 }) {
   const meshRef = useRef();
 
-  const { positions, colors, scales } = useMemo(() => {
+  const { positions, colors, scales, voxelResolution } = useMemo(() => {
     if (!grid || !grid.data) {
-      return { positions: [], colors: [], scales: [] };
+      return { positions: [], colors: [], scales: [], voxelResolution: 0.5 };
     }
 
     const { dimensions, origin, resolution, data } = grid;
-    const [nx, ny, nz] = dimensions;
-    const [ox, oy, oz] = origin;
+    const [nx, ny, nz] = dimensions || [10, 10, 5];
+    const [ox, oy, oz] = origin || [0, 0, 0];
+    const res = resolution || 0.5;
 
     const positions = [];
     const colors = [];
@@ -102,31 +124,35 @@ function VoxelGrid({ grid, opacity = 0.6, threshold = 0.0 }) {
 
     if (maxVal <= 0) maxVal = 1;
 
-    // Create voxels for non-zero values
-    for (let zi = 0; zi < nz; zi++) {
-      for (let yi = 0; yi < ny; yi++) {
-        for (let xi = 0; xi < nx; xi++) {
+    // Create voxels for non-zero values (limit to prevent performance issues)
+    let voxelCount = 0;
+    const maxVoxels = 500;
+
+    for (let zi = 0; zi < nz && voxelCount < maxVoxels; zi++) {
+      for (let yi = 0; yi < ny && voxelCount < maxVoxels; yi++) {
+        for (let xi = 0; xi < nx && voxelCount < maxVoxels; xi++) {
           const idx = xi + yi * nx + zi * nx * ny;
-          const val = data[idx];
+          const val = data[idx] || 0;
 
           if (val > threshold) {
             const normalizedVal = val / maxVal;
             const [r, g, b] = getColor(normalizedVal);
 
             positions.push(
-              ox + (xi + 0.5) * resolution,
-              oz + (zi + 0.5) * resolution,
-              oy + (yi + 0.5) * resolution
+              ox + (xi + 0.5) * res,
+              oz + (zi + 0.5) * res,
+              oy + (yi + 0.5) * res
             );
 
             colors.push(r, g, b);
             scales.push(normalizedVal);
+            voxelCount++;
           }
         }
       }
     }
 
-    return { positions, colors, scales };
+    return { positions, colors, scales, voxelResolution: res };
   }, [grid, threshold]);
 
   if (positions.length === 0) {
@@ -136,7 +162,7 @@ function VoxelGrid({ grid, opacity = 0.6, threshold = 0.0 }) {
   return (
     <group ref={meshRef}>
       {positions.map((_, i) => {
-        const idx = i / 3;
+        const idx = Math.floor(i / 3);
         const x = positions[idx * 3];
         const y = positions[idx * 3 + 1];
         const z = positions[idx * 3 + 2];
@@ -151,7 +177,7 @@ function VoxelGrid({ grid, opacity = 0.6, threshold = 0.0 }) {
             position={[x, y, z]}
             scale={[scale * 0.8, scale * 0.8, scale * 0.8]}
           >
-            <boxGeometry args={[grid.resolution, grid.resolution, grid.resolution]} />
+            <boxGeometry args={[voxelResolution, voxelResolution, voxelResolution]} />
             <meshStandardMaterial
               color={new THREE.Color(r, g, b)}
               transparent
@@ -177,14 +203,18 @@ function ParticleCloud({ particles }) {
     }
 
     const { positions: posArray, weights } = particles;
-    const maxWeight = Math.max(...weights, 0.01);
+    const maxWeight = Math.max(...(weights || [1]), 0.01);
 
     const positions = [];
     const colors = [];
 
-    for (let i = 0; i < posArray.length; i++) {
+    // Limit particles for performance
+    const maxParticles = 1000;
+    const step = Math.max(1, Math.floor(posArray.length / maxParticles));
+
+    for (let i = 0; i < posArray.length; i += step) {
       const [x, y] = posArray[i];
-      const weight = weights[i] || 0;
+      const weight = (weights && weights[i]) || 0;
       const normalizedWeight = weight / maxWeight;
 
       // Position at y=0 (2D particles on XY plane)
@@ -277,11 +307,46 @@ function EstimateMarker({ estimate }) {
 function Lighting() {
   return (
     <>
-      <ambientLight intensity={0.4} />
+      <ambientLight intensity={0.5} />
       <directionalLight position={[10, 20, 10]} intensity={0.8} />
       <pointLight position={[-10, 10, -10]} intensity={0.4} />
     </>
   );
+}
+
+/**
+ * Error boundary component for Three.js canvas
+ */
+function CanvasErrorBoundary({ children }) {
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    const handleError = (event) => {
+      if (event.message?.includes('WebGL') || event.message?.includes('Three')) {
+        setHasError(true);
+      }
+    };
+
+    window.addEventListener('error', handleError);
+    return () => window.removeEventListener('error', handleError);
+  }, []);
+
+  if (hasError) {
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100%',
+        color: '#94a3b8',
+        fontSize: '14px'
+      }}>
+        3D渲染不可用，请刷新页面重试
+      </div>
+    );
+  }
+
+  return children;
 }
 
 /**
@@ -324,50 +389,77 @@ function Heatmap3D({
   const centerX = (sceneBounds.minX + sceneBounds.maxX) / 2;
   const centerZ = (sceneBounds.minZ + sceneBounds.maxZ) / 2;
 
+  // Check if we have any data to display
+  const hasData = useMemo(() => {
+    return (grid && grid.data && grid.data.some(v => v > 0)) ||
+           (particles && particles.positions && particles.positions.length > 0) ||
+           (estimate && estimate.position);
+  }, [grid, particles, estimate]);
+
   return (
     <div className="heatmap-container">
-      <Canvas
-        camera={{
-          position: [centerX + 15, 15, centerZ + 15],
-          fov: 50,
-          near: 0.1,
-          far: 1000,
-        }}
-        gl={{ antialias: true, alpha: true }}
-      >
-        <color attach="background" args={["#071423"]} />
+      <CanvasErrorBoundary>
+        <Canvas
+          camera={{
+            position: [centerX + 15, 15, centerZ + 15],
+            fov: 50,
+            near: 0.1,
+            far: 1000,
+          }}
+          gl={{ antialias: true, alpha: true }}
+          fallback={
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+              color: '#94a3b8',
+              fontSize: '14px'
+            }}>
+              正在加载3D视图...
+            </div>
+          }
+        >
+          <color attach="background" args={["#071423"]} />
 
-        <Lighting />
+          <Lighting />
 
-        {showAxes && <Axes size={5} />}
-        {showGrid && (
-          <Grid
-            args={[20, 20]}
-            cellSize={1}
-            cellThickness={0.5}
-            cellColor="#274768"
-            sectionSize={5}
-            sectionThickness={1}
-            sectionColor="#3a5f85"
-            fadeDistance={50}
-            fadeStrength={1}
-            position={[centerX, 0, centerZ]}
+          {showAxes && <Axes size={5} />}
+          {showGrid && (
+            <Grid
+              args={[20, 20]}
+              cellSize={1}
+              cellThickness={0.5}
+              cellColor="#274768"
+              sectionSize={5}
+              sectionThickness={1}
+              sectionColor="#3a5f85"
+              fadeDistance={50}
+              fadeStrength={1}
+              position={[centerX, 0, centerZ]}
+            />
+          )}
+
+          {hasData ? (
+            <>
+              <VoxelGrid grid={grid} opacity={opacity} />
+              <ParticleCloud particles={particles} />
+              <EstimateMarker estimate={estimate} />
+            </>
+          ) : (
+            <DemoBox />
+          )}
+
+          <OrbitControls
+            makeDefault
+            enableDamping
+            dampingFactor={0.05}
+            minDistance={2}
+            maxDistance={100}
+            maxPolarAngle={Math.PI / 2.1}
           />
-        )}
-
-        <VoxelGrid grid={grid} opacity={opacity} />
-        <ParticleCloud particles={particles} />
-        <EstimateMarker estimate={estimate} />
-
-        <OrbitControls
-          makeDefault
-          enableDamping
-          dampingFactor={0.05}
-          minDistance={2}
-          maxDistance={100}
-          maxPolarAngle={Math.PI / 2.1}
-        />
-      </Canvas>
+        </Canvas>
+      </CanvasErrorBoundary>
 
       <div className="heatmap-legend">
         <div className="legend-title">浓度</div>

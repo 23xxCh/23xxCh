@@ -7,6 +7,42 @@ import re
 from typing import Any
 import urllib.error
 import urllib.request
+from urllib.parse import urlparse
+
+ALLOWED_SCHEMES = {"https"}
+BLOCKED_HOSTS = {
+    "169.254.169.254",
+    "localhost",
+    "127.0.0.1",
+    "0.0.0.0",
+    "metadata.google.internal",
+}
+
+
+def validate_base_url(base_url: str) -> str:
+    """Validate base_url to prevent SSRF attacks.
+
+    Args:
+        base_url: The URL to validate.
+
+    Returns:
+        The validated URL.
+
+    Raises:
+        ValueError: If the URL scheme is not allowed or the host is blocked.
+    """
+    parsed = urlparse(base_url)
+    if parsed.scheme not in ALLOWED_SCHEMES:
+        raise ValueError(f"URL scheme must be https, got: {parsed.scheme}")
+    if parsed.hostname in BLOCKED_HOSTS:
+        raise ValueError(f"Access to blocked host is not allowed: {parsed.hostname}")
+    if parsed.hostname and (
+        parsed.hostname.startswith("10.")
+        or parsed.hostname.startswith("192.168.")
+        or parsed.hostname.startswith("172.")
+    ):
+        raise ValueError(f"Access to private networks is not allowed: {parsed.hostname}")
+    return base_url
 
 
 class OpenAICompatClient:
@@ -35,8 +71,9 @@ class OpenAICompatClient:
             The full endpoint URL.
 
         Raises:
-            ValueError: If the protocol is not supported.
+            ValueError: If the protocol is not supported or URL is invalid.
         """
+        validate_base_url(base_url)
         root = base_url.rstrip("/")
         versioned = bool(re.search(r"/v[0-9]+$", root))
         if protocol == "chat":

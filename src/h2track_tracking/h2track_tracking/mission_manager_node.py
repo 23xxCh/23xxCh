@@ -149,6 +149,7 @@ class MissionManagerNode(Node):
         self._mode_pub = self.create_publisher(String, "/robot_mode", 10)
         self._source_pub = self.create_publisher(Bool, "/source_found", 10)
         self._estimate_pub = self.create_publisher(PoseStamped, "/estimated_source_pose", 10)
+        self._last_mode_publish_time: float | None = None
         self.create_timer(1.0, self._control_loop)
 
     def _amcl_pose_callback(self, msg: PoseWithCovarianceStamped) -> None:
@@ -360,9 +361,17 @@ class MissionManagerNode(Node):
             goal_reached=goal_reached,
         )
 
-        if mode is not self._active_mode:
+        # Publish mode on change or periodically (every 5 seconds)
+        now_sec = self.get_clock().now().nanoseconds / 1e9
+        should_publish_mode = (
+            mode is not self._active_mode or
+            self._last_mode_publish_time is None or
+            (now_sec - self._last_mode_publish_time) >= 5.0
+        )
+        if should_publish_mode:
             self._mode_pub.publish(String(data=mode.name))
             self._active_mode = mode
+            self._last_mode_publish_time = now_sec
 
         if previous_mode is not mode:
             self._clear_goal_retry()

@@ -18,9 +18,12 @@ colcon build
 pytest src/h2track_tracking/test/ -v
 
 # Run single test file
-pytest src/h2track_tracking/test/test_mission_logic.py -v
-pytest src/h2track_tracking/test/test_gas_model.py -v
-pytest src/h2track_tracking/test/test_particle_filter_node.py -v
+pytest src/h2track_tracking/test/test_surge_cast.py -v
+pytest src/h2track_tracking/test/test_plume_detector.py -v
+pytest src/h2track_tracking/test/test_pf_integrator.py -v
+
+# Run with coverage
+pytest src/h2track_tracking/test/ --cov=src/h2track_tracking/h2track_tracking --cov-report=term-missing
 ```
 
 ## Package Structure
@@ -69,10 +72,28 @@ Two modes:
 
 Probabilistic gas source localization using `particle_filter/` module:
 
-- **ParticleFilter**: Core filter with predict/update/resample steps
+- **ParticleFilter**: Core filter with predict/update/resample steps. Supports vectorized operations via `method='vectorized'` parameter for 10-50x speedup on large particle counts.
 - **GaussianPlumeObservationModel**: Weights particles based on gas concentration
 - **RandomWalkMotionModel**: Adds noise to particle positions
 - **ParticleFilterNode**: ROS wrapper, publishes to `/estimated_source` and `/particle_cloud`
+
+### Surge-Cast Algorithm
+
+Gas source localization using `tracking/` module with wind-aware navigation:
+
+- **SurgeCastTracker**: Two-phase algorithm (SURGE/CAST)
+  - SURGE: Move upwind when plume detected
+  - CAST: Lateral search when plume lost
+- **PlumeDetector**: Detects plume boundaries using concentration thresholds
+- **PfIntegrator**: Integrates particle filter estimates with surge-cast navigation
+
+State transitions:
+```
+PATROL → SURGE (plume detected)
+SURGE → CAST (plume lost)
+SURGE → SOURCE_FOUND (threshold reached)
+CAST → SURGE (plume reacquired)
+```
 
 ### Heatmap System
 
@@ -155,6 +176,12 @@ ros2 run h2track_tracking demo_selfcheck --timeout 5.0
 - GADEN requires preprocessed environment and scenario files
 - `olfaction_msgs` for `GasSensor` message type
 
+## Security Requirements
+
+- **LLM Client**: Base URLs must use `https://` scheme (HTTP rejected for security)
+- **URL Whitelisting**: LLM client validates URLs against allowed patterns
+- **Command Execution**: Shell commands in demo_prep use parameter lists, not string interpolation
+
 ## Code Patterns
 
 - Pure Python modules (`gas_model.py`, `mission_logic.py`, `gaden_adapter.py`) are ROS-agnostic and unit-testable
@@ -169,20 +196,31 @@ ros2 run h2track_tracking demo_selfcheck --timeout 5.0
 h2track_tracking/
 ├── particle_filter/      # Probabilistic source localization
 │   ├── types.py          # Particle, SourceEstimate dataclasses
-│   ├── filter.py         # Core particle filter logic
+│   ├── filter.py         # Core filter (supports vectorized ops)
 │   ├── motion_model.py   # Random walk motion model
 │   └── observation_model.py  # Gaussian plume observation model
+├── tracking/             # Gas tracking algorithms
+│   ├── types.py          # Pose2D, TrackingState, TrackingAction
+│   ├── surge_cast.py     # Surge-Cast source localization
+│   ├── plume_detector.py # Plume boundary detection
+│   └── pf_integrator.py  # Particle filter integration
 ├── heatmap/              # Concentration visualization
 │   ├── grid.py           # 3D concentration grid
 │   └── history_store.py  # Time series snapshots
+├── recovery/             # Navigation recovery policies
+│   ├── policies.py       # Recovery policy definitions
+│   ├── actions.py        # Recovery action execution
+│   └── monitor.py        # Failure detection
 ├── llm/                  # LLM assistant backend
-│   ├── client.py         # OpenAI-compatible client
+│   ├── client.py         # OpenAI-compatible client (HTTPS required)
 │   ├── controller.py     # Chat and action execution
+│   ├── actions.py        # LLM-triggered actions
 │   └── profile_store.py  # Profile management
 └── web/                  # FastAPI web console
     ├── app.py            # Application factory
     ├── routes.py         # REST and WebSocket endpoints
     ├── websocket.py      # Connection manager, heatmap streaming
+    ├── auth.py           # API key authentication
     └── simulation_controller.py  # Simulation lifecycle
 ```
 
@@ -193,6 +231,16 @@ One-click demo launcher available at `http://<host>:18080`:
 ```bash
 ros2 run h2track_tracking demo_web_server --host 0.0.0.0 --port 18080
 ```
+
+### API Authentication
+
+Optional API key authentication via `H2TRACK_API_KEY` environment variable:
+
+```bash
+export H2TRACK_API_KEY="your-secret-key"
+```
+
+When set, protected endpoints (`/api/sim/start`, `/api/sim/stop`, `/api/llm/*`, `/api/diag/export`, `/api/report/export`) require `X-API-Key` header.
 
 ### WebSocket Endpoints
 

@@ -28,6 +28,20 @@ FORBIDDEN_COMMAND_PATTERNS = [
     ":(){",
 ]
 
+# Shell metacharacters that enable command chaining and injection
+DANGEROUS_SHELL_METACHARACTERS = [
+    ";",      # Command separator
+    "&&",     # Conditional AND
+    "||",     # Conditional OR
+    "|",      # Pipe
+    "`",      # Command substitution (backtick)
+    "$(",     # Command substitution (modern)
+    ">",      # Output redirection
+    "<",      # Input redirection
+    "$(",     # Command substitution
+    "${",     # Variable expansion
+]
+
 ALLOWED_COMMAND_PREFIXES = [
     "ros2 ",
     "colcon ",
@@ -68,6 +82,24 @@ def command_allowed(command: str) -> tuple[bool, str]:
     if not any(lowered.startswith(prefix) for prefix in ALLOWED_COMMAND_PREFIXES):
         return False, "command not allowed by policy"
     return True, ""
+
+
+def has_dangerous_metacharacters(command: str) -> tuple[bool, str]:
+    """Check if a command contains dangerous shell metacharacters.
+
+    These characters enable command chaining and injection attacks.
+    Commands with these characters must be rejected or use shell=True with caution.
+
+    Args:
+        command: The command to check.
+
+    Returns:
+        Tuple of (has_dangerous_chars, found_char).
+    """
+    for char in DANGEROUS_SHELL_METACHARACTERS:
+        if char in command:
+            return True, char
+    return False, ""
 
 
 def execute_console_action(
@@ -232,9 +264,23 @@ def execute_shell_command(
     allowed, reason = command_allowed(command)
     if not allowed:
         return {"ok": False, "message": reason}
+
+    # Check for dangerous shell metacharacters to prevent command injection
+    has_dangerous, dangerous_char = has_dangerous_metacharacters(command)
+    if has_dangerous:
+        return {"ok": False, "message": f"command contains dangerous metacharacter: {dangerous_char}"}
+
     timeout_sec = float(payload.get("timeout_sec") or 120.0)
+
+    # Use shlex.split to safely parse the command into arguments
+    try:
+        args = shlex.split(command)
+    except ValueError as exc:
+        return {"ok": False, "message": f"invalid command syntax: {exc}"}
+
+    # Execute without shell to prevent injection
     proc = subprocess.run(
-        ["bash", "-lc", command],
+        args,
         cwd=str(Path.cwd()),
         check=False,
         capture_output=True,

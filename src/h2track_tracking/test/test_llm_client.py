@@ -10,11 +10,17 @@ from h2track_tracking.llm.client import OpenAICompatClient
 class TestOpenAICompatClientEndpoint:
     """Test endpoint building."""
 
-    def test_endpoint_for_chat_http(self):
-        """Test HTTP chat endpoint building."""
+    def test_endpoint_for_chat_https(self):
+        """Test HTTPS chat endpoint building."""
         client = OpenAICompatClient()
-        endpoint = client._endpoint_for("http://api.example.com/v1", "chat")
-        assert endpoint == "http://api.example.com/v1/chat/completions"
+        endpoint = client._endpoint_for("https://api.example.com/v1", "chat")
+        assert endpoint == "https://api.example.com/v1/chat/completions"
+
+    def test_endpoint_for_chat_http_rejected(self):
+        """Test HTTP URL is rejected for security."""
+        client = OpenAICompatClient()
+        with pytest.raises(ValueError, match="https"):
+            client._endpoint_for("http://api.example.com/v1", "chat")
 
     def test_endpoint_for_chat_https(self):
         """Test HTTPS chat endpoint building."""

@@ -2,17 +2,18 @@
 
 import pytest
 from h2track_tracking.web.config import (
-    DEMO_PREP_COMMAND,
     DEFAULT_LAUNCH_PROFILE,
     normalize_launch_profile,
     build_demo_launch_command,
+    build_demo_prep_command,
     _coerce_bool_token,
 )
 
 
-def test_demo_prep_command():
-    assert DEMO_PREP_COMMAND[0] == "ros2"
-    assert "demo_prep" in DEMO_PREP_COMMAND
+def test_build_demo_prep_command():
+    cmd = build_demo_prep_command()
+    assert cmd[0] == "ros2"
+    assert "demo_prep" in cmd
 
 
 def test_default_launch_profile():

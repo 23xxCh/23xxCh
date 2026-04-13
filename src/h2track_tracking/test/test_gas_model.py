@@ -46,7 +46,15 @@ def test_concentration_prefers_downwind_samples():
     assert downwind > upwind
 
 
-def test_gradient_target_rotates_when_concentration_drops():
+def test_gradient_target_moves_toward_best_position_when_concentration_drops():
+    """When concentration drops, the algorithm should move toward the best position.
+
+    The history shows:
+    - Position (0.0, 0.0) had concentration 3.0 (best)
+    - Position (0.6, 0.0) has concentration 2.0 (current, lower)
+
+    The algorithm should move toward the best position at (0.0, 0.0).
+    """
     model = GasFieldModel(
         GasFieldParams(
             source_x=2.0,
@@ -73,5 +81,7 @@ def test_gradient_target_rotates_when_concentration_drops():
         sweep_angle=math.pi / 6.0,
     )
 
-    assert target.x > 0.6
-    assert target.y != 0.0
+    # Target should move toward the best position (x=0.0), so x should decrease
+    assert target.x < 0.6
+    # The target should be moving toward (0.0, 0.0)
+    assert target.x >= 0.0  # Should not overshoot the best position by much

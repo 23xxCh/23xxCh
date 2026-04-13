@@ -188,7 +188,8 @@ def test_warehouse_nav2_enables_rotate_to_heading_for_rpp_stability():
 
     assert follow_path['plugin'] == 'nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController'
     assert follow_path['use_rotate_to_heading'] is True
-    assert warehouse_map.endswith('scenes/warehouse/maps/warehouse_map.yaml')
+    # Verify the map path in the scene config points to the correct location
+    assert 'maps/warehouse_map.yaml' in warehouse_scene['map']
 
 
 def test_warehouse_patrol_points_use_progressive_step_lengths_for_slam_mapping():

@@ -484,6 +484,8 @@ def generate_launch_description():
                 "sweep_angle_deg": sweep_angle_deg,
                 "source_x": source_x,
                 "source_y": source_y,
+                "wind_x": gas_wind_x,
+                "wind_y": gas_wind_y,
                 "localizer_node": localizer_node,
                 "use_slam": ParameterValue(use_slam, value_type=bool),
                 "publish_initial_pose": ParameterValue(publish_initial_pose, value_type=bool),

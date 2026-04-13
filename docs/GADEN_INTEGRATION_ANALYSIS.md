@@ -260,13 +260,35 @@ python3 -m pytest src/h2track_sim/test/test_warehouse_gaden_contract.py -v
 |----------|----------|------|
 | test_gaden_adapter.py | 30+ | ✅ 通过 |
 | test_gaden_sensor_gate.py | 20+ | ✅ 通过 |
-| test_warehouse_gaden_contract.py | 5 | ❌ 1 失败 |
+| test_warehouse_gaden_contract.py | 5 | ✅ 全部通过 |
 | test_llm_agent.py | 11 | ✅ 通过 |
 
-## 六、下一步行动
+---
 
-1. **优先级高**: 修复 GADEN 气源位置和气体类型
-2. **优先级高**: 重新运行 GADEN 仿真
-3. **优先级中**: 重新构建 Web Console bundle
-4. **优先级中**: 提交未跟踪的代码更改
-5. **优先级低**: 添加更多集成测试
+## 六、Wind文件问题 (关键发现)
+
+**问题描述**: GADEN player需要wind文件来播放仿真结果，但当前只有25个wind文件，而仿真有566个迭代。
+
+**错误日志**:
+```
+[ERROR] [player-5]: process has died [pid 104971, exit code -6]
+terminate called after throwing an instance of 'rclcpp::exceptions::RCLError'
+```
+
+**解决方案**:
+1. 生成更多wind文件（需要CFD仿真）
+2. 或使用简化气体场（use_gaden=false）
+
+**验证结果** (2026-04-06):
+- 简化气体场测试成功: `source_found=1, seek_track=1`
+- 追踪算法本身正常工作
+- GADEN需要更多wind文件才能正常使用
+
+## 七、下一步行动
+
+1. **已完成**: 修复 GADEN 气源位置和气体类型 ✅
+2. **已完成**: 重新运行 GADEN 仿真 ✅
+3. **已完成**: 验证追踪算法（简化气体场） ✅
+4. **待解决**: 生成更多wind文件以支持GADEN播放
+5. **优先级中**: 重新构建 Web Console bundle
+6. **优先级中**: 提交未跟踪的代码更改
