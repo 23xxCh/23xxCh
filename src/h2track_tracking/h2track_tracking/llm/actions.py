@@ -75,6 +75,11 @@ def command_allowed(command: str) -> tuple[bool, str]:
     text = str(command or "").strip()
     if not text:
         return False, "empty command"
+
+    # Check for path traversal attempts
+    if ".." in text or "${" in text or "$(" in text:
+        return False, "path traversal or variable expansion detected"
+
     lowered = text.lower()
     for token in FORBIDDEN_COMMAND_PATTERNS:
         if token in lowered:
@@ -321,8 +326,40 @@ def run_shell(cmd: str, *, cwd: Path, timeout_sec: float) -> dict[str, Any]:
     Returns:
         Dictionary with ok, returncode, stdout, stderr, and cmd.
     """
+    # Validate command is allowed
+    allowed, reason = command_allowed(cmd)
+    if not allowed:
+        return {"ok": False, "returncode": -1, "stdout": "", "stderr": reason, "cmd": cmd}
+
+    # Check for dangerous shell metacharacters
+    has_dangerous, dangerous_char = has_dangerous_metacharacters(cmd)
+    if has_dangerous:
+        return {
+            "ok": False,
+            "returncode": -1,
+            "stdout": "",
+            "stderr": f"command contains dangerous metacharacter: {dangerous_char}",
+            "cmd": cmd,
+        }
+
+    # Parse command safely using shlex
+    try:
+        args = shlex.split(cmd)
+    except ValueError as exc:
+        return {
+            "ok": False,
+            "returncode": -1,
+            "stdout": "",
+            "stderr": f"invalid command syntax: {exc}",
+            "cmd": cmd,
+        }
+
+    if not args:
+        return {"ok": False, "returncode": -1, "stdout": "", "stderr": "empty command", "cmd": cmd}
+
+    # Execute without shell to prevent injection
     proc = subprocess.run(
-        ["bash", "-lc", cmd],
+        args,
         cwd=str(cwd),
         check=False,
         capture_output=True,

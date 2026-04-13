@@ -299,18 +299,20 @@ class SimulationController:
         """
         with self._lock:
             process = self._process
-            state = self._state
-            if process is None or state not in {"running", "starting"}:
+            if process is None or self._state not in {"running", "starting"}:
                 return False, "simulation is not running"
             self._state = "stopping"
+            # Hold process reference while still holding lock
+            process_to_kill = process
 
         self._append_log("stopping simulation...", source="control")
         try:
-            os.killpg(os.getpgid(process.pid), signal.SIGINT)
+            os.killpg(os.getpgid(process_to_kill.pid), signal.SIGINT)
             return True, "stop signal sent"
         except Exception as exc:
             with self._lock:
-                self._state = "error"
+                if self._state == "stopping":
+                    self._state = "error"
                 self._last_error = f"failed to stop simulation: {exc}"
             self._append_log(self._last_error, source="control")
             return False, str(exc)

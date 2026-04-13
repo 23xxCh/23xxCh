@@ -1,0 +1,40 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - img [ref=e7]
+      - generic [ref=e9]:
+        - heading "H2Track 仓库智能控制台" [level=1] [ref=e10]
+        - paragraph [ref=e11]: 仿真启动、实时日志、AI 决策建议与执行审计
+    - generic [ref=e12]:
+      - generic [ref=e13]:
+        - img [ref=e15]
+        - text: IDLE
+      - generic [ref=e17]: 已连接
+  - navigation [ref=e19]:
+    - button "总览" [ref=e20] [cursor=pointer]:
+      - img [ref=e21]
+      - text: 总览
+    - button "热力图" [active] [ref=e23] [cursor=pointer]:
+      - img [ref=e24]
+      - text: 热力图
+    - button "AI 策略" [ref=e26] [cursor=pointer]:
+      - img [ref=e27]
+      - text: AI 策略
+    - button "诊断日志" [ref=e35] [cursor=pointer]:
+      - img [ref=e36]
+      - text: 诊断日志
+  - generic [ref=e141]:
+    - generic [ref=e142]:
+      - heading "3D 气体浓度热力图" [level=2] [ref=e143]
+      - img [ref=e144]
+    - generic [ref=e147]:
+      - img [ref=e148]
+      - text: 已连接
+    - generic [ref=e154]:
+      - generic [ref=e155]: 浓度
+      - generic [ref=e156]:
+        - generic [ref=e157]: 低
+        - generic [ref=e159]: 高
+    - generic [ref=e160]:
+      - button "暂停" [ref=e161] [cursor=pointer]
+      - button "继续" [ref=e162] [cursor=pointer]

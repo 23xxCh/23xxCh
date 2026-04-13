@@ -1,0 +1,3 @@
+[     582ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:18080/favicon.ico:0
+[   81058ms] [VERBOSE] [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) %o @ http://localhost:18080/#/ai:0
+[  102331ms] [VERBOSE] [DOM] Password field is not contained in a form: (More info: https://goo.gl/9p2vKq) %o @ http://localhost:18080/#/ai:0

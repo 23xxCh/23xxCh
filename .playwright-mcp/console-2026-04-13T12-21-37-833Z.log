@@ -1,0 +1,112 @@
+[     584ms] [ERROR] Error: Minified React error #300; visit https://reactjs.org/docs/error-decoder.html?invariant=300 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+    at Jl (http://localhost:18080/assets/index-AWqZv5T-.js:38:17155)
+    at Ia (http://localhost:18080/assets/index-AWqZv5T-.js:40:3134)
+    at Rp (http://localhost:18080/assets/index-AWqZv5T-.js:40:44607)
+    at jp (http://localhost:18080/assets/index-AWqZv5T-.js:40:39616)
+    at m0 (http://localhost:18080/assets/index-AWqZv5T-.js:40:39544)
+    at Rs (http://localhost:18080/assets/index-AWqZv5T-.js:40:39398)
+    at Ya (http://localhost:18080/assets/index-AWqZv5T-.js:40:35790)
+    at Pp (http://localhost:18080/assets/index-AWqZv5T-.js:40:34741)
+    at T (http://localhost:18080/assets/index-AWqZv5T-.js:25:1557)
+    at MessagePort.W (http://localhost:18080/assets/index-AWqZv5T-.js:25:1923) @ http://localhost:18080/assets/index-AWqZv5T-.js:39
+[     610ms] Error: Minified React error #300; visit https://reactjs.org/docs/error-decoder.html?invariant=300 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+    at Jl (http://localhost:18080/assets/index-AWqZv5T-.js:38:17155)
+    at Ia (http://localhost:18080/assets/index-AWqZv5T-.js:40:3134)
+    at Rp (http://localhost:18080/assets/index-AWqZv5T-.js:40:44607)
+    at jp (http://localhost:18080/assets/index-AWqZv5T-.js:40:39616)
+    at m0 (http://localhost:18080/assets/index-AWqZv5T-.js:40:39544)
+    at Rs (http://localhost:18080/assets/index-AWqZv5T-.js:40:39398)
+    at Ya (http://localhost:18080/assets/index-AWqZv5T-.js:40:35790)
+    at Pp (http://localhost:18080/assets/index-AWqZv5T-.js:40:34741)
+    at T (http://localhost:18080/assets/index-AWqZv5T-.js:25:1557)
+    at MessagePort.W (http://localhost:18080/assets/index-AWqZv5T-.js:25:1923)
+[     586ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:18080/favicon.ico:0
+[    9039ms] [ERROR] Error: Minified React error #300; visit https://reactjs.org/docs/error-decoder.html?invariant=300 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+    at Jl (http://localhost:18080/assets/index-AWqZv5T-.js:38:17155)
+    at Ia (http://localhost:18080/assets/index-AWqZv5T-.js:40:3134)
+    at Rp (http://localhost:18080/assets/index-AWqZv5T-.js:40:44607)
+    at jp (http://localhost:18080/assets/index-AWqZv5T-.js:40:39616)
+    at m0 (http://localhost:18080/assets/index-AWqZv5T-.js:40:39544)
+    at Rs (http://localhost:18080/assets/index-AWqZv5T-.js:40:39398)
+    at Ya (http://localhost:18080/assets/index-AWqZv5T-.js:40:35790)
+    at Pp (http://localhost:18080/assets/index-AWqZv5T-.js:40:34741)
+    at T (http://localhost:18080/assets/index-AWqZv5T-.js:25:1557)
+    at MessagePort.W (http://localhost:18080/assets/index-AWqZv5T-.js:25:1923) @ http://localhost:18080/assets/index-AWqZv5T-.js:39
+[    9052ms] Error: Minified React error #300; visit https://reactjs.org/docs/error-decoder.html?invariant=300 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+    at Jl (http://localhost:18080/assets/index-AWqZv5T-.js:38:17155)
+    at Ia (http://localhost:18080/assets/index-AWqZv5T-.js:40:3134)
+    at Rp (http://localhost:18080/assets/index-AWqZv5T-.js:40:44607)
+    at jp (http://localhost:18080/assets/index-AWqZv5T-.js:40:39616)
+    at m0 (http://localhost:18080/assets/index-AWqZv5T-.js:40:39544)
+    at Rs (http://localhost:18080/assets/index-AWqZv5T-.js:40:39398)
+    at Ya (http://localhost:18080/assets/index-AWqZv5T-.js:40:35790)
+    at Pp (http://localhost:18080/assets/index-AWqZv5T-.js:40:34741)
+    at T (http://localhost:18080/assets/index-AWqZv5T-.js:25:1557)
+    at MessagePort.W (http://localhost:18080/assets/index-AWqZv5T-.js:25:1923)
+[   10937ms] [ERROR] Error: Minified React error #300; visit https://reactjs.org/docs/error-decoder.html?invariant=300 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+    at Jl (http://localhost:18080/assets/index-AWqZv5T-.js:38:17155)
+    at Ia (http://localhost:18080/assets/index-AWqZv5T-.js:40:3134)
+    at Rp (http://localhost:18080/assets/index-AWqZv5T-.js:40:44607)
+    at jp (http://localhost:18080/assets/index-AWqZv5T-.js:40:39616)
+    at m0 (http://localhost:18080/assets/index-AWqZv5T-.js:40:39544)
+    at Rs (http://localhost:18080/assets/index-AWqZv5T-.js:40:39398)
+    at Ya (http://localhost:18080/assets/index-AWqZv5T-.js:40:35790)
+    at Pp (http://localhost:18080/assets/index-AWqZv5T-.js:40:34741)
+    at T (http://localhost:18080/assets/index-AWqZv5T-.js:25:1557)
+    at MessagePort.W (http://localhost:18080/assets/index-AWqZv5T-.js:25:1923) @ http://localhost:18080/assets/index-AWqZv5T-.js:39
+[   10948ms] Error: Minified React error #300; visit https://reactjs.org/docs/error-decoder.html?invariant=300 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+    at Jl (http://localhost:18080/assets/index-AWqZv5T-.js:38:17155)
+    at Ia (http://localhost:18080/assets/index-AWqZv5T-.js:40:3134)
+    at Rp (http://localhost:18080/assets/index-AWqZv5T-.js:40:44607)
+    at jp (http://localhost:18080/assets/index-AWqZv5T-.js:40:39616)
+    at m0 (http://localhost:18080/assets/index-AWqZv5T-.js:40:39544)
+    at Rs (http://localhost:18080/assets/index-AWqZv5T-.js:40:39398)
+    at Ya (http://localhost:18080/assets/index-AWqZv5T-.js:40:35790)
+    at Pp (http://localhost:18080/assets/index-AWqZv5T-.js:40:34741)
+    at T (http://localhost:18080/assets/index-AWqZv5T-.js:25:1557)
+    at MessagePort.W (http://localhost:18080/assets/index-AWqZv5T-.js:25:1923)
+[   12270ms] [ERROR] Error: Minified React error #300; visit https://reactjs.org/docs/error-decoder.html?invariant=300 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+    at Jl (http://localhost:18080/assets/index-AWqZv5T-.js:38:17155)
+    at Ia (http://localhost:18080/assets/index-AWqZv5T-.js:40:3134)
+    at Rp (http://localhost:18080/assets/index-AWqZv5T-.js:40:44607)
+    at jp (http://localhost:18080/assets/index-AWqZv5T-.js:40:39616)
+    at m0 (http://localhost:18080/assets/index-AWqZv5T-.js:40:39544)
+    at Rs (http://localhost:18080/assets/index-AWqZv5T-.js:40:39398)
+    at Ya (http://localhost:18080/assets/index-AWqZv5T-.js:40:35790)
+    at Pp (http://localhost:18080/assets/index-AWqZv5T-.js:40:34741)
+    at T (http://localhost:18080/assets/index-AWqZv5T-.js:25:1557)
+    at MessagePort.W (http://localhost:18080/assets/index-AWqZv5T-.js:25:1923) @ http://localhost:18080/assets/index-AWqZv5T-.js:39
+[   12292ms] Error: Minified React error #300; visit https://reactjs.org/docs/error-decoder.html?invariant=300 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+    at Jl (http://localhost:18080/assets/index-AWqZv5T-.js:38:17155)
+    at Ia (http://localhost:18080/assets/index-AWqZv5T-.js:40:3134)
+    at Rp (http://localhost:18080/assets/index-AWqZv5T-.js:40:44607)
+    at jp (http://localhost:18080/assets/index-AWqZv5T-.js:40:39616)
+    at m0 (http://localhost:18080/assets/index-AWqZv5T-.js:40:39544)
+    at Rs (http://localhost:18080/assets/index-AWqZv5T-.js:40:39398)
+    at Ya (http://localhost:18080/assets/index-AWqZv5T-.js:40:35790)
+    at Pp (http://localhost:18080/assets/index-AWqZv5T-.js:40:34741)
+    at T (http://localhost:18080/assets/index-AWqZv5T-.js:25:1557)
+    at MessagePort.W (http://localhost:18080/assets/index-AWqZv5T-.js:25:1923)
+[  196416ms] [ERROR] Failed to load resource: net::ERR_INCOMPLETE_CHUNKED_ENCODING @ http://localhost:18080/api/logs/stream?after_id=0:0
+[  199419ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:18080/api/logs/stream?after_id=0:0
+[  202454ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:18080/api/logs/stream?after_id=0:0
+[  205456ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:18080/api/logs/stream?after_id=0:0
+[  208460ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:18080/api/logs/stream?after_id=0:0
+[  211463ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:18080/api/logs/stream?after_id=0:0
+[  214468ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:18080/api/logs/stream?after_id=0:0
+[  217471ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:18080/api/logs/stream?after_id=0:0
+[  220474ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:18080/api/logs/stream?after_id=0:0
+[  223477ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:18080/api/logs/stream?after_id=0:0
+[  226480ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:18080/api/logs/stream?after_id=0:0
+[  229483ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:18080/api/logs/stream?after_id=0:0
+[  232486ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:18080/api/logs/stream?after_id=0:0
+[  235489ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:18080/api/logs/stream?after_id=0:0
+[  238492ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:18080/api/logs/stream?after_id=0:0
+[  241495ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:18080/api/logs/stream?after_id=0:0
+[  244500ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:18080/api/logs/stream?after_id=0:0
+[  247502ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:18080/api/logs/stream?after_id=0:0
+[  250506ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:18080/api/logs/stream?after_id=0:0
+[  253510ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:18080/api/logs/stream?after_id=0:0
+[  256513ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:18080/api/logs/stream?after_id=0:0
+[  259517ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:18080/api/logs/stream?after_id=0:0
+[  262524ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://localhost:18080/api/logs/stream?after_id=0:0

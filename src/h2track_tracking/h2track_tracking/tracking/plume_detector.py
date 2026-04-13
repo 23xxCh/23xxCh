@@ -12,10 +12,29 @@ from .types import PlumeState, SurgeCastConfig
 @dataclass
 class PlumeDetectorConfig:
     """Configuration for plume detector."""
+
     history_size: int = 20
     min_samples: int = 3
     plume_threshold: float = 3.0
     trend_window: int = 5
+
+    def __post_init__(self) -> None:
+        """Validate configuration values."""
+        if self.history_size < 1:
+            raise ValueError(f"history_size must be >= 1, got {self.history_size}")
+        if self.min_samples < 1:
+            raise ValueError(f"min_samples must be >= 1, got {self.min_samples}")
+        if self.min_samples > self.history_size:
+            raise ValueError(
+                f"min_samples ({self.min_samples}) cannot exceed "
+                f"history_size ({self.history_size})"
+            )
+        if self.plume_threshold < 0:
+            raise ValueError(
+                f"plume_threshold must be >= 0, got {self.plume_threshold}"
+            )
+        if self.trend_window < 2:
+            raise ValueError(f"trend_window must be >= 2, got {self.trend_window}")
 
 
 class PlumeDetector:

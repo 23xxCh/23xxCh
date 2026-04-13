@@ -34,6 +34,11 @@ except Exception:
     WebSocket = None  # type: ignore[misc,assignment]
     WebSocketDisconnect = None  # type: ignore[misc,assignment]
 
+# Maximum WebSocket message size (1MB) to prevent DoS
+MAX_WEBSOCKET_MESSAGE_SIZE = 1024 * 1024
+# Maximum command string length
+MAX_COMMAND_LENGTH = 4096
+
 
 def _now_iso() -> str:
     """Return current time as ISO format string with timezone."""
@@ -222,7 +227,7 @@ class ConnectionManager:
         Returns:
             Number of clients the message was sent to.
         """
-        to_send: list[Any] = []
+        to_send: list[tuple[int, Any]] = []
         with self._lock:
             for client_id, client in self._clients.items():
                 # Skip paused clients if requested
@@ -235,16 +240,22 @@ class ConnectionManager:
                     if client.subscriptions and topic not in client.subscriptions:
                         continue
 
-                to_send.append(client.websocket)
+                to_send.append((client_id, client.websocket))
 
         sent_count = 0
-        for websocket in to_send:
+        failed_clients: list[int] = []
+
+        for client_id, websocket in to_send:
             try:
                 await websocket.send_json(message)
                 sent_count += 1
             except Exception:
-                # Connection may have been closed; ignore errors
-                pass
+                # Connection may have been closed; mark for cleanup
+                failed_clients.append(client_id)
+
+        # Clean up failed connections
+        for client_id in failed_clients:
+            self.disconnect(client_id)
 
         return sent_count
 
@@ -290,7 +301,10 @@ def parse_client_command(data: str | dict[str, Any]) -> dict[str, Any] | None:
         - subscribe:topic -> {"action": "subscribe", "topic": "topic"}
         - unsubscribe:topic -> {"action": "unsubscribe", "topic": "topic"}
     """
+    # Validate message size for string input
     if isinstance(data, str):
+        if len(data) > MAX_COMMAND_LENGTH:
+            return None
         text = data.strip().lower()
         if text == "pause":
             return {"action": "pause"}
@@ -298,12 +312,12 @@ def parse_client_command(data: str | dict[str, Any]) -> dict[str, Any] | None:
             return {"action": "resume"}
         if text.startswith("subscribe:"):
             topic = data.split(":", 1)[1].strip()
-            if topic:
+            if topic and len(topic) <= 256:  # Limit topic length
                 return {"action": "subscribe", "topic": topic}
             return None
         if text.startswith("unsubscribe:"):
             topic = data.split(":", 1)[1].strip()
-            if topic:
+            if topic and len(topic) <= 256:
                 return {"action": "unsubscribe", "topic": topic}
             return None
         # Try parsing as JSON
@@ -318,7 +332,7 @@ def parse_client_command(data: str | dict[str, Any]) -> dict[str, Any] | None:
             return {"action": action}
         if action in {"subscribe", "unsubscribe"}:
             topic = data.get("topic")
-            if topic:
+            if topic and len(str(topic)) <= 256:
                 return {"action": action, "topic": str(topic)}
     return None
 
@@ -377,6 +391,20 @@ async def websocket_endpoint(
                 raw = await websocket.receive()
             except Exception:
                 break
+
+            # Validate message size to prevent DoS
+            if "text" in raw and len(raw["text"]) > MAX_WEBSOCKET_MESSAGE_SIZE:
+                await manager.send_to(
+                    client_id,
+                    {"type": "error", "message": "Message too large", "timestamp": _now_iso()},
+                )
+                continue
+            if "bytes" in raw and len(raw["bytes"]) > MAX_WEBSOCKET_MESSAGE_SIZE:
+                await manager.send_to(
+                    client_id,
+                    {"type": "error", "message": "Message too large", "timestamp": _now_iso()},
+                )
+                continue
 
             # Handle different message types
             if "text" in raw:
@@ -645,6 +673,20 @@ async def heatmap_websocket_endpoint(
                 raw = await websocket.receive()
             except Exception:
                 break
+
+            # Validate message size to prevent DoS
+            if "text" in raw and len(raw["text"]) > MAX_WEBSOCKET_MESSAGE_SIZE:
+                await manager.send_to(
+                    client_id,
+                    {"type": "error", "message": "Message too large", "timestamp": _now_iso()},
+                )
+                continue
+            if "bytes" in raw and len(raw["bytes"]) > MAX_WEBSOCKET_MESSAGE_SIZE:
+                await manager.send_to(
+                    client_id,
+                    {"type": "error", "message": "Message too large", "timestamp": _now_iso()},
+                )
+                continue
 
             # Handle different message types
             if "text" in raw:
