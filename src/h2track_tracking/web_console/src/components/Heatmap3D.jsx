@@ -13,6 +13,7 @@ function Heatmap3D({
   opacity = 0.6,
   showAxes = true,
   showGrid = true,
+  worldBounds = { x: [-10, 10], y: [-10, 10] }, // Configurable world bounds
 }) {
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
@@ -38,6 +39,17 @@ function Heatmap3D({
     };
     resize();
     window.addEventListener('resize', resize);
+
+    // Calculate world bounds
+    const worldWidth = worldBounds.x[1] - worldBounds.x[0];
+    const worldHeight = worldBounds.y[1] - worldBounds.y[0];
+
+    // Helper to transform world coordinates to canvas coordinates
+    const worldToCanvas = (x, y, w, h) => {
+      const canvasX = ((x - worldBounds.x[0]) / worldWidth) * w;
+      const canvasY = h - ((y - worldBounds.y[0]) / worldHeight) * h;
+      return [canvasX, canvasY];
+    };
 
     // Animation function
     const animate = (time) => {
@@ -74,8 +86,7 @@ function Heatmap3D({
         currentParticles.positions.forEach((pos, i) => {
           const weight = (currentParticles.weights && currentParticles.weights[i]) || 0.5;
           const normalizedWeight = weight / maxWeight;
-          const x = (pos[0] + 10) * (w / 20);
-          const y = h - (pos[1] + 10) * (h / 20);
+          const [x, y] = worldToCanvas(pos[0], pos[1], w, h);
 
           ctx.beginPath();
           ctx.arc(x, y, 3 + normalizedWeight * 3, 0, Math.PI * 2);
@@ -87,8 +98,7 @@ function Heatmap3D({
 
       // Draw estimate if available
       if (currentEstimate && currentEstimate.position) {
-        const x = (currentEstimate.position[0] + 10) * (w / 20);
-        const y = h - (currentEstimate.position[1] + 10) * (h / 20);
+        const [x, y] = worldToCanvas(currentEstimate.position[0], currentEstimate.position[1], w, h);
 
         // Draw crosshair
         ctx.strokeStyle = '#f59e0b';
@@ -145,7 +155,7 @@ function Heatmap3D({
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, []);
+  }, [worldBounds]);
 
   return (
     <div className="heatmap-container" style={{ background: '#071423', position: 'relative', width: '100%', height: '100%' }}>

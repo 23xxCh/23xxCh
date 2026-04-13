@@ -63,16 +63,36 @@ class MissionManagerNode(Node):
         self.declare_parameter("wind_x", 0.4)
         self.declare_parameter("wind_y", 0.0)
 
+        # Validate numeric parameters
+        enter_threshold = self._get_positive_float("enter_threshold", 4.0)
+        exit_threshold = self._get_positive_float("exit_threshold", 1.5)
+        source_threshold = self._get_positive_float("source_threshold", 8.0)
+        source_radius = self._get_positive_float("source_radius", 0.6)
+        track_step = self._get_positive_float("track_step", 0.7)
+        surge_step = self._get_positive_float("surge_step", 0.5)
+        cast_step = self._get_positive_float("cast_step", 0.3)
+        cast_distance_limit = self._get_positive_float("cast_distance_limit", 3.0)
+        patrol_goal_timeout_sec = self._get_positive_float("patrol_goal_timeout_sec", 45.0)
+        goal_reject_retry_sec = self._get_positive_float("goal_reject_retry_sec", 2.0)
+
+        # Validate integer parameters
+        confirm_samples = self._get_positive_int("confirm_samples", 3)
+        track_exit_samples = self._get_positive_int("track_exit_samples", 3)
+        source_hold_steps = self._get_positive_int("source_hold_steps", 3)
+
+        # Validate confidence parameter
+        pf_confidence = self._get_clamped_float("particle_filter_min_confidence", 0.3, 0.0, 1.0)
+
         patrol_points = coerce_patrol_points(self.get_parameter("patrol_points").value)
         config = MissionConfig(
             patrol_points=patrol_points,
-            enter_threshold=float(self.get_parameter("enter_threshold").value),
-            exit_threshold=float(self.get_parameter("exit_threshold").value),
-            source_threshold=float(self.get_parameter("source_threshold").value),
-            confirm_samples=int(self.get_parameter("confirm_samples").value),
-            track_exit_samples=int(self.get_parameter("track_exit_samples").value),
-            source_radius=float(self.get_parameter("source_radius").value),
-            source_hold_steps=int(self.get_parameter("source_hold_steps").value),
+            enter_threshold=enter_threshold,
+            exit_threshold=exit_threshold,
+            source_threshold=source_threshold,
+            confirm_samples=confirm_samples,
+            track_exit_samples=track_exit_samples,
+            source_radius=source_radius,
+            source_hold_steps=source_hold_steps,
             actual_source=(
                 float(self.get_parameter("source_x").value),
                 float(self.get_parameter("source_y").value),
@@ -107,6 +127,36 @@ class MissionManagerNode(Node):
         self._goal_reject_retry_sec = float(self.get_parameter("goal_reject_retry_sec").value)
         if not self._localizer_node:
             self._localizer_node = "none" if self._use_slam else "amcl"
+
+    def _get_positive_float(self, param_name: str, default: float) -> float:
+        """Get a positive float parameter, validating it."""
+        value = float(self.get_parameter(param_name).value)
+        if value <= 0:
+            self.get_logger().error(
+                f"Invalid {param_name}: {value} (must be positive), using default {default}"
+            )
+            return default
+        return value
+
+    def _get_positive_int(self, param_name: str, default: int) -> int:
+        """Get a positive integer parameter, validating it."""
+        value = int(self.get_parameter(param_name).value)
+        if value <= 0:
+            self.get_logger().error(
+                f"Invalid {param_name}: {value} (must be positive), using default {default}"
+            )
+            return default
+        return value
+
+    def _get_clamped_float(self, param_name: str, default: float, min_val: float, max_val: float) -> float:
+        """Get a float parameter clamped to [min_val, max_val]."""
+        value = float(self.get_parameter(param_name).value)
+        if value < min_val or value > max_val:
+            self.get_logger().warning(
+                f"{param_name} {value} out of range [{min_val}, {max_val}], clamping"
+            )
+            return max(min_val, min(max_val, value))
+        return value
         self._current_pose = Pose2D(0.0, 0.0)
         self._current_yaw = 0.0
         self._current_concentration = 0.0

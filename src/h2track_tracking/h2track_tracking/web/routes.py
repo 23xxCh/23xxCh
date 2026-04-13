@@ -8,9 +8,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from typing import Any
 
 from .auth import get_auth_dependency, settings as auth_settings
+
+# Configure logger
+logger = logging.getLogger(__name__)
 
 try:
     from fastapi import HTTPException, Query, Request, WebSocket, WebSocketDisconnect
@@ -149,8 +153,12 @@ def register_routes(
         """Export diagnostics to zip file."""
         try:
             path = sim.export_diagnostics(scene="warehouse")
+        except RuntimeError as exc:
+            logger.error(f"Runtime error exporting diagnostics: {exc}")
+            raise HTTPException(status_code=500, detail="Diagnostic export failed") from exc
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"diagnostic export failed: {exc}") from exc
+            logger.exception(f"Unexpected error exporting diagnostics: {exc}")
+            raise HTTPException(status_code=500, detail="Diagnostic export failed") from exc
         return JSONResponse(status_code=202, content={"ok": True, "path": path})
 
     @app.post("/api/report/export")
@@ -161,8 +169,12 @@ def register_routes(
             profile = status_payload.get("launch_profile", {}) if isinstance(status_payload, dict) else {}
             scene = str(profile.get("scene", "warehouse"))
             artifacts = sim.export_run_report(scene=scene)
+        except RuntimeError as exc:
+            logger.error(f"Runtime error exporting run report: {exc}")
+            raise HTTPException(status_code=500, detail="Run report export failed") from exc
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"run report export failed: {exc}") from exc
+            logger.exception(f"Unexpected error exporting run report: {exc}")
+            raise HTTPException(status_code=500, detail="Run report export failed") from exc
         return JSONResponse(status_code=202, content={"ok": True, **artifacts})
 
     @app.get("/api/llm/profiles")
@@ -170,8 +182,12 @@ def register_routes(
         """List all LLM profiles."""
         try:
             payload = llm.list_profiles()
+        except RuntimeError as exc:
+            logger.error(f"Runtime error listing LLM profiles: {exc}")
+            raise HTTPException(status_code=500, detail="Internal server error") from exc
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"list profiles failed: {exc}") from exc
+            logger.exception(f"Unexpected error listing LLM profiles: {exc}")
+            raise HTTPException(status_code=500, detail="Internal server error") from exc
         return JSONResponse(content=payload)
 
     @app.post("/api/llm/profiles")
@@ -181,9 +197,14 @@ def register_routes(
         try:
             result = llm.save_profile(payload)
         except ValueError as exc:
+            logger.warning(f"Invalid LLM profile data: {exc}")
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            logger.error(f"Runtime error saving LLM profile: {exc}")
+            raise HTTPException(status_code=500, detail="Internal server error") from exc
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"save profile failed: {exc}") from exc
+            logger.exception(f"Unexpected error saving LLM profile: {exc}")
+            raise HTTPException(status_code=500, detail="Internal server error") from exc
         return JSONResponse(status_code=202, content=result)
 
     @app.post("/api/llm/profiles/{profile_id}/activate")
@@ -192,9 +213,14 @@ def register_routes(
         try:
             result = llm.activate_profile(profile_id)
         except ValueError as exc:
+            logger.warning(f"Failed to activate LLM profile {profile_id}: {exc}")
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            logger.error(f"Runtime error activating LLM profile {profile_id}: {exc}")
+            raise HTTPException(status_code=500, detail="Internal server error") from exc
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"activate profile failed: {exc}") from exc
+            logger.exception(f"Unexpected error activating LLM profile {profile_id}: {exc}")
+            raise HTTPException(status_code=500, detail="Internal server error") from exc
         return JSONResponse(status_code=202, content=result)
 
     @app.post("/api/llm/profiles/{profile_id}/check")

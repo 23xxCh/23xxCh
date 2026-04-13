@@ -138,11 +138,15 @@ export function useHeatmapData() {
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
   const mountedRef = useRef(true);
+  const connectionSeqRef = useRef(0); // Track connection sequence to prevent race conditions
 
   const connect = useCallback(() => {
     if (!mountedRef.current) {
       return;
     }
+
+    // Increment connection sequence
+    const currentSeq = ++connectionSeqRef.current;
 
     // Close existing connection
     if (wsRef.current) {
@@ -159,7 +163,7 @@ export function useHeatmapData() {
       wsRef.current = ws;
 
       ws.onopen = () => {
-        if (!mountedRef.current) {
+        if (!mountedRef.current || connectionSeqRef.current !== currentSeq) {
           ws.close();
           return;
         }
@@ -167,7 +171,7 @@ export function useHeatmapData() {
       };
 
       ws.onmessage = (event) => {
-        if (!mountedRef.current) {
+        if (!mountedRef.current || connectionSeqRef.current !== currentSeq) {
           return;
         }
 
@@ -195,7 +199,7 @@ export function useHeatmapData() {
       };
 
       ws.onerror = () => {
-        if (!mountedRef.current) {
+        if (!mountedRef.current || connectionSeqRef.current !== currentSeq) {
           return;
         }
         setState((prev) => ({
@@ -209,18 +213,23 @@ export function useHeatmapData() {
         if (!mountedRef.current) {
           return;
         }
-        setState((prev) => ({ ...prev, connected: false }));
-        wsRef.current = null;
-
-        // Schedule reconnect
-        if (reconnectTimeoutRef.current) {
-          clearTimeout(reconnectTimeoutRef.current);
+        // Only update state if this is still the current connection
+        if (connectionSeqRef.current === currentSeq) {
+          setState((prev) => ({ ...prev, connected: false }));
+          wsRef.current = null;
         }
-        reconnectTimeoutRef.current = setTimeout(() => {
-          if (mountedRef.current) {
-            connect();
+
+        // Schedule reconnect only if this is the current connection
+        if (connectionSeqRef.current === currentSeq) {
+          if (reconnectTimeoutRef.current) {
+            clearTimeout(reconnectTimeoutRef.current);
           }
-        }, 3000);
+          reconnectTimeoutRef.current = setTimeout(() => {
+            if (mountedRef.current) {
+              connect();
+            }
+          }, 3000);
+        }
       };
     } catch (err) {
       setState((prev) => ({

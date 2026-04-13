@@ -137,12 +137,13 @@ function PhaseTimeline({ timeline }) {
   }
   return (
     <div className="phase-list">
-      {rows.map((row, idx) => {
+      {rows.map((row) => {
         const phase = String(row?.phase || "N/A");
         const reason = String(row?.reason || "-");
         const duration = row?.duration_ms == null ? "进行中" : `${Number(row.duration_ms).toFixed(0)} ms`;
+        const key = `${phase}-${row?.start_ts || row?.end_ts || Date.now()}-${reason.slice(0, 20)}`;
         return (
-          <div key={`${phase}-${idx}-${row?.start_ts || ""}`} className="phase-item">
+          <div key={key} className="phase-item">
             <strong>{phase}</strong>
             <span>{duration}</span>
             <span className="muted">原因: {reason}</span>
@@ -781,7 +782,7 @@ export function App() {
               </div>
               <div className="actions">
                 {llmActions.map((action, idx) => (
-                  <div key={`${action.type}-${idx}`} className="action-item">
+                  <div key={`${action.type}-${action.title || ""}-${idx}`} className="action-item">
                     <div>
                       <strong>{action.title || action.type}</strong>
                       <div className="muted">风险：{action.risk_level || "medium"} | 类型：{action.type}</div>
@@ -809,8 +810,8 @@ export function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {llmHistoryRows.slice(-12).reverse().map((row, idx) => (
-                    <tr key={`history-${idx}-${row.timestamp || ""}`}>
+                  {llmHistoryRows.slice(-12).reverse().map((row) => (
+                    <tr key={`history-${row.timestamp || ""}-${row.model || "unknown"}`}>
                       <td>{String(row.timestamp || "").replace("T", " ").slice(0, 19)}</td>
                       <td>{row.model || "-"}</td>
                       <td>{String(row.analysis || row.message || "-").slice(0, 80)}</td>
@@ -832,8 +833,8 @@ export function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {llmAuditRows.slice(-20).reverse().map((row, idx) => (
-                    <tr key={`audit-${idx}-${row.timestamp || ""}`}>
+                  {llmAuditRows.slice(-20).reverse().map((row) => (
+                    <tr key={`audit-${row.timestamp || ""}-${row.title || row.type || "unknown"}`}>
                       <td>{String(row.timestamp || "").replace("T", " ").slice(0, 19)}</td>
                       <td>{row.title || row.type || "-"}</td>
                       <td>{row.risk_level || "-"}</td>
@@ -864,8 +865,8 @@ export function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {nodeRows.map((row, idx) => (
-                    <tr key={`node-${idx}-${row.node || ""}`}>
+                  {nodeRows.map((row) => (
+                    <tr key={`node-${row.node || "unknown"}`}>
                       <td>{row.node || "-"}</td>
                       <td>{row.up ? "UP" : "DOWN"}</td>
                       <td>{safeNumber(row.restart_count, 0)}</td>
