@@ -16,6 +16,12 @@ function Heatmap3D({
 }) {
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
+  const dataRef = useRef({ grid, particles, estimate });
+
+  // Update data ref when props change
+  useEffect(() => {
+    dataRef.current = { grid, particles, estimate };
+  }, [grid, particles, estimate]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -59,11 +65,14 @@ function Heatmap3D({
         ctx.stroke();
       }
 
+      // Get latest data from ref
+      const { grid: currentGrid, particles: currentParticles, estimate: currentEstimate } = dataRef.current;
+
       // Draw particles if available
-      if (particles && particles.positions && particles.positions.length > 0) {
-        const maxWeight = Math.max(...(particles.weights || [1]), 0.01);
-        particles.positions.forEach((pos, i) => {
-          const weight = (particles.weights && particles.weights[i]) || 0.5;
+      if (currentParticles && currentParticles.positions && currentParticles.positions.length > 0) {
+        const maxWeight = Math.max(...(currentParticles.weights || [1]), 0.01);
+        currentParticles.positions.forEach((pos, i) => {
+          const weight = (currentParticles.weights && currentParticles.weights[i]) || 0.5;
           const normalizedWeight = weight / maxWeight;
           const x = (pos[0] + 10) * (w / 20);
           const y = h - (pos[1] + 10) * (h / 20);
@@ -77,9 +86,9 @@ function Heatmap3D({
       }
 
       // Draw estimate if available
-      if (estimate && estimate.position) {
-        const x = (estimate.position[0] + 10) * (w / 20);
-        const y = h - (estimate.position[1] + 10) * (h / 20);
+      if (currentEstimate && currentEstimate.position) {
+        const x = (currentEstimate.position[0] + 10) * (w / 20);
+        const y = h - (currentEstimate.position[1] + 10) * (h / 20);
 
         // Draw crosshair
         ctx.strokeStyle = '#f59e0b';
@@ -98,9 +107,9 @@ function Heatmap3D({
 
       // Draw animated demo circles
       const t = time / 1000;
-      const hasData = grid && grid.data && grid.data.some(v => v > 0);
-      const hasParticles = particles && particles.positions && particles.positions.length > 0;
-      const hasEstimate = estimate && estimate.position;
+      const hasData = currentGrid && currentGrid.data && currentGrid.data.some(v => v > 0);
+      const hasParticles = currentParticles && currentParticles.positions && currentParticles.positions.length > 0;
+      const hasEstimate = currentEstimate && currentEstimate.position;
 
       if (!hasData && !hasParticles && !hasEstimate) {
         for (let i = 0; i < 15; i++) {
@@ -136,7 +145,7 @@ function Heatmap3D({
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [grid, particles, estimate]);
+  }, []);
 
   return (
     <div className="heatmap-container" style={{ background: '#071423', position: 'relative', width: '100%', height: '100%' }}>
