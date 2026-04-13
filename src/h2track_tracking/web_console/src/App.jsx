@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import {
   Activity,
   Wind,
@@ -123,15 +122,11 @@ function LogRow({ row }) {
   const source = String(row?.source || "system");
   const isErr = /error|failed|exception|traceback/i.test(text);
   return (
-    <motion.div
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      className={`log-row ${isErr ? "err" : ""}`}
-    >
+    <div className={`log-row ${isErr ? "err" : ""}`}>
       <span className={`tag tag-${source}`}>{source}</span>
       <span className="ts">{row?.timestamp || ""}</span>
       <span className="text">{text}</span>
-    </motion.div>
+    </div>
   );
 }
 
@@ -147,38 +142,20 @@ function PhaseTimeline({ timeline }) {
         const reason = String(row?.reason || "-");
         const duration = row?.duration_ms == null ? "进行中" : `${Number(row.duration_ms).toFixed(0)} ms`;
         return (
-          <motion.div
-            key={`${phase}-${idx}-${row?.start_ts || ""}`}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: idx * 0.05 }}
-            className="phase-item"
-          >
+          <div key={`${phase}-${idx}-${row?.start_ts || ""}`} className="phase-item">
             <strong>{phase}</strong>
             <span>{duration}</span>
             <span className="muted">原因: {reason}</span>
-          </motion.div>
+          </div>
         );
       })}
     </div>
   );
 }
 
-function StatCard({ title, value, icon: Icon, color = "blue" }) {
-  const colorMap = {
-    blue: "from-blue-500 to-cyan-500",
-    green: "from-green-500 to-emerald-500",
-    yellow: "from-yellow-500 to-orange-500",
-    purple: "from-purple-500 to-pink-500"
-  };
-
+function StatCard({ title, value, icon: Icon }) {
   return (
-    <motion.article
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileHover={{ scale: 1.02 }}
-      className="card"
-    >
+    <article className="card">
       <div className="card-header">
         <span>{title}</span>
         <div className="card-icon">
@@ -186,7 +163,7 @@ function StatCard({ title, value, icon: Icon, color = "blue" }) {
         </div>
       </div>
       <strong>{String(value)}</strong>
-    </motion.article>
+    </article>
   );
 }
 
@@ -512,25 +489,12 @@ export function App() {
   const state = valueByPath(status, "state", "idle");
   const statusClass = `state-pill state-${String(state).toLowerCase()}`;
 
-  const getStatusIcon = () => {
-    switch (state) {
-      case "running": return CheckCircle2;
-      case "error": return XCircle;
-      case "starting":
-      case "stopping": return AlertCircle;
-      default: return AlertCircle;
-    }
-  };
-
-  const StatusIcon = getStatusIcon();
+  const StatusIcon = state === "running" ? CheckCircle2 :
+                    state === "error" ? XCircle : AlertCircle;
 
   return (
     <div className="page">
-      <motion.header
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="hero"
-      >
+      <header className="hero">
         <div className="hero-main">
           <div className="hero-icon">
             <Cloud size={28} color="white" />
@@ -551,528 +515,420 @@ export function App() {
             {conn}
           </div>
         </div>
-      </motion.header>
+      </header>
 
-      <motion.nav
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="top-nav"
-      >
+      <nav className="top-nav">
         {TAB_LIST.map((tab) => {
           const Icon = tab.icon;
           return (
-            <motion.button
+            <button
               key={tab.id}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
               className={`tab-btn ${activeTab === tab.id ? "active" : ""}`}
               onClick={() => setTab(tab.id)}
             >
               <Icon size={16} />
               {tab.label}
-            </motion.button>
+            </button>
           );
         })}
-      </motion.nav>
+      </nav>
 
-      <AnimatePresence>
-        {toast && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="toast"
-          >
-            <AlertCircle size={18} />
-            {toast}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {toast ? <div className="toast">{toast}</div> : null}
 
-      <AnimatePresence mode="wait">
-        {activeTab === "overview" && (
-          <motion.div
-            key="overview"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3 }}
-          >
-            <section className="grid cards">
-              <StatCard title="当前阶段" value={phase} icon={Zap} color="purple" />
-              <StatCard title="机器人模式" value={modeLabel(mode)} icon={Radar} color="blue" />
-              <StatCard title="气体浓度" value={String(gas)} icon={Wind} color="green" />
-              <StatCard title="源点状态" value={String(sourceFound)} icon={Search} color="yellow" />
-            </section>
+      {activeTab === "overview" && (
+        <>
+          <section className="grid cards">
+            <StatCard title="当前阶段" value={phase} icon={Zap} />
+            <StatCard title="机器人模式" value={modeLabel(mode)} icon={Radar} />
+            <StatCard title="气体浓度" value={String(gas)} icon={Wind} />
+            <StatCard title="源点状态" value={String(sourceFound)} icon={Search} />
+          </section>
 
-            <section className="grid control-grid">
-              <motion.article
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.1 }}
-                className="panel"
-              >
-                <div className="panel-header">
-                  <h2>仿真控制</h2>
-                  <Settings size={18} style={{ color: "var(--muted)" }} />
-                </div>
-                <div className="row">
-                  <label>场景</label>
-                  <select value={profile.scene} onChange={(e) => setProfile((p) => ({ ...p, scene: e.target.value }))}>
-                    <option value="warehouse">warehouse</option>
-                    <option value="baseline">baseline</option>
-                  </select>
-                </div>
-                <div className="row">
-                  <label>GADEN</label>
-                  <select value={profile.use_gaden} onChange={(e) => setProfile((p) => ({ ...p, use_gaden: e.target.value }))}>
-                    <option value="true">true</option>
-                    <option value="false">false</option>
-                  </select>
-                </div>
-                <div className="row">
-                  <label>SLAM</label>
-                  <select value={profile.use_slam} onChange={(e) => setProfile((p) => ({ ...p, use_slam: e.target.value }))}>
-                    <option value="true">true</option>
-                    <option value="false">false</option>
-                  </select>
-                </div>
-                <div className="row">
-                  <label>RViz</label>
-                  <select value={profile.use_rviz} onChange={(e) => setProfile((p) => ({ ...p, use_rviz: e.target.value }))}>
-                    <option value="true">true</option>
-                    <option value="false">false</option>
-                  </select>
-                </div>
-                <div className="row">
-                  <label>headless</label>
-                  <select value={profile.headless} onChange={(e) => setProfile((p) => ({ ...p, headless: e.target.value }))}>
-                    <option value="false">false</option>
-                    <option value="true">true</option>
-                  </select>
-                </div>
-                <div className="btn-row">
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className="btn primary"
-                    onClick={startSim}
-                  >
-                    <Play size={16} />
-                    开始仿真
-                  </motion.button>
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className="btn danger"
-                    onClick={stopSim}
-                  >
-                    <Square size={16} />
-                    停止仿真
-                  </motion.button>
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className="btn"
-                    onClick={() => Promise.all([refreshStatus(), refreshMetrics(), refreshLogs()])}
-                  >
-                    <RefreshCw size={16} />
-                    刷新状态
-                  </motion.button>
-                </div>
-                <div className="meta">UI 模式：{uiMeta.mode} | bundle_ready：{String(uiMeta.bundle_ready)}</div>
-              </motion.article>
-
-              <motion.article
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.2 }}
-                className="panel"
-              >
-                <div className="panel-header">
-                  <h2>导航与浓度趋势</h2>
-                  <Activity size={18} style={{ color: "var(--muted)" }} />
-                </div>
-                <div className="metric-line">
-                  导航：成功 {navSuccess} / 前进失败 {navFail} / 取消 {navCancel} / 平均到点 {String(navMean)}
-                </div>
-                <div className="gas-diagnostics">
-                  <div className="gas-diag-card">
-                    <span>气体链路诊断</span>
-                    <small className="gas-diag-caption">信号状态</small>
-                    <strong className={`gas-signal gas-signal-${String(gasSignalStatus).toLowerCase()}`}>
-                      {gasSignalLabel(gasSignalStatus)}
-                    </strong>
-                  </div>
-                  <div className="gas-diag-card">
-                    <span>原始读数</span>
-                    <strong>{String(gasRaw)}</strong>
-                  </div>
-                  <div className="gas-diag-card">
-                    <span>原始话题</span>
-                    <strong>{String(gasRawTopic.status || "N/A")}</strong>
-                  </div>
-                </div>
-                <div className="gas-diag-reason">{String(gasSignalReason)}</div>
-                <TrendChart points={gasHistory} color="#40c4ff" />
-              </motion.article>
-            </section>
-
-            <motion.section
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="panel"
-            >
+          <section className="grid control-grid">
+            <article className="panel">
               <div className="panel-header">
-                <h2>阶段时间线</h2>
-                <FileText size={18} style={{ color: "var(--muted)" }} />
+                <h2>仿真控制</h2>
+                <Settings size={18} style={{ color: "var(--muted)" }} />
               </div>
-              <PhaseTimeline timeline={phaseTimeline} />
-            </motion.section>
-          </motion.div>
-        )}
-
-        {activeTab === "heatmap" && (
-          <motion.section
-            key="heatmap"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="panel heatmap-panel"
-          >
-            <div className="panel-header">
-              <h2>3D 气体浓度热力图</h2>
-              <Map size={18} style={{ color: "var(--muted)" }} />
-            </div>
-            <div className="heatmap-status">
-              <span className={`heatmap-conn ${heatmapData.connected ? "connected" : ""}`}>
-                {heatmapData.connected ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
-                {heatmapData.connected ? "已连接" : "未连接"}
-              </span>
-              {heatmapData.error && (
-                <span className="heatmap-error">
-                  <AlertCircle size={14} />
-                  {heatmapData.error}
-                </span>
-              )}
-              {heatmapData.estimate && (
-                <span className="heatmap-estimate">
-                  <Search size={14} />
-                  估计位置: ({heatmapData.estimate.position[0].toFixed(2)}, {heatmapData.estimate.position[1].toFixed(2)})
-                  {" "}
-                  置信度: {(heatmapData.estimate.confidence * 100).toFixed(1)}%
-                </span>
-              )}
-            </div>
-            <div className="heatmap-wrapper">
-              <Heatmap3D
-                grid={heatmapData.grid}
-                particles={heatmapData.particles}
-                estimate={heatmapData.estimate}
-                opacity={0.6}
-              />
-            </div>
-            <div className="heatmap-controls">
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className="btn"
-                onClick={heatmapData.pause}
-              >
-                暂停
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className="btn"
-                onClick={heatmapData.resume}
-              >
-                继续
-              </motion.button>
-            </div>
-          </motion.section>
-        )}
-
-        {activeTab === "ai" && (
-          <motion.section
-            key="ai"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="panel"
-          >
-            <div className="panel-header">
-              <h2>AI 助手（分析 + 建议 + 半自动执行）</h2>
-              <Brain size={18} style={{ color: "var(--muted)" }} />
-            </div>
-            <div className="grid ai-grid">
-              <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.1 }}
-                className="ai-card"
-              >
-                <div className="row">
-                  <label>配置</label>
-                  <select value={activeProfileId} onChange={(e) => setActiveProfileId(e.target.value)}>
-                    {llmProfiles.map((item) => (
-                      <option key={item.id} value={item.id}>{item.name} ({item.model || "no-model"})</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="row"><label>名称</label><input value={llmForm.name} onChange={(e) => setLlmForm((p) => ({ ...p, name: e.target.value }))} /></div>
-                <div className="row"><label>URL</label><input value={llmForm.base_url} onChange={(e) => setLlmForm((p) => ({ ...p, base_url: e.target.value }))} /></div>
-                <div className="row"><label>API Key</label><input type="password" value={llmForm.api_key} onChange={(e) => setLlmForm((p) => ({ ...p, api_key: e.target.value }))} /></div>
-                <div className="row"><label>模型</label><input value={llmForm.model} onChange={(e) => setLlmForm((p) => ({ ...p, model: e.target.value }))} /></div>
-                <div className="row">
-                  <label>协议</label>
-                  <select value={llmForm.protocol} onChange={(e) => setLlmForm((p) => ({ ...p, protocol: e.target.value }))}>
-                    <option value="dual">dual</option>
-                    <option value="responses">responses</option>
-                    <option value="chat">chat</option>
-                  </select>
-                </div>
-                <div className="btn-row">
-                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="btn" onClick={saveLlmProfile}>
-                    <Save size={16} />
-                    保存配置
-                  </motion.button>
-                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="btn" onClick={loadLlmProfiles}>
-                    <RefreshCw size={16} />
-                    刷新配置
-                  </motion.button>
-                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="btn" onClick={activateProfile}>
-                    <CheckCircle2 size={16} />
-                    设为当前
-                  </motion.button>
-                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="btn" onClick={checkProfile}>
-                    <Zap size={16} />
-                    连接测试
-                  </motion.button>
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.2 }}
-                className="ai-card"
-              >
-                <div className="row row-col">
-                  <label>AI 指令</label>
-                  <textarea rows={3} value={llmPrompt} onChange={(e) => setLlmPrompt(e.target.value)} />
-                </div>
-                <div className="btn-row">
-                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="btn primary" onClick={sendAi}>
-                    <MessageSquare size={16} />
-                    发送给 AI
-                  </motion.button>
-                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="btn" onClick={runAiOnce}>
-                    <Bot size={16} />
-                    执行 AI 单轮流程
-                  </motion.button>
-                </div>
-                <div className="reply">
-                  {llmReply || "AI 分析结果会显示在这里。"}
-                </div>
-                <div className="actions">
-                  {llmActions.map((action, idx) => (
-                    <motion.div
-                      key={`${action.type}-${idx}`}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: idx * 0.1 }}
-                      className="action-item"
-                    >
-                      <div>
-                        <strong>{action.title || action.type}</strong>
-                        <div className="muted">风险：{action.risk_level || "medium"} | 类型：{action.type}</div>
-                        <div className="muted">{action.reason || ""}</div>
-                      </div>
-                      <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        className="btn"
-                        onClick={() => executeAction(action)}
-                      >
-                        <ChevronRight size={16} />
-                        执行动作
-                      </motion.button>
-                    </motion.div>
-                  ))}
-                </div>
-              </motion.div>
-            </div>
-
-            <div className="grid ai-audit-grid">
-              <motion.article
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                className="panel inset"
-              >
-                <h3>AI 对话历史</h3>
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>时间</th>
-                      <th>模型</th>
-                      <th>摘要</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {llmHistoryRows.slice(-12).reverse().map((row, idx) => (
-                      <tr key={`history-${idx}-${row.timestamp || ""}`}>
-                        <td>{String(row.timestamp || "").replace("T", " ").slice(0, 19)}</td>
-                        <td>{row.model || "-"}</td>
-                        <td>{String(row.analysis || row.message || "-").slice(0, 80)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </motion.article>
-
-              <motion.article
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-                className="panel inset"
-              >
-                <h3>动作执行审计</h3>
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>时间</th>
-                      <th>动作</th>
-                      <th>风险</th>
-                      <th>结果</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {llmAuditRows.slice(-20).reverse().map((row, idx) => (
-                      <tr key={`audit-${idx}-${row.timestamp || ""}`}>
-                        <td>{String(row.timestamp || "").replace("T", " ").slice(0, 19)}</td>
-                        <td>{row.title || row.type || "-"}</td>
-                        <td>{row.risk_level || "-"}</td>
-                        <td>{row.result?.ok ? "成功" : `失败: ${row.result?.message || "-"}`}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </motion.article>
-            </div>
-          </motion.section>
-        )}
-
-        {activeTab === "diagnostics" && (
-          <motion.div
-            key="diagnostics"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-          >
-            <section className="grid diagnostics-grid">
-              <motion.article
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.1 }}
-                className="panel inset"
-              >
-                <div className="panel-header">
-                  <h2>节点健康</h2>
-                  <Cpu size={18} style={{ color: "var(--muted)" }} />
-                </div>
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>节点</th>
-                      <th>状态</th>
-                      <th>重启次数</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {nodeRows.map((row, idx) => (
-                      <tr key={`node-${idx}-${row.node || ""}`}>
-                        <td>{row.node || "-"}</td>
-                        <td>{row.up ? "UP" : "DOWN"}</td>
-                        <td>{safeNumber(row.restart_count, 0)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </motion.article>
-
-              <motion.article
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.2 }}
-                className="panel inset"
-              >
-                <div className="panel-header">
-                  <h2>话题健康</h2>
-                  <Activity size={18} style={{ color: "var(--muted)" }} />
-                </div>
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>话题</th>
-                      <th>状态</th>
-                      <th>频率(Hz)</th>
-                      <th>延迟(s)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(topicHealth || {}).map(([topic, row]) => (
-                      <tr key={topic}>
-                        <td>{topic}</td>
-                        <td>{row?.status || "-"}</td>
-                        <td>{safeNumber(row?.hz, 0).toFixed(2)}</td>
-                        <td>{row?.stale_sec == null ? "-" : safeNumber(row?.stale_sec, 0).toFixed(2)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </motion.article>
-            </section>
-
-            <motion.section
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="panel"
-            >
-              <div className="panel-header">
-                <h2>运行日志</h2>
-                <Terminal size={18} style={{ color: "var(--muted)" }} />
-              </div>
-              <div className="log-tools">
-                <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
-                  <option value="all">全部来源</option>
-                  <option value="control">control</option>
-                  <option value="sim">sim</option>
-                  <option value="demo_prep">demo_prep</option>
-                  <option value="system">system</option>
+              <div className="row">
+                <label>场景</label>
+                <select value={profile.scene} onChange={(e) => {
+                  const val = e.target.value;
+                  setProfile(prev => ({ ...prev, scene: val }));
+                }}>
+                  <option value="warehouse">warehouse</option>
+                  <option value="baseline">baseline</option>
                 </select>
-                <input placeholder="搜索日志..." value={query} onChange={(e) => setQuery(e.target.value)} />
-                <label className="auto-scroll">
-                  <input type="checkbox" checked={autoScroll} onChange={(e) => setAutoScroll(e.target.checked)} />
-                  自动滚动
-                </label>
-                <span className="muted">{filteredLogs.length} 行</span>
               </div>
-              <div ref={logBoxRef} className="log-box">
-                <AnimatePresence>
-                  {filteredLogs.map((row) => (
-                    <LogRow key={row.id} row={row} />
+              <div className="row">
+                <label>GADEN</label>
+                <select value={profile.use_gaden} onChange={(e) => {
+                  const val = e.target.value;
+                  setProfile(prev => ({ ...prev, use_gaden: val }));
+                }}>
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </div>
+              <div className="row">
+                <label>SLAM</label>
+                <select value={profile.use_slam} onChange={(e) => {
+                  const val = e.target.value;
+                  setProfile(prev => ({ ...prev, use_slam: val }));
+                }}>
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </div>
+              <div className="row">
+                <label>RViz</label>
+                <select value={profile.use_rviz} onChange={(e) => {
+                  const val = e.target.value;
+                  setProfile(prev => ({ ...prev, use_rviz: val }));
+                }}>
+                  <option value="true">true</option>
+                  <option value="false">false</option>
+                </select>
+              </div>
+              <div className="row">
+                <label>headless</label>
+                <select value={profile.headless} onChange={(e) => {
+                  const val = e.target.value;
+                  setProfile(prev => ({ ...prev, headless: val }));
+                }}>
+                  <option value="false">false</option>
+                  <option value="true">true</option>
+                </select>
+              </div>
+              <div className="btn-row">
+                <button className="btn primary" onClick={startSim}>
+                  <Play size={16} />
+                  开始仿真
+                </button>
+                <button className="btn danger" onClick={stopSim}>
+                  <Square size={16} />
+                  停止仿真
+                </button>
+                <button className="btn" onClick={() => Promise.all([refreshStatus(), refreshMetrics(), refreshLogs()])}>
+                  <RefreshCw size={16} />
+                  刷新状态
+                </button>
+              </div>
+              <div className="meta">UI 模式：{uiMeta.mode} | bundle_ready：{String(uiMeta.bundle_ready)}</div>
+            </article>
+
+            <article className="panel">
+              <div className="panel-header">
+                <h2>导航与浓度趋势</h2>
+                <Activity size={18} style={{ color: "var(--muted)" }} />
+              </div>
+              <div className="metric-line">
+                导航：成功 {navSuccess} / 前进失败 {navFail} / 取消 {navCancel} / 平均到点 {String(navMean)}
+              </div>
+              <div className="gas-diagnostics">
+                <div className="gas-diag-card">
+                  <span>气体链路诊断</span>
+                  <small className="gas-diag-caption">信号状态</small>
+                  <strong className={`gas-signal gas-signal-${String(gasSignalStatus).toLowerCase()}`}>
+                    {gasSignalLabel(gasSignalStatus)}
+                  </strong>
+                </div>
+                <div className="gas-diag-card">
+                  <span>原始读数</span>
+                  <strong>{String(gasRaw)}</strong>
+                </div>
+                <div className="gas-diag-card">
+                  <span>原始话题</span>
+                  <strong>{String(gasRawTopic.status || "N/A")}</strong>
+                </div>
+              </div>
+              <div className="gas-diag-reason">{String(gasSignalReason)}</div>
+              <TrendChart points={gasHistory} color="#40c4ff" />
+            </article>
+          </section>
+
+          <section className="panel">
+            <div className="panel-header">
+              <h2>阶段时间线</h2>
+              <FileText size={18} style={{ color: "var(--muted)" }} />
+            </div>
+            <PhaseTimeline timeline={phaseTimeline} />
+          </section>
+        </>
+      )}
+
+      {activeTab === "heatmap" && (
+        <section className="panel heatmap-panel">
+          <div className="panel-header">
+            <h2>3D 气体浓度热力图</h2>
+            <Map size={18} style={{ color: "var(--muted)" }} />
+          </div>
+          <div className="heatmap-status">
+            <span className={`heatmap-conn ${heatmapData.connected ? "connected" : ""}`}>
+              {heatmapData.connected ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+              {heatmapData.connected ? "已连接" : "未连接"}
+            </span>
+            {heatmapData.error && (
+              <span className="heatmap-error">
+                <AlertCircle size={14} />
+                {heatmapData.error}
+              </span>
+            )}
+            {heatmapData.estimate && (
+              <span className="heatmap-estimate">
+                <Search size={14} />
+                估计位置: ({heatmapData.estimate.position[0].toFixed(2)}, {heatmapData.estimate.position[1].toFixed(2)})
+                {" "}
+                置信度: {(heatmapData.estimate.confidence * 100).toFixed(1)}%
+              </span>
+            )}
+          </div>
+          <div className="heatmap-wrapper">
+            <Heatmap3D
+              grid={heatmapData.grid}
+              particles={heatmapData.particles}
+              estimate={heatmapData.estimate}
+              opacity={0.6}
+            />
+          </div>
+          <div className="heatmap-controls">
+            <button className="btn" onClick={heatmapData.pause}>暂停</button>
+            <button className="btn" onClick={heatmapData.resume}>继续</button>
+          </div>
+        </section>
+      )}
+
+      {activeTab === "ai" && (
+        <section className="panel">
+          <div className="panel-header">
+            <h2>AI 助手（分析 + 建议 + 半自动执行）</h2>
+            <Brain size={18} style={{ color: "var(--muted)" }} />
+          </div>
+          <div className="grid ai-grid">
+            <div className="ai-card">
+              <div className="row">
+                <label>配置</label>
+                <select value={activeProfileId} onChange={(e) => setActiveProfileId(e.target.value)}>
+                  {llmProfiles.map((item) => (
+                    <option key={item.id} value={item.id}>{item.name} ({item.model || "no-model"})</option>
                   ))}
-                </AnimatePresence>
+                </select>
               </div>
-            </motion.section>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              <div className="row"><label>名称</label><input value={llmForm.name} onChange={(e) => {
+                const val = e.target.value;
+                setLlmForm(prev => ({ ...prev, name: val }));
+              }} /></div>
+              <div className="row"><label>URL</label><input value={llmForm.base_url} onChange={(e) => {
+                const val = e.target.value;
+                setLlmForm(prev => ({ ...prev, base_url: val }));
+              }} /></div>
+              <div className="row"><label>API Key</label><input type="password" value={llmForm.api_key} onChange={(e) => {
+                const val = e.target.value;
+                setLlmForm(prev => ({ ...prev, api_key: val }));
+              }} /></div>
+              <div className="row"><label>模型</label><input value={llmForm.model} onChange={(e) => {
+                const val = e.target.value;
+                setLlmForm(prev => ({ ...prev, model: val }));
+              }} /></div>
+              <div className="row">
+                <label>协议</label>
+                <select value={llmForm.protocol} onChange={(e) => {
+                  const val = e.target.value;
+                  setLlmForm(prev => ({ ...prev, protocol: val }));
+                }}>
+                  <option value="dual">dual</option>
+                  <option value="responses">responses</option>
+                  <option value="chat">chat</option>
+                </select>
+              </div>
+              <div className="btn-row">
+                <button className="btn" onClick={saveLlmProfile}>
+                  <Save size={16} />
+                  保存配置
+                </button>
+                <button className="btn" onClick={loadLlmProfiles}>
+                  <RefreshCw size={16} />
+                  刷新配置
+                </button>
+                <button className="btn" onClick={activateProfile}>
+                  <CheckCircle2 size={16} />
+                  设为当前
+                </button>
+                <button className="btn" onClick={checkProfile}>
+                  <Zap size={16} />
+                  连接测试
+                </button>
+              </div>
+            </div>
+
+            <div className="ai-card">
+              <div className="row row-col">
+                <label>AI 指令</label>
+                <textarea rows={3} value={llmPrompt} onChange={(e) => setLlmPrompt(e.target.value)} />
+              </div>
+              <div className="btn-row">
+                <button className="btn primary" onClick={sendAi}>
+                  <MessageSquare size={16} />
+                  发送给 AI
+                </button>
+                <button className="btn" onClick={runAiOnce}>
+                  <Bot size={16} />
+                  执行 AI 单轮流程
+                </button>
+              </div>
+              <div className="reply">
+                {llmReply || "AI 分析结果会显示在这里。"}
+              </div>
+              <div className="actions">
+                {llmActions.map((action, idx) => (
+                  <div key={`${action.type}-${idx}`} className="action-item">
+                    <div>
+                      <strong>{action.title || action.type}</strong>
+                      <div className="muted">风险：{action.risk_level || "medium"} | 类型：{action.type}</div>
+                      <div className="muted">{action.reason || ""}</div>
+                    </div>
+                    <button className="btn" onClick={() => executeAction(action)}>
+                      <ChevronRight size={16} />
+                      执行动作
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid ai-audit-grid">
+            <article className="panel inset">
+              <h3>AI 对话历史</h3>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>时间</th>
+                    <th>模型</th>
+                    <th>摘要</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {llmHistoryRows.slice(-12).reverse().map((row, idx) => (
+                    <tr key={`history-${idx}-${row.timestamp || ""}`}>
+                      <td>{String(row.timestamp || "").replace("T", " ").slice(0, 19)}</td>
+                      <td>{row.model || "-"}</td>
+                      <td>{String(row.analysis || row.message || "-").slice(0, 80)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </article>
+
+            <article className="panel inset">
+              <h3>动作执行审计</h3>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>时间</th>
+                    <th>动作</th>
+                    <th>风险</th>
+                    <th>结果</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {llmAuditRows.slice(-20).reverse().map((row, idx) => (
+                    <tr key={`audit-${idx}-${row.timestamp || ""}`}>
+                      <td>{String(row.timestamp || "").replace("T", " ").slice(0, 19)}</td>
+                      <td>{row.title || row.type || "-"}</td>
+                      <td>{row.risk_level || "-"}</td>
+                      <td>{row.result?.ok ? "成功" : `失败: ${row.result?.message || "-"}`}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </article>
+          </div>
+        </section>
+      )}
+
+      {activeTab === "diagnostics" && (
+        <>
+          <section className="grid diagnostics-grid">
+            <article className="panel inset">
+              <div className="panel-header">
+                <h2>节点健康</h2>
+                <Cpu size={18} style={{ color: "var(--muted)" }} />
+              </div>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>节点</th>
+                    <th>状态</th>
+                    <th>重启次数</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {nodeRows.map((row, idx) => (
+                    <tr key={`node-${idx}-${row.node || ""}`}>
+                      <td>{row.node || "-"}</td>
+                      <td>{row.up ? "UP" : "DOWN"}</td>
+                      <td>{safeNumber(row.restart_count, 0)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </article>
+
+            <article className="panel inset">
+              <div className="panel-header">
+                <h2>话题健康</h2>
+                <Activity size={18} style={{ color: "var(--muted)" }} />
+              </div>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>话题</th>
+                    <th>状态</th>
+                    <th>频率(Hz)</th>
+                    <th>延迟(s)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(topicHealth || {}).map(([topic, row]) => (
+                    <tr key={topic}>
+                      <td>{topic}</td>
+                      <td>{row?.status || "-"}</td>
+                      <td>{safeNumber(row?.hz, 0).toFixed(2)}</td>
+                      <td>{row?.stale_sec == null ? "-" : safeNumber(row?.stale_sec, 0).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </article>
+          </section>
+
+          <section className="panel">
+            <div className="panel-header">
+              <h2>运行日志</h2>
+              <Terminal size={18} style={{ color: "var(--muted)" }} />
+            </div>
+            <div className="log-tools">
+              <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
+                <option value="all">全部来源</option>
+                <option value="control">control</option>
+                <option value="sim">sim</option>
+                <option value="demo_prep">demo_prep</option>
+                <option value="system">system</option>
+              </select>
+              <input placeholder="搜索日志..." value={query} onChange={(e) => setQuery(e.target.value)} />
+              <label className="auto-scroll">
+                <input type="checkbox" checked={autoScroll} onChange={(e) => setAutoScroll(e.target.checked)} />
+                自动滚动
+              </label>
+              <span className="muted">{filteredLogs.length} 行</span>
+            </div>
+            <div ref={logBoxRef} className="log-box">
+              {filteredLogs.map((row) => <LogRow key={row.id} row={row} />)}
+            </div>
+          </section>
+        </>
+      )}
     </div>
   );
 }
