@@ -2,6 +2,13 @@
 
 A clean ASCII-path rebuild of the H2 hydrogen tracking simulation workspace.
 
+## Features
+
+- **Hydrogen Source Tracking**: Gradient-based tracking with particle filter localization
+- **GADEN Gas Simulation**: Realistic filament-based gas dispersion modeling
+- **SLAM/AMCL Navigation**: Autonomous mapping and localization with Nav2
+- **Obstacle Avoidance**: Full Nav2 stack with costmap-based collision avoidance
+
 ## Layout
 
 - Project root: `/home/user/h2track-xian`
@@ -16,35 +23,65 @@ source /home/user/gaden_ws/install/setup.bash
 colcon build
 ```
 
-## Launch with the simplified gas field
+## Quick Start
 
-```bash
-cd /home/user/h2track-xian
-source /opt/ros/humble/setup.bash
-source install/setup.bash
-ros2 launch h2track_sim bringup.launch.py use_gaden:=false
-```
-
-## Launch with GADEN playback
-
-The external GADEN workspace is expected to have preprocessing and `sim1` results already generated under the official `test_env` sample project.
+### Launch with GADEN gas simulation (recommended)
 
 ```bash
 cd /home/user/h2track-xian
 source /opt/ros/humble/setup.bash
 source /home/user/gaden_ws/install/setup.bash
 source install/setup.bash
-ros2 launch h2track_sim bringup.launch.py use_gaden:=true use_rviz:=true
+ros2 launch h2track_sim demo.launch.py scene:=warehouse use_rviz:=true
 ```
 
-## Launch with SLAM mapping + GADEN (warehouse)
+### Launch with simplified gas field (no GADEN dependency)
+
+```bash
+cd /home/user/h2track-xian
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 launch h2track_sim demo.launch.py scene:=warehouse use_gaden:=false use_rviz:=true
+```
+
+## GADEN Gas Simulation Notes
+
+### Hydrogen Gas Behavior
+
+Hydrogen (H₂) is 14x lighter than air, causing it to rapidly rise toward the ceiling. The GADEN simulation correctly models this physical phenomenon:
+
+- Gas source at floor level (z=0.3m)
+- Filaments rise to ceiling level (z≈1.8-1.9m)
+- Gas sensor must be positioned at elevated height to detect rising gas
+
+### Sensor Configuration
+
+The gas sensor is positioned at 1.5m height in the robot URDF to detect the rising H₂ plume. Scene configurations use `gas_sensor_link` as the sensor frame:
+
+```yaml
+gaden:
+  sensor_frame: gas_sensor_link  # Elevated sensor for H2 detection
+  fixed_frame: gaden_map
+```
+
+If you need to modify the sensor height, edit `src/h2track_sim/urdf/h2track_bot.urdf.xacro`:
+
+```xml
+<joint name="gas_sensor_joint" type="fixed">
+  <parent link="base_link"/>
+  <child link="gas_sensor_link"/>
+  <origin xyz="0 0 1.5"/>  <!-- Adjust z-value as needed -->
+</joint>
+```
+
+## Launch with SLAM mapping
 
 ```bash
 cd /home/user/h2track-xian
 source /opt/ros/humble/setup.bash
 source /home/user/gaden_ws/install/setup.bash
 source install/setup.bash
-ros2 launch h2track_sim slam_demo.launch.py use_rviz:=true headless:=false
+ros2 launch h2track_sim slam_demo.launch.py use_rviz:=true
 ```
 
 ## Save map from SLAM
@@ -58,48 +95,31 @@ source install/setup.bash
 ros2 run h2track_tracking slam_save_map --output /home/user/h2track-xian/src/h2track_sim/scenes/warehouse/maps/warehouse_slam_map
 ```
 
-## Switch back to static-map navigation with the saved map
+## Demo Prep
+
+Run this before launching the demo to clear stale processes:
 
 ```bash
 cd /home/user/h2track-xian
 source /opt/ros/humble/setup.bash
 source /home/user/gaden_ws/install/setup.bash
 source install/setup.bash
-ros2 launch h2track_sim demo.launch.py scene:=warehouse use_slam:=false nav2_map_file:=/home/user/h2track-xian/src/h2track_sim/scenes/warehouse/maps/warehouse_slam_map.yaml use_rviz:=true
+ros2 run h2track_tracking demo_prep --scene warehouse
 ```
 
-
-## Demo prep
-
-Run this before launching the stage demo to clear stale H2track Gazebo/Nav2 processes and confirm the required ROS packages are visible in the current shell.
+Preview mode (no changes):
 
 ```bash
-cd /home/user/h2track-xian
-source /opt/ros/humble/setup.bash
-source /home/user/gaden_ws/install/setup.bash
-source install/setup.bash
-ros2 run h2track_tracking demo_prep
+ros2 run h2track_tracking demo_prep --scene warehouse --dry-run
 ```
 
-Preview mode:
+## Web Console
 
-```bash
-ros2 run h2track_tracking demo_prep --dry-run
-```
-
-## Web Console (Warehouse One-Click)
-
-Install the web runtime dependencies once (Ubuntu/Debian recommended):
+Install dependencies:
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y python3-fastapi python3-uvicorn
-```
-
-Alternative (if you use a Python venv):
-
-```bash
-python -m pip install fastapi uvicorn
 ```
 
 Start the web console:
@@ -112,141 +132,83 @@ source install/setup.bash
 ros2 run h2track_tracking demo_web_server --host 0.0.0.0 --port 18080
 ```
 
-Open in browser:
+Open in browser: `http://<your-machine-ip>:18080`
 
-```text
-http://<your-machine-ip>:18080
-```
+### Web Console Features
 
-Frontend is now served from a built React bundle (`h2track_tracking/static_console`) by default.  
-If you modify UI code under `src/h2track_tracking/web_console`, rebuild with:
+- One-click simulation start/stop
+- Real-time gas concentration monitoring
+- Topic and node health panels
+- Phase timeline visualization
+- AI assistant integration (OpenAI-compatible)
+- Diagnostic export and run reports
 
-```bash
-cd /home/user/h2track-xian/src/h2track_tracking/web_console
-npm install
-npm run build
-cd /home/user/h2track-xian
-source /opt/ros/humble/setup.bash
-colcon build --packages-select h2track_tracking
-```
+## Demo Self-Check
 
-The page provides:
-
-- `Start Simulation`: runs `demo_prep` then launches simulation with the selected launch profile
-- `Stop Simulation`: sends SIGINT to the current launch process group
-- `Export Diagnostics`: writes a zip artifact to `artifacts/diag/`
-- `Export Run Report`: writes JSON + Markdown run reports to `artifacts/reports/`
-- live logs via SSE (`/api/logs/stream`)
-- phase timeline panel
-- topic health panel (`/gas_concentration`, `/robot_mode`, `/source_found`, `/odom`)
-- node health panel (core Nav2 + mission + GADEN nodes)
-- real-time metric cards (mode, gas concentration trend, source_found, nav quality)
-- AI assistant panel:
-  - configure multiple OpenAI-compatible model profiles (`URL/API key/model/protocol`)
-  - natural-language chat with structured system context (status + metrics + logs + recent reports)
-  - suggested actions with manual execution
-  - one-cycle auto loop (`analyze -> suggest -> execute`)
-  - execution audit table for AI-triggered actions
-
-The upgraded React console is organized into three tabs:
-
-- `总览`: simulation control, KPI cards, gas trend, phase timeline
-- `AI 策略`: model profile management, AI suggestions, action execution audit
-- `诊断日志`: topic/node health tables and live filtered logs
-
-Additional API:
-
-- `GET /api/metrics/recent?limit=120`: returns in-memory metric snapshot and short history for dashboard rendering
-- `GET /api/health/nodes`: returns latest node-health snapshot
-- `POST /api/diag/export`: creates a diagnostic bundle and returns the artifact path
-- `POST /api/report/export`: creates a JSON+Markdown run report and returns artifact paths
-- `GET /api/llm/profiles`: list model profiles (API key masked)
-- `POST /api/llm/profiles`: create/update a model profile
-- `POST /api/llm/profiles/{id}/activate`: set active profile
-- `POST /api/llm/profiles/{id}/check`: connectivity check for a profile
-- `DELETE /api/llm/profiles/{id}`: delete a profile
-- `POST /api/llm/chat`: AI analysis + structured suggested actions
-- `POST /api/llm/action/execute`: execute one suggested action
-- `POST /api/llm/loop/run-once`: run one AI cycle
-- `GET /api/llm/history`: read AI conversation history
-- `GET /api/llm/audit`: read action execution audit logs
-
-LLM profile storage (plaintext by design):
-
-- `~/.config/h2track/llm_profiles.json`
-
-
-## Demo self-check
-
-Run this after bringup to confirm the stage-demo stack has the expected nodes, topics, TF edges, and active Nav2 lifecycle nodes.
-
-
-## Standard Demo Rehearsal Flow
-
-Use this exact sequence before a formal demo.
-
-1. Clear stale H2track demo processes and verify package visibility:
-
-```bash
-cd /home/user/h2track-xian
-source /opt/ros/humble/setup.bash
-source /home/user/gaden_ws/install/setup.bash
-source install/setup.bash
-ros2 run h2track_tracking demo_prep
-```
-
-2. Launch the formal demo stack:
-
-```bash
-ros2 launch h2track_sim demo.launch.py use_rviz:=true headless:=false
-```
-
-3. Verify the runtime stack after bringup:
+Verify the stack after bringup:
 
 ```bash
 ros2 run h2track_tracking demo_selfcheck --timeout 5.0
 ```
 
-## Demo regression
+## Demo Regression Testing
 
-Run multi-round stability checks for the current scene profile and report source-finding success rate.
+Run multi-round stability checks:
 
 ```bash
-cd /home/user/h2track-xian
-source /opt/ros/humble/setup.bash
-source /home/user/gaden_ws/install/setup.bash
-source install/setup.bash
 ros2 run h2track_tracking demo_regression --scene warehouse --use-gaden true --rounds 3 --run-timeout-sec 110
 ```
 
-Compare SLAM vs non-SLAM regression behavior:
+## Available Scenes
 
-```bash
-# Scene default SLAM behavior
-ros2 run h2track_tracking demo_regression --scene warehouse --use-gaden true --use-slam auto --rounds 1 --run-timeout-sec 180
+| Scene | GADEN | SLAM | Description |
+|-------|-------|------|-------------|
+| `warehouse` | ✅ | ✅ | AWS RoboMaker Small Warehouse |
+| `baseline` | ✅ | ❌ | H2Track Lab environment |
 
-# Force static-map localization behavior
-ros2 run h2track_tracking demo_regression --scene warehouse --use-gaden true --use-slam false --rounds 1 --run-timeout-sec 180
-```
+## Key Topics
 
-If any step fails, do not start the formal demo. Return to step 1 and fix the issue first.
-
-```bash
-cd /home/user/h2track-xian
-source /opt/ros/humble/setup.bash
-source /home/user/gaden_ws/install/setup.bash
-source install/setup.bash
-ros2 run h2track_tracking demo_selfcheck --timeout 5.0
-```
+| Topic | Type | Description |
+|-------|------|-------------|
+| `/gas_concentration` | `Float32` | Normalized gas sensor reading |
+| `/robot_mode` | `String` | Current mission state |
+| `/source_found` | `Bool` | Source detection signal |
+| `/estimated_source` | `PoseWithCovarianceStamped` | Particle filter estimate |
+| `/map` | `OccupancyGrid` | SLAM/localization map |
 
 ## Scene Assets
 
-- `src/h2track_sim/scenes/warehouse/` vendors the AWS RoboMaker Small Warehouse World runtime assets from `aws-robotics/aws-robomaker-small-warehouse-world` under the upstream `MIT-0` license.
-- The vendored warehouse scene keeps only the runtime world/models needed by Gazebo; upstream docs/images/launch helpers are not copied into the project.
+- `src/h2track_sim/scenes/warehouse/` vendors assets from `aws-robotics/aws-robomaker-small-warehouse-world` under MIT-0 license.
 
-## Notes
+## Configuration Notes
 
-- `use_gaden:=false` uses `gas_field_node` to publish `/gas_concentration`.
-- `use_gaden:=true` starts `gaden_environment`, `gaden_player`, `gaden_sensor_gate_node`, `gaden_adapter_node`, and a static `gaden_map -> map` transform; the gate node waits for TF connectivity before launching `simulated_gas_sensor`.
-- `use_slam:=true` routes Nav2 bringup through `slam_toolbox`; `mission_manager_node` switches to TF-based pose refresh (`map <- base_link`) and does not require `/amcl_pose` to become available.
-- The Nav2 configuration is limited to `navigate_to_pose` to avoid the old `ComputePathThroughPoses` BT issue from the previous repo.
+- `use_gaden:=false` uses simplified `gas_field_node` for gas simulation
+- `use_gaden:=true` starts full GADEN stack with realistic filament-based dispersion
+- `use_slam:=true` enables `slam_toolbox` for mapping
+- `use_slam:=false` uses AMCL with pre-existing map
+
+## Troubleshooting
+
+### Gas concentration always zero
+
+If using GADEN mode, ensure:
+1. Sensor frame is `gas_sensor_link` (not `base_link`)
+2. GADEN workspace is sourced: `source /home/user/gaden_ws/install/setup.bash`
+3. Preprocessed GADEN data exists for the scene
+
+### TF tree disconnected
+
+Verify TF chain: `gaden_map` → `map` → `odom` → `base_link` → `gas_sensor_link`
+
+```bash
+ros2 run tf2_ros tf2_echo gaden_map gas_sensor_link
+```
+
+### Nav2 not navigating
+
+Check lifecycle nodes are active:
+
+```bash
+ros2 lifecycle list /controller_server
+ros2 lifecycle list /planner_server
+```
