@@ -134,7 +134,7 @@ def test_warehouse_scene_uses_stable_gas_sensor_frame():
     loader = _scene_loader_module()
     warehouse = loader.load_scene_profile(pkg_share, 'warehouse')
 
-    assert warehouse['gaden']['sensor_frame'] == 'base_link'
+    assert warehouse['gaden']['sensor_frame'] == 'gas_sensor_link'
 
 
 def test_robot_urdf_declares_elevated_gas_sensor_link():
@@ -142,7 +142,8 @@ def test_robot_urdf_declares_elevated_gas_sensor_link():
 
     assert '<link name="gas_sensor_link">' in urdf
     assert '<joint name="gas_sensor_joint" type="fixed">' in urdf
-    assert '<origin xyz="0 0 0.45"/>' in urdf
+    # Sensor elevated to 1.5m to detect rising H2 gas
+    assert '<origin xyz="0 0 1.5"/>' in urdf
 
 
 def test_scene_loader_resolves_world_and_model_paths_from_selected_scene():

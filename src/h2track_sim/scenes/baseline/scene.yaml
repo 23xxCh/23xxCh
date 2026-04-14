@@ -39,7 +39,7 @@ gaden:
   playback_id: scene1
   player_freq: 1.0
   sensor_topic: /gaden/sensor_reading
-  sensor_frame: base_link
+  sensor_frame: gas_sensor_link
   fixed_frame: gaden_map
   map_offset_x: 5.0
   map_offset_y: 3.0

@@ -135,7 +135,8 @@
   <joint name="gas_sensor_joint" type="fixed">
     <parent link="base_link"/>
     <child link="gas_sensor_link"/>
-    <origin xyz="0 0 0.45"/>
+    <!-- Elevated sensor height (1.5m) to detect rising H2 gas -->
+    <origin xyz="0 0 1.5"/>
   </joint>
 
   <gazebo reference="base_link">
