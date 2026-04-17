@@ -293,6 +293,23 @@ class MissionManagerNode(Node):
         """Update costmap for tracking target validation."""
         self._costmap_checker.update_costmap(msg)
 
+    def _reset_tracking_state(self) -> None:
+        """Reset all tracking-related state for a new tracking session.
+
+        Called when:
+        - Source is found and mission resets to PATROL
+        - Tracking is aborted and robot returns to PATROL
+        """
+        self._surge_cast_tracker.reset()
+        self._wind_estimator.reset()
+        self._tracking_fusion.reset()
+        self._history.clear()
+        self._particle_filter_estimate = None
+        self._particle_filter_confidence = 0.0
+        self._estimated_wind = None
+        self._source_announced = False
+        self.get_logger().info("Tracking state reset")
+
     def _make_goal(self, x: float, y: float, yaw: float = 0.0) -> PoseStamped:
         goal = PoseStamped()
         goal.header.frame_id = "map"
@@ -553,6 +570,9 @@ class MissionManagerNode(Node):
                 self._navigator.cancelTask()
                 self._send_tracking_goal()
             elif mode is MissionMode.PATROL:
+                # Reset tracking state when returning to patrol
+                if previous_mode in (MissionMode.SEEK_TRACK, MissionMode.SOURCE_FOUND):
+                    self._reset_tracking_state()
                 self._send_patrol_goal()
             elif mode is MissionMode.SOURCE_FOUND:
                 self._navigator.cancelTask()
