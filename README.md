@@ -85,6 +85,13 @@ This section describes the standard demo rehearsal flow for testing the gas sour
 | Track Source | SEEK_TRACK | 30-120s |
 | Complete | SOURCE_FOUND | - |
 
+### Troubleshooting
+
+If any step fails, do not start the formal demo. Check:
+1. GADEN simulation is running
+2. Nav2 server is available
+3. Robot is spawned in Gazebo
+
 ## GADEN Gas Simulation Notes
 
 ### Hydrogen Gas Behavior
