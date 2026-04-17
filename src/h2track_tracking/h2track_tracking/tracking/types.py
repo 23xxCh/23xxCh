@@ -68,6 +68,13 @@ class SurgeCastConfig:
     source_radius: float = 1.0          # Distance to confirm source (meters)
     source_hold_steps: int = 2          # Consecutive detections needed
 
+    # Adaptive step size parameters
+    adaptive_step: bool = True          # Enable adaptive step size
+    min_step: float = 0.2               # Minimum step size (meters)
+    max_step: float = 1.0               # Maximum step size (meters)
+    concentration_threshold_high: float = 5.0  # High concentration threshold
+    concentration_threshold_low: float = 1.0   # Low concentration threshold
+
     @property
     def upwind_direction(self) -> float:
         """Direction to move upwind (opposite to wind)."""

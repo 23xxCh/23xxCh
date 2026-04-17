@@ -24,6 +24,7 @@ class GasFieldParams:
     wind_y: float
     noise_stddev: float
     min_concentration: float
+    gas_type: str = "H2"  # 气体类型
 
 
 class GasFieldModel:

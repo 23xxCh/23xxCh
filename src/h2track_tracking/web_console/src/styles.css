@@ -1091,3 +1091,103 @@ textarea {
     grid-template-columns: 1fr;
   }
 }
+
+/* 控制台优化 */
+.console-header {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  padding: 1.5rem;
+  border-bottom: 2px solid #0f3460;
+}
+
+.gas-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: rgba(0, 255, 136, 0.1);
+  border: 1px solid rgba(0, 255, 136, 0.3);
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.gas-indicator.warning {
+  background: rgba(255, 193, 7, 0.1);
+  border-color: rgba(255, 193, 7, 0.3);
+}
+
+.gas-indicator.danger {
+  background: rgba(255, 82, 82, 0.1);
+  border-color: rgba(255, 82, 82, 0.3);
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* 多气体选择器 */
+.gas-selector {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.gas-selector button {
+  padding: 0.5rem 1rem;
+  border: 1px solid #0f3460;
+  background: rgba(15, 52, 96, 0.3);
+  color: #e0e0e0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.gas-selector button.active {
+  background: #e94560;
+  border-color: #e94560;
+  color: white;
+}
+
+.gas-selector button:hover {
+  background: rgba(233, 69, 96, 0.5);
+}
+
+/* 追踪状态卡片 */
+.tracking-card {
+  background: rgba(15, 52, 96, 0.5);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin: 1rem 0;
+}
+
+.tracking-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.tracking-stat:last-child {
+  border-bottom: none;
+}
+
+.stat-label {
+  color: #a0a0a0;
+  font-size: 0.9rem;
+}
+
+.stat-value {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #00ff88;
+}
+
+.stat-value.warning {
+  color: #ffc107;
+}
+
+.stat-value.danger {
+  color: #ff5252;
+}

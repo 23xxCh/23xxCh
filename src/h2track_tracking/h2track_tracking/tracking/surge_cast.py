@@ -71,6 +71,27 @@ class SurgeCastTracker:
         self._source_hits = 0
         self._source_estimate: Pose2D | None = None
 
+    def _adaptive_step_size(self, concentration: float) -> float:
+        """Adjust step size based on concentration.
+        
+        Higher concentration = smaller steps for precision.
+        Lower concentration = larger steps for exploration.
+        """
+        if not self.config.adaptive_step:
+            return self.config.surge_step
+        
+        if concentration >= self.config.concentration_threshold_high:
+            # Near source: small steps for precision
+            return self.config.min_step
+        elif concentration <= self.config.concentration_threshold_low:
+            # Far from source: large steps for exploration
+            return self.config.max_step
+        else:
+            # Linear interpolation
+            ratio = (concentration - self.config.concentration_threshold_low) / \
+                    (self.config.concentration_threshold_high - self.config.concentration_threshold_low)
+            return self.config.max_step - ratio * (self.config.max_step - self.config.min_step)
+
     def update(
         self,
         concentration: float,
