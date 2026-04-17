@@ -125,6 +125,41 @@ Key parameters:
 
 Fusion improves tracking by leveraging both real-time surge-cast navigation and probabilistic source estimates.
 
+### Usage Example: Fusion Configuration
+
+To enable fusion in your scene configuration:
+
+```yaml
+# In scene.yaml
+fusion:
+  use_fusion: true
+  fusion_mode: weighted  # Options: weighted, switching, cascade
+  pf_weight: 0.35        # Particle filter weight (0-1)
+  surge_weight: 0.65     # Surge-cast weight (0-1)
+  pf_confidence_threshold: 0.3
+
+wind_estimation:
+  estimate_wind: true
+  min_samples: 8         # Minimum samples before wind estimation
+```
+
+Monitor fusion state via ROS topics:
+
+```bash
+# View fusion state
+ros2 topic echo /fusion_state
+
+# View estimated wind
+ros2 topic echo /estimated_wind
+```
+
+The fusion algorithm combines:
+1. **Surge-Cast**: Real-time plume tracking with wind-aware navigation
+2. **Particle Filter**: Probabilistic source localization
+3. **Wind Estimation**: Infers wind from concentration gradients
+
+Default fusion mode (`weighted`) blends both estimates based on confidence.
+
 ### Heatmap System
 
 Concentration visualization using `heatmap/` module:
