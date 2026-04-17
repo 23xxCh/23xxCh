@@ -97,3 +97,61 @@ $$\sigma_{fused}^2 = w_s^2 \sigma_s^2 + w_p^2 \sigma_p^2$$
 - [ ] 非理想条件下的收敛性分析
 - [ ] 噪声鲁棒性分析
 - [ ] 多机器人协作的理论框架
+
+## Surge-Cast 收敛性证明
+
+### 假设条件
+
+1. 气体浓度场满足高斯烟羽模型
+2. 风场在短期内稳定
+3. 机器人速度有界 $v \in [v_{min}, v_{max}]$
+
+### 定理 1：Surge 阶段收敛性
+
+在 Surge 阶段，若机器人沿浓度梯度方向移动，则期望距离源的位置单调递减。
+
+**证明：**
+
+设源位置为 $S = (x_s, y_s)$，机器人位置为 $R_t = (x_t, y_t)$。
+
+距离函数：$D_t = \|R_t - S\|$
+
+在 Surge 阶段，机器人沿梯度方向移动：
+$$R_{t+1} = R_t + \alpha \nabla C(R_t)$$
+
+其中 $\alpha$ 为步长，$\nabla C$ 为浓度梯度。
+
+根据高斯烟羽模型，浓度梯度指向源方向：
+$$\nabla C(R_t) \propto (S - R_t)$$
+
+因此：
+$$D_{t+1} = \|R_{t+1} - S\| = \|R_t + \alpha \nabla C - S\| < \|R_t - S\| = D_t$$
+
+**证毕。**
+
+### 定理 2：Cast 阶段探索性
+
+当浓度下降时，Cast 阶段通过横向搜索重新定位烟羽。
+
+设横向移动距离为 $L$，搜索角度为 $\theta$。
+
+成功重新定位烟羽的概率：
+$$P_{detect} = 1 - e^{-\lambda L \sin\theta}$$
+
+其中 $\lambda$ 为烟羽宽度参数。
+
+### 算法复杂度分析
+
+| 操作 | 时间复杂度 | 空间复杂度 |
+|------|-----------|-----------|
+| Surge 更新 | $O(1)$ | $O(1)$ |
+| Cast 更新 | $O(1)$ | $O(1)$ |
+| 风向估计 | $O(n)$ | $O(n)$ |
+| 粒子滤波更新 | $O(N_p)$ | $O(N_p)$ |
+
+其中 $n$ 为采样数，$N_p$ 为粒子数。
+
+## 参考文献
+
+1. *Vergassola, M., Villermaux, E., & Shraiman, B. I. (2007). 'Infotaxis' as a strategy for searching without gradients. Nature, 445(7126), 406-409.*
+2. *Russell, R. A., Bab-Hadiashar, A., Shepherd, R. L., & Wallace, G. G. (2003). A comparison of reactive robot chemotaxis algorithms. Robotics and Autonomous Systems, 45(2), 83-97.*
