@@ -95,6 +95,36 @@ SURGE → SOURCE_FOUND (threshold reached)
 CAST → SURGE (plume reacquired)
 ```
 
+### Wind Estimation
+
+Estimates wind direction from gas concentration gradients using `tracking/wind_estimator.py`:
+
+- **WindEstimator**: Infers wind from spatial concentration patterns
+  - Gradient-based estimation: Concentration gradient points toward source, wind is opposite
+  - Plume shape analysis: Plume elongation indicates wind direction
+  - Outputs: wind_x, wind_y, confidence
+
+Key parameters:
+- `estimate_wind`: Enable wind estimation (default: true)
+- `wind_estimation_min_samples`: Minimum samples before estimating (default: 10)
+
+### Algorithm Fusion
+
+Combines Surge-Cast and Particle Filter estimates using `tracking/fusion.py`:
+
+- **TrackingFusion**: Three fusion modes:
+  - `weighted`: Blend targets based on confidence
+  - `switching`: Select one algorithm based on conditions
+  - `cascade`: PF guides region, Surge-Cast navigates
+
+Key parameters:
+- `use_fusion`: Enable algorithm fusion (default: true)
+- `fusion_mode`: Fusion mode - "weighted", "switching", or "cascade" (default: "weighted")
+- `fusion_pf_weight`: Base weight for particle filter estimate (default: 0.3)
+- `fusion_surge_weight`: Base weight for surge-cast (default: 0.7)
+
+Fusion improves tracking by leveraging both real-time surge-cast navigation and probabilistic source estimates.
+
 ### Heatmap System
 
 Concentration visualization using `heatmap/` module:
@@ -169,6 +199,8 @@ ros2 run h2track_tracking demo_selfcheck --timeout 5.0
 | `/estimated_source_pose` | `PoseStamped` | Estimated source position |
 | `/estimated_source` | `PoseWithCovarianceStamped` | Particle filter source estimate with covariance |
 | `/particle_cloud` | `PoseArray` | Particle positions for visualization |
+| `/estimated_wind` | `String` | Estimated wind vector: "wind_x,wind_y,confidence" |
+| `/fusion_state` | `String` | Fusion state: "mode,pf_contrib,surge_contrib,target_x,target_y" |
 
 ## External Dependencies
 

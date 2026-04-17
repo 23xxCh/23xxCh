@@ -2,7 +2,27 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
+
+logger = logging.getLogger(__name__)
+
+# Lazy import to avoid circular dependency
+def _get_scene_registry() -> Any:
+    """Get scene registry with error handling.
+
+    Returns:
+        SceneRegistry instance or None if unavailable.
+    """
+    try:
+        from .scene_registry import get_scene_registry
+        return get_scene_registry()
+    except ImportError as e:
+        logger.warning(f"Scene registry module not available: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Failed to initialize scene registry: {e}")
+        return None
 
 
 DEFAULT_LAUNCH_PROFILE = {
@@ -28,14 +48,44 @@ def _coerce_bool_token(value: Any, *, default: str) -> str:
     return default
 
 
+def _sanitize_scene_id(scene: str) -> str:
+    """Sanitize scene ID to prevent path traversal and injection.
+
+    Only allows alphanumeric characters, hyphens, and underscores.
+    """
+    if not scene:
+        return "warehouse"
+    # Remove any path separators and dangerous characters
+    sanitized = "".join(c for c in scene if c.isalnum() or c in "-_")
+    # Limit length
+    return sanitized[:64] or "warehouse"
+
+
 def normalize_launch_profile(profile: dict[str, Any] | None) -> dict[str, str]:
-    """Normalize and validate a launch profile configuration."""
+    """Normalize and validate a launch profile configuration.
+
+    Scene validation is performed against the scene registry to support
+    dynamic scene discovery.
+    """
     source = dict(DEFAULT_LAUNCH_PROFILE)
     if profile:
         source.update({k: v for k, v in profile.items() if v is not None})
-    scene = str(source.get("scene", "warehouse")).strip().lower()
-    if scene not in {"warehouse", "baseline"}:
-        scene = "warehouse"
+
+    # Sanitize scene ID
+    scene = _sanitize_scene_id(str(source.get("scene", "warehouse")).strip().lower())
+
+    # Validate against available scenes (fallback to default if invalid)
+    registry = _get_scene_registry()
+    if registry is not None:
+        try:
+            if not registry.is_valid_scene(scene):
+                default_scene = registry.get_default_scene()
+                scene = default_scene
+        except Exception as e:
+            logger.debug(f"Scene validation failed: {e}")
+    # If registry is None, accept the sanitized scene ID
+    # (validation will happen at launch time)
+
     return {
         "scene": scene,
         "use_gaden": _coerce_bool_token(source.get("use_gaden"), default=DEFAULT_LAUNCH_PROFILE["use_gaden"]),

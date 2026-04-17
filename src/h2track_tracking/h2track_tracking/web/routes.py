@@ -12,6 +12,7 @@ import logging
 from typing import Any
 
 from .auth import get_auth_dependency, settings as auth_settings
+from .scene_registry import get_scene_registry
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -105,6 +106,47 @@ def register_routes(
     def get_ui_meta() -> Any:
         """Get UI mode metadata (static bundle vs legacy inline)."""
         return JSONResponse(content=ui_meta)
+
+    @app.get("/api/scenes")
+    def get_scenes() -> Any:
+        """Get list of available scenes for multi-map selection.
+
+        Returns:
+            JSON list of scene objects with id, name, description, and metadata.
+        """
+        try:
+            registry = get_scene_registry()
+            scenes = registry.list_scenes()
+            return JSONResponse(content={
+                "scenes": [scene.to_dict() for scene in scenes],
+                "default": registry.get_default_scene(),
+                "count": len(scenes),
+            })
+        except Exception as exc:
+            logger.exception("Failed to list scenes")
+            raise HTTPException(status_code=500, detail=f"Failed to list scenes: {exc}") from exc
+
+    @app.get("/api/scenes/{scene_id}")
+    def get_scene_detail(scene_id: str) -> Any:
+        """Get detailed information about a specific scene.
+
+        Args:
+            scene_id: Scene identifier
+
+        Returns:
+            Scene details including configuration and metadata.
+        """
+        try:
+            registry = get_scene_registry()
+            scene = registry.get_scene(scene_id)
+            if scene is None:
+                raise HTTPException(status_code=404, detail=f"Scene not found: {scene_id}")
+            return JSONResponse(content=scene.to_dict())
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.exception(f"Failed to get scene details for {scene_id}")
+            raise HTTPException(status_code=500, detail=f"Failed to get scene: {exc}") from exc
 
     @app.post("/api/sim/start")
     async def start_sim(request: "RequestType", _auth: str = auth_dep) -> Any:  # type: ignore[valid-type]

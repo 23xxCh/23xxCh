@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
+from nav2_msgs.msg import Costmap
 from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
 import numpy as np
 import rclpy
@@ -22,10 +23,16 @@ from .navigation_executor import (
     should_skip_patrol_goal,
 )
 from .tracking import (
+    CostmapChecker,
+    FusionConfig,
     SurgeCastConfig,
     SurgeCastTracker,
+    TrackingAction,
+    TrackingFusion,
     TrackingState,
     ParticleFilterIntegrator,
+    WindEstimator,
+    WindEstimatorConfig,
 )
 
 
@@ -62,6 +69,16 @@ class MissionManagerNode(Node):
         self.declare_parameter("cast_distance_limit", 3.0)
         self.declare_parameter("wind_x", 0.4)
         self.declare_parameter("wind_y", 0.0)
+
+        # Wind estimation parameters
+        self.declare_parameter("estimate_wind", True)
+        self.declare_parameter("wind_estimation_min_samples", 10)
+
+        # Fusion parameters
+        self.declare_parameter("use_fusion", True)
+        self.declare_parameter("fusion_mode", "weighted")  # weighted, switching, cascade
+        self.declare_parameter("fusion_pf_weight", 0.3)
+        self.declare_parameter("fusion_surge_weight", 0.7)
 
         # Validate numeric parameters
         enter_threshold = self._get_positive_float("enter_threshold", 4.0)
@@ -128,35 +145,6 @@ class MissionManagerNode(Node):
         if not self._localizer_node:
             self._localizer_node = "none" if self._use_slam else "amcl"
 
-    def _get_positive_float(self, param_name: str, default: float) -> float:
-        """Get a positive float parameter, validating it."""
-        value = float(self.get_parameter(param_name).value)
-        if value <= 0:
-            self.get_logger().error(
-                f"Invalid {param_name}: {value} (must be positive), using default {default}"
-            )
-            return default
-        return value
-
-    def _get_positive_int(self, param_name: str, default: int) -> int:
-        """Get a positive integer parameter, validating it."""
-        value = int(self.get_parameter(param_name).value)
-        if value <= 0:
-            self.get_logger().error(
-                f"Invalid {param_name}: {value} (must be positive), using default {default}"
-            )
-            return default
-        return value
-
-    def _get_clamped_float(self, param_name: str, default: float, min_val: float, max_val: float) -> float:
-        """Get a float parameter clamped to [min_val, max_val]."""
-        value = float(self.get_parameter(param_name).value)
-        if value < min_val or value > max_val:
-            self.get_logger().warning(
-                f"{param_name} {value} out of range [{min_val}, {max_val}], clamping"
-            )
-            return max(min_val, min(max_val, value))
-        return value
         self._current_pose = Pose2D(0.0, 0.0)
         self._current_yaw = 0.0
         self._current_concentration = 0.0
@@ -193,14 +181,70 @@ class MissionManagerNode(Node):
         self._surge_cast_tracker = SurgeCastTracker(self._surge_cast_config)
         self._pf_integrator = ParticleFilterIntegrator()
 
+        # Costmap validation for tracking targets
+        self._costmap_checker = CostmapChecker()
+        self.create_subscription(Costmap, "/global_costmap/costmap", self._costmap_callback, 10)
+
+        # Wind estimation from gas concentration gradients
+        self._estimate_wind = bool(self.get_parameter("estimate_wind").value)
+        wind_min_samples = int(self.get_parameter("wind_estimation_min_samples").value)
+        self._wind_estimator = WindEstimator(WindEstimatorConfig(
+            min_samples_for_estimate=wind_min_samples,
+        ))
+        self._estimated_wind: tuple[float, float] | None = None
+
+        # Algorithm fusion: combines Surge-Cast and Particle Filter estimates
+        self._use_fusion = bool(self.get_parameter("use_fusion").value)
+        fusion_mode = str(self.get_parameter("fusion_mode").value)
+        pf_weight = float(self.get_parameter("fusion_pf_weight").value)
+        surge_weight = float(self.get_parameter("fusion_surge_weight").value)
+        self._tracking_fusion = TrackingFusion(FusionConfig(
+            blending_mode=fusion_mode,
+            pf_weight_base=pf_weight,
+            surge_weight=surge_weight,
+            pf_confidence_threshold=self._particle_filter_min_confidence,
+        ))
+
         self.create_subscription(PoseWithCovarianceStamped, "/amcl_pose", self._amcl_pose_callback, 10)
         self.create_subscription(PoseWithCovarianceStamped, "/estimated_source", self._particle_filter_callback, 10)
         self.create_subscription(Float32, "/gas_concentration", self._concentration_callback, 10)
         self._mode_pub = self.create_publisher(String, "/robot_mode", 10)
         self._source_pub = self.create_publisher(Bool, "/source_found", 10)
         self._estimate_pub = self.create_publisher(PoseStamped, "/estimated_source_pose", 10)
+        self._wind_pub = self.create_publisher(String, "/estimated_wind", 10)
+        self._fusion_pub = self.create_publisher(String, "/fusion_state", 10)
         self._last_mode_publish_time: float | None = None
         self.create_timer(1.0, self._control_loop)
+
+    def _get_positive_float(self, param_name: str, default: float) -> float:
+        """Get a positive float parameter, validating it."""
+        value = float(self.get_parameter(param_name).value)
+        if value <= 0:
+            self.get_logger().error(
+                f"Invalid {param_name}: {value} (must be positive), using default {default}"
+            )
+            return default
+        return value
+
+    def _get_positive_int(self, param_name: str, default: int) -> int:
+        """Get a positive integer parameter, validating it."""
+        value = int(self.get_parameter(param_name).value)
+        if value <= 0:
+            self.get_logger().error(
+                f"Invalid {param_name}: {value} (must be positive), using default {default}"
+            )
+            return default
+        return value
+
+    def _get_clamped_float(self, param_name: str, default: float, min_val: float, max_val: float) -> float:
+        """Get a float parameter clamped to [min_val, max_val]."""
+        value = float(self.get_parameter(param_name).value)
+        if value < min_val or value > max_val:
+            self.get_logger().warning(
+                f"{param_name} {value} out of range [{min_val}, {max_val}], clamping"
+            )
+            return max(min_val, min(max_val, value))
+        return value
 
     def _amcl_pose_callback(self, msg: PoseWithCovarianceStamped) -> None:
         self._current_pose, self._current_yaw = map_pose_from_amcl(msg)
@@ -209,6 +253,19 @@ class MissionManagerNode(Node):
         self._current_concentration = float(msg.data)
         self._history.append((self._current_pose, self._current_concentration))
         self._history = self._history[-50:]  # Keep more history for better tracking
+
+        # Update wind estimator if enabled
+        if self._estimate_wind:
+            wind_estimate = self._wind_estimator.update(
+                self._current_pose,
+                self._current_concentration,
+            )
+            if wind_estimate is not None and wind_estimate.confidence > 0.3:
+                self._estimated_wind = (wind_estimate.wind_x, wind_estimate.wind_y)
+                # Publish estimated wind
+                wind_msg = String()
+                wind_msg.data = f"{wind_estimate.wind_x:.3f},{wind_estimate.wind_y:.3f},{wind_estimate.confidence:.2f}"
+                self._wind_pub.publish(wind_msg)
 
     def _particle_filter_callback(self, msg: PoseWithCovarianceStamped) -> None:
         """Handle particle filter source estimate."""
@@ -231,6 +288,10 @@ class MissionManagerNode(Node):
             confidence=self._particle_filter_confidence,
             covariance=(cov_x, cov_y, msg.pose.covariance[1], msg.pose.covariance[6]),
         )
+
+    def _costmap_callback(self, msg: Costmap) -> None:
+        """Update costmap for tracking target validation."""
+        self._costmap_checker.update_costmap(msg)
 
     def _make_goal(self, x: float, y: float, yaw: float = 0.0) -> PoseStamped:
         goal = PoseStamped()
@@ -261,10 +322,14 @@ class MissionManagerNode(Node):
     def _send_tracking_goal(self) -> bool:
         # Use Surge-Cast algorithm if enabled
         if self._use_surge_cast:
+            # Use estimated wind if available, otherwise fall back to config
+            wind = self._estimated_wind if self._estimate_wind else None
+
             action = self._surge_cast_tracker.update(
                 concentration=self._current_concentration,
                 robot_pose=Pose2D(self._current_pose.x, self._current_pose.y),
                 robot_yaw=self._current_yaw,
+                wind=wind,
             )
 
             # Check for source found
@@ -273,10 +338,43 @@ class MissionManagerNode(Node):
                 # Don't send new goal, let the state machine handle it
                 return True
 
+            # Apply fusion if enabled and PF estimate available
+            if self._use_fusion and self._particle_filter_estimate is not None:
+                fused_action = self._tracking_fusion.compute_fused_action(
+                    surge_action=action,
+                    pf_position=self._particle_filter_estimate,
+                    pf_confidence=self._particle_filter_confidence,
+                    concentration=self._current_concentration,
+                    robot_pose=Pose2D(self._current_pose.x, self._current_pose.y),
+                )
+                fusion_state = self._tracking_fusion.state
+                self.get_logger().info(
+                    f"Fusion: mode={fusion_state.current_mode}, "
+                    f"pf_contrib={fusion_state.pf_contribution:.2f}, "
+                    f"surge_contrib={fusion_state.surge_contribution:.2f}"
+                )
+                # Publish fusion state to topic
+                fusion_msg = String()
+                fusion_msg.data = (
+                    f"{fusion_state.current_mode},"
+                    f"{fusion_state.pf_contribution:.3f},"
+                    f"{fusion_state.surge_contribution:.3f},"
+                    f"{action.target.x:.3f},"
+                    f"{action.target.y:.3f}"
+                )
+                self._fusion_pub.publish(fusion_msg)
+                action = fused_action
+
+            # Validate and correct tracking action using costmap
+            action = self._costmap_checker.safe_tracking_action(
+                action,
+                Pose2D(self._current_pose.x, self._current_pose.y),
+            )
             target = action.target
+            wind_info = f"wind=({wind[0]:.2f}, {wind[1]:.2f})" if wind else "wind=config"
             self.get_logger().info(
                 f"Surge-Cast {action.state.name}: target=({target.x:.2f}, {target.y:.2f}), "
-                f"conc={self._current_concentration:.2f}"
+                f"conc={self._current_concentration:.2f}, {wind_info}"
             )
         else:
             # Legacy tracking with particle filter integration
@@ -304,6 +402,18 @@ class MissionManagerNode(Node):
                     step_size=float(self.get_parameter("track_step").value),
                     sweep_angle=math.radians(float(self.get_parameter("sweep_angle_deg").value)),
                 )
+
+            # Validate target using costmap
+            if not self._costmap_checker.is_valid_target(target):
+                projected = self._costmap_checker.project_to_free_space(
+                    target,
+                    Pose2D(self._current_pose.x, self._current_pose.y),
+                )
+                if projected is not None:
+                    target = projected
+                    self.get_logger().info(
+                        f"Projected tracking target to free space: ({target.x:.2f}, {target.y:.2f})"
+                    )
 
         accepted = self._navigator.goToPose(self._make_goal(target.x, target.y))
         if not accepted:

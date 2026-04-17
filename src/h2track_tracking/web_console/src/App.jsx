@@ -24,6 +24,7 @@ import {
   Bot
 } from "lucide-react";
 import Heatmap3D from "./components/Heatmap3D";
+import SceneSelector from "./components/SceneSelector";
 import { useHeatmapData } from "./hooks/useHeatmapData";
 
 const DEFAULT_PROFILE = {
@@ -553,13 +554,11 @@ export function App() {
               </div>
               <div className="row">
                 <label>场景</label>
-                <select value={profile.scene} onChange={(e) => {
-                  const val = e.target.value;
-                  setProfile(prev => ({ ...prev, scene: val }));
-                }}>
-                  <option value="warehouse">warehouse</option>
-                  <option value="baseline">baseline</option>
-                </select>
+                <SceneSelector
+                  value={profile.scene}
+                  onChange={(val) => setProfile(prev => ({ ...prev, scene: val }))}
+                  disabled={state === "running" || state === "starting"}
+                />
               </div>
               <div className="row">
                 <label>GADEN</label>

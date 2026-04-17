@@ -189,6 +189,9 @@ def generate_launch_description():
         # When use_slam is false, always use amcl regardless of scene config
         if not use_slam_enabled:
             resolved_localizer_node = "amcl"
+            # When using AMCL (non-SLAM mode), force autostart=true because
+            # lifecycle_manager_localization needs to auto-activate amcl and map_server
+            resolved_nav2_autostart = True
         else:
             resolved_localizer_node = localizer_node.perform(context).strip() or str(
                 scene_profile.get("localizer_node", "none")
