@@ -1,0 +1,53 @@
+scene_name: benchmark
+description: 标准化测试场景，用于算法对比实验
+world: scenes/warehouse/warehouse.world
+map: scenes/warehouse/maps/warehouse_map.yaml
+nav2_params: scenes/warehouse/nav2_params.yaml
+use_gaden: true
+use_slam: false
+nav2_autostart: true
+localizer_node: amcl
+
+mission_manager:
+  initial_pose:
+    x: 0.0
+    y: 0.0
+    yaw: 0.0
+  patrol_points:
+  - [2.0, 2.0]
+  - [-2.0, 2.0]
+  - [-2.0, -2.0]
+  - [2.0, -2.0]
+  enter_threshold: 0.5
+  exit_threshold: 0.3
+  source_threshold: 3.0
+  confirm_samples: 2
+  track_exit_samples: 3
+  source_radius: 0.8
+  source_hold_steps: 2
+  track_step: 0.4
+  sweep_angle_deg: 30.0
+
+# 测试用气体源位置（多个测试case）
+gas_source:
+  x: 3.0
+  y: -2.0
+
+gaden:
+  enabled: true
+  project_path: /home/user/gaden_ws/install/test_env/share/test_env/scenarios/h2track_warehouse/environment_configurations/config1
+  playback_id: scene1
+  player_freq: 0.5
+  sensor_topic: /gaden/sensor_reading
+  sensor_frame: gas_sensor_link
+  fixed_frame: gaden_map
+
+fusion:
+  use_fusion: true
+  fusion_mode: weighted
+  pf_weight: 0.35
+  surge_weight: 0.65
+
+wind_estimation:
+  estimate_wind: true
+  min_samples: 8
