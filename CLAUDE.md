@@ -68,6 +68,42 @@ Two modes:
 1. **Simplified** (`use_gaden:=false`): `gas_field_node` publishes synthetic plume data based on `GasFieldModel` in `gas_model.py`
 2. **GADEN** (`use_gaden:=true`): Uses external GADEN workspace for realistic filament-based gas dispersion
 
+### Multi-Gas Support
+
+The system supports multiple gas types with different physical properties:
+
+| Gas | Formula | Behavior | Sensor Height | Alarm Threshold |
+|-----|---------|----------|---------------|-----------------|
+| Hydrogen | H2 | Rising (light) | 1.5m | 250 ppm |
+| Methane | CH4 | Rising (light) | 1.2m | 5000 ppm |
+| Carbon Monoxide | CO | Neutral | 0.5m | 50 ppm |
+| Propane | C3H8 | Sinking (heavy) | 0.3m | 1000 ppm |
+
+Configure gas type in scene.yaml:
+
+```yaml
+gas_field:
+  gas_type: "H2"  # H2, CH4, CO, C3H8
+  source_strength: 160.0
+  decay_rate: 0.32
+```
+
+Gas properties include:
+- Molecular weight and density ratio
+- Diffusion coefficient
+- Recommended sensor height
+- Alarm thresholds
+
+Use `gas_types.py` to access gas properties programmatically:
+
+```python
+from h2track_tracking.gas_types import GasType, get_gas_properties, get_sensor_height
+
+# Get gas properties
+props = get_gas_properties(GasType.HYDROGEN)
+print(f"Sensor height: {get_sensor_height(GasType.HYDROGEN)}m")
+```
+
 ### Particle Filter
 
 Probabilistic gas source localization using `particle_filter/` module:
@@ -159,6 +195,25 @@ The fusion algorithm combines:
 3. **Wind Estimation**: Infers wind from concentration gradients
 
 Default fusion mode (`weighted`) blends both estimates based on confidence.
+
+### Adaptive Step Size
+
+The Surge-Cast algorithm supports adaptive step size adjustment:
+
+- **High concentration**: Small steps (0.2m) for precision near source
+- **Low concentration**: Large steps (1.0m) for fast exploration
+- **Intermediate**: Linear interpolation
+
+Configure in scene.yaml:
+
+```yaml
+mission_manager:
+  adaptive_step: true
+  min_step: 0.2
+  max_step: 1.0
+  concentration_threshold_high: 5.0
+  concentration_threshold_low: 1.0
+```
 
 ### Heatmap System
 
