@@ -7,12 +7,15 @@ downstream code.
 
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import random
 from typing import Any
 
 from h2track_tracking.gas_model import GasFieldModel, GasFieldParams, Pose2D
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -281,7 +284,8 @@ class GadenGasModelPlugin(GasModelPlugin):
         if self._concentration_provider is not None:
             try:
                 return float(self._concentration_provider(x, y, z))
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed to load gas model plugin: {e}")
                 # Fall back on error
                 pass
 

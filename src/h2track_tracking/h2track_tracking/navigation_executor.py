@@ -7,9 +7,15 @@ without ROS infrastructure.
 
 from __future__ import annotations
 
+import asyncio
 import ast
 import math
 from typing import TYPE_CHECKING
+
+import rclpy
+from nav2_msgs.action import NavigateToPose
+from rclpy.action import ActionClient
+from rclpy.node import Node
 
 if TYPE_CHECKING:
     from .gas_model import GasFieldModel, Pose2D
@@ -170,3 +176,83 @@ def determine_nav_action_on_result(
             return "retry_track"
 
     return None
+
+
+class NavigationExecutor:
+    """ROS 2 navigation executor using Nav2 Action Server.
+
+    This class provides an async interface to Nav2's NavigateToPose action,
+    allowing the robot to navigate to specified poses in the map frame.
+    """
+
+    def __init__(self, node: Node) -> None:
+        """Initialize the navigation executor.
+
+        Args:
+            node: ROS 2 node instance for creating clients and logging.
+        """
+        self._node = node
+
+        # Nav2 Action Client
+        self._nav_to_pose_client = ActionClient(
+            node, NavigateToPose, 'navigate_to_pose'
+        )
+
+    async def navigate_to_pose(
+        self,
+        target_x: float,
+        target_y: float,
+        target_yaw: float = 0.0,
+        timeout: float = 30.0
+    ) -> bool:
+        """Navigate to a target pose using Nav2.
+
+        Args:
+            target_x: Target x coordinate.
+            target_y: Target y coordinate.
+            target_yaw: Target yaw angle (radians).
+            timeout: Timeout in seconds.
+
+        Returns:
+            True if navigation succeeded.
+        """
+        if not self._nav_to_pose_client.wait_for_server(timeout_sec=2.0):
+            self._node.get_logger().warning("Nav2 server not available")
+            return False
+
+        goal_msg = NavigateToPose.Goal()
+        goal_msg.pose.header.frame_id = "map"
+        goal_msg.pose.header.stamp = self._node.get_clock().now().to_msg()
+        goal_msg.pose.pose.position.x = target_x
+        goal_msg.pose.pose.position.y = target_y
+        goal_msg.pose.pose.position.z = 0.0
+
+        # Convert yaw to quaternion
+        from tf_transformations import quaternion_from_euler
+        q = quaternion_from_euler(0, 0, target_yaw)
+        goal_msg.pose.pose.orientation.x = q[0]
+        goal_msg.pose.pose.orientation.y = q[1]
+        goal_msg.pose.pose.orientation.z = q[2]
+        goal_msg.pose.pose.orientation.w = q[3]
+
+        self._node.get_logger().info(
+            f"Navigating to ({target_x:.2f}, {target_y:.2f})"
+        )
+
+        send_goal_future = self._nav_to_pose_client.send_goal_async(goal_msg)
+
+        try:
+            goal_handle = await asyncio.wait_for(
+                send_goal_future, timeout=timeout
+            )
+            if not goal_handle.accepted:
+                self._node.get_logger().warning("Navigation goal rejected")
+                return False
+
+            result_future = goal_handle.get_result_async()
+            result = await asyncio.wait_for(result_future, timeout=timeout)
+
+            return result.status == 4  # SUCCEEDED
+        except asyncio.TimeoutError:
+            self._node.get_logger().error("Navigation timeout")
+            return False

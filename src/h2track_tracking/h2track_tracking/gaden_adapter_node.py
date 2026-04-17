@@ -66,7 +66,8 @@ class GadenAdapterNode(Node):
         if sensor_model_value >= 0:
             try:
                 return HydrogenSensorModel(sensor_model_value)
-            except ValueError:
+            except ValueError as e:
+                self.get_logger().warning(f"Invalid sensor value: {e}")
                 pass
         return HydrogenSensorModel.TGS2600
 

@@ -12,9 +12,12 @@ Environment Variables:
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 def get_workspace_root() -> Path:
@@ -59,9 +62,11 @@ def get_h2track_sim_share_path() -> Optional[Path]:
         from ament_index_python.packages import get_package_share_directory
 
         return Path(get_package_share_directory("h2track_sim"))
-    except ImportError:
+    except ImportError as e:
+        logger.debug(f"Path not found: {e}")
         pass
-    except Exception:
+    except (FileNotFoundError, OSError) as e:
+        logger.debug(f"Path not found: {e}")
         # PackageNotFoundError or other issues
         pass
 

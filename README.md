@@ -44,6 +44,47 @@ source install/setup.bash
 ros2 launch h2track_sim demo.launch.py scene:=warehouse use_gaden:=false use_rviz:=true
 ```
 
+## Standard Demo Rehearsal Flow
+
+This section describes the standard demo rehearsal flow for testing the gas source localization system.
+
+### Prerequisites
+
+1. GADEN simulation environment running
+2. Gazebo world loaded with gas source
+3. Nav2 navigation stack active
+
+### Step-by-Step Flow
+
+1. **Launch Simulation**
+   ```bash
+   ros2 launch h2track_sim bringup.launch.py scene:=warehouse
+   ```
+
+2. **Start Tracking**
+   ```bash
+   ros2 run h2track_tracking mission_manager_node
+   ```
+
+3. **Monitor Progress**
+   - Open Web Console: http://localhost:8080
+   - Check gas concentration readings
+   - Observe robot navigation to source
+
+4. **Verify Source Found**
+   - Robot enters SOURCE_FOUND mode
+   - Concentration drops below threshold
+   - Position estimate converges
+
+### Expected Behavior
+
+| Phase | Mode | Duration |
+|-------|------|----------|
+| Initialize | PATROL | 10-30s |
+| Detect Gas | SEEK_CONFIRM | 5-15s |
+| Track Source | SEEK_TRACK | 30-120s |
+| Complete | SOURCE_FOUND | - |
+
 ## GADEN Gas Simulation Notes
 
 ### Hydrogen Gas Behavior
