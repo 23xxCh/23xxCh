@@ -3,7 +3,7 @@ rclpy>=3.3.0
 numpy>=1.21.0
 scipy>=1.7.0
 matplotlib>=3.5.0
-PyYAML>=6.0
+PyYAML>=6.0.3
 
 # Testing
 pytest>=7.0.0
