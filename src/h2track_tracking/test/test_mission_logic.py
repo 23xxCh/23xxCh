@@ -277,3 +277,49 @@ def test_tracking_uses_separate_exit_window_when_configured():
     # Sustained collapse across the configured exit window should return to patrol.
     machine.update(0.7, (0.1, 0.1), False)
     assert machine.mode is MissionMode.PATROL
+
+
+def test_patrol_advances_one_point_per_goal_reached():
+    """Regression: each goal_reached=True advances exactly one patrol point.
+
+    The state machine trusts its caller to reset goal_reached after each
+    advance. If goal_reached remains True (sticky flag bug), every tick
+    calls advance_patrol(), consuming all waypoints instantly and
+    preventing gas detection from triggering mode transitions.
+
+    Fix: bt_node_runner._tick() resets bb.nav2.goal_reached = False after
+    the state machine update.
+    """
+    machine = MissionStateMachine(
+        MissionConfig(
+            patrol_points=[(1.0, 1.0), (2.0, 2.0), (3.0, 3.0), (4.0, 4.0)],
+            enter_threshold=5.0,
+            exit_threshold=2.0,
+            source_threshold=20.0,
+            confirm_samples=2,
+            source_radius=1.0,
+            source_hold_steps=2,
+        )
+    )
+
+    assert machine.current_patrol_goal == (1.0, 1.0)
+
+    # One goal_reached → advance to point 2
+    machine.update(0.1, (0.0, 0.0), goal_reached=True)
+    assert machine.current_patrol_goal == (2.0, 2.0)
+
+    # Same call without resetting → advances again (contract: caller MUST reset)
+    machine.update(0.1, (0.0, 0.0), goal_reached=True)
+    assert machine.current_patrol_goal == (3.0, 3.0)
+
+    machine.update(0.1, (0.0, 0.0), goal_reached=True)
+    assert machine.current_patrol_goal == (4.0, 4.0)
+
+    # Wrap around
+    machine.update(0.1, (0.0, 0.0), goal_reached=True)
+    assert machine.current_patrol_goal == (1.0, 1.0)
+
+    # Without goal_reached, patrol stays on current point (concentration too low)
+    mode = machine.update(0.1, (0.0, 0.0), goal_reached=False)
+    assert mode is MissionMode.PATROL
+    assert machine.current_patrol_goal == (1.0, 1.0)
