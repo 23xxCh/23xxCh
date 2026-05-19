@@ -240,6 +240,7 @@ class BTNodeRunner(Node):
         # mode publication
         mode = bb.mission.mode
         if mode is not None and mode != self._last_mode:
+            self.get_logger().info(f"Mode change: {self._last_mode} -> {mode}")
             self._mode_pub.publish(String(data=mode.name))
             self._last_mode = mode
 
@@ -271,6 +272,16 @@ class BTNodeRunner(Node):
             if not self._nav2_ready():
                 return
             self._nav_ready = True
+            self.get_logger().info("Nav2 ready, starting main loop")
+
+        # - diagnostic: log every 50 ticks (~5s)
+        self._tick_count = getattr(self, '_tick_count', 0) + 1
+        if self._tick_count % 50 == 1:
+            self.get_logger().info(
+                f"tick #{self._tick_count} mode={self._last_mode} "
+                f"pose=({self._current_pose.x:.2f},{self._current_pose.y:.2f}) "
+                f"conc={self._current_concentration:.3f}"
+            )
 
         # -- push sensor data to blackboard (was SensorReaderNode) ----------
         bb = self._bb
@@ -295,6 +306,9 @@ class BTNodeRunner(Node):
         bb.mission.mode = mode
         bb.mission.source_estimate = self._state_machine.source_estimate
 
+        # Reset sticky flag so goal_reached only triggers one advance per arrival
+        bb.nav2.goal_reached = False
+
         # -- patrol target (from state machine) -----------------------------
         goal = self._state_machine.current_patrol_goal
         bb.mission.patrol_target = Pose2D(goal[0], goal[1])
@@ -302,6 +316,13 @@ class BTNodeRunner(Node):
         # -- route targets to nav2 (mode-aware) -----------------------------
         self._sync_to_blackboard()
         bb.nav2.nav_ready = self._nav_ready
+
+        # diagnostic
+        if self._tick_count % 50 == 1:
+            tp = bb.nav2.target_pose
+            self.get_logger().info(
+                f"nav2 target=({tp.x:.2f},{tp.y:.2f})" if tp else "nav2 target=None"
+            )
 
         # tick the behavior tree
         self._tree.tick()
