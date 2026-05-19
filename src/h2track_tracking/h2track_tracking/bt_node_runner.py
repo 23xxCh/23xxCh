@@ -119,7 +119,7 @@ class BTNodeRunner(Node):
             pf_confidence_threshold=self._pf("particle_filter_min_confidence"),
         ))
         costmap = CostmapChecker()
-        state_machine = MissionStateMachine(mission_cfg)
+        self._state_machine = MissionStateMachine(mission_cfg)
 
         # -- blackboard & tree -----------------------------------------------
         self._bb = H2TrackBlackboard()
@@ -129,7 +129,6 @@ class BTNodeRunner(Node):
             surge_tracker=surge_tracker,
             fusion=fusion,
             costmap_checker=costmap,
-            state_machine=state_machine,
         )
         self._tree = self._tree_factory.create_tree()
 
