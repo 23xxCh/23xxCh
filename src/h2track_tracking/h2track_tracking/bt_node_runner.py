@@ -296,7 +296,7 @@ class BTNodeRunner(Node):
         mode = self._state_machine.update(
             concentration=self._current_concentration,
             robot_position=(self._current_pose.x, self._current_pose.y),
-            goal_reached=bb.nav2.goal_reached or False,
+            goal_reached=bool(bb.nav2.goal_reached_count),
         )
         if bb.mission.mode != mode:
             bb.mission.mode_changed = True
@@ -306,8 +306,8 @@ class BTNodeRunner(Node):
         bb.mission.mode = mode
         bb.mission.source_estimate = self._state_machine.source_estimate
 
-        # Reset sticky flag so goal_reached only triggers one advance per arrival
-        bb.nav2.goal_reached = False
+        # Consume accumulated goal completions (edge-triggered counter)
+        bb.nav2.goal_reached_count = 0
 
         # -- patrol target (from state machine) -----------------------------
         goal = self._state_machine.current_patrol_goal

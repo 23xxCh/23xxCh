@@ -287,8 +287,9 @@ def test_patrol_advances_one_point_per_goal_reached():
     calls advance_patrol(), consuming all waypoints instantly and
     preventing gas detection from triggering mode transitions.
 
-    Fix: bt_node_runner._tick() resets bb.nav2.goal_reached = False after
-    the state machine update.
+    Fix: Nav2ClientNode increments bb.nav2.goal_reached_count (edge-triggered
+    counter). bt_node_runner._tick() consumes it via bool(count) and resets
+    to 0 after the state machine update.
     """
     machine = MissionStateMachine(
         MissionConfig(

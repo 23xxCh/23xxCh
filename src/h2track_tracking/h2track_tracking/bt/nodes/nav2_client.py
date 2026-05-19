@@ -105,7 +105,9 @@ class Nav2ClientNode(py_trees.behaviour.Behaviour):
             return Status.RUNNING
 
         if self._nav_status == "succeeded":
-            self._bb.nav2.goal_reached = True
+            self._bb.nav2.goal_reached_count = (
+                self._bb.nav2.goal_reached_count or 0
+            ) + 1
             self._bb.nav2.task_complete = True
             return Status.SUCCESS
 

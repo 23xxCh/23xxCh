@@ -55,7 +55,7 @@ _BB_DEFS: dict[str, list[str]] = {
         "status",
         "result",
         "task_complete",
-        "goal_reached",
+        "goal_reached_count",
         "path_deviation",
         "recovery_needed",
         "nav_ready",
