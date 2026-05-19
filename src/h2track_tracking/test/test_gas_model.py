@@ -73,12 +73,16 @@ def test_gradient_target_moves_toward_best_position_when_concentration_drops():
         (Pose2D(0.6, 0.0), 2.0),
     ]
 
-    target = model.next_search_target(
+    from h2track_tracking.navigation_executor import _gradient_search_target
+
+    target = _gradient_search_target(
         current_pose=Pose2D(0.6, 0.0),
         current_yaw=0.0,
         history=history,
         step_size=0.5,
         sweep_angle=math.pi / 6.0,
+        wind_x=model.params.wind_x,
+        wind_y=model.params.wind_y,
     )
 
     # Target should move toward the best position (x=0.0), so x should decrease

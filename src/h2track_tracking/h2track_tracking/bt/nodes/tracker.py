@@ -1,0 +1,134 @@
+"""Tracker node for Behavior Tree.
+
+Wraps SurgeCastTracker + TrackingFusion + CostmapChecker as a single
+py_trees Behaviour that outputs the next navigational target.
+
+Fix #1: Reads safety.avoiding instead of nav2.status (cross-domain leak).
+Fix #5: Accepts domain objects via constructor (DI).
+"""
+
+from __future__ import annotations
+
+import py_trees
+from py_trees.common import Status
+
+from ...tracking.types import Pose2D, SurgeCastConfig
+from ...tracking.surge_cast import SurgeCastTracker
+from ...tracking.fusion import TrackingFusion, FusionConfig
+from ...tracking.costmap_checker import CostmapChecker
+
+
+class TrackerNode(py_trees.behaviour.Behaviour):
+    """py_trees Behaviour: compute next tracking target.
+
+    Inputs (blackboard):
+        sensor.concentration, sensor.robot_pose, sensor.robot_yaw,
+        sensor.wind, sensor.pf_estimate, sensor.pf_confidence,
+        safety.avoiding   <-- NEW: reads safety domain, not nav2
+
+    Outputs (blackboard):
+        tracker.target, tracker.state, tracker.heading, tracker.step_size
+    """
+
+    def __init__(
+        self,
+        name: str,
+        bb: "H2TrackBlackboard",
+        surge_tracker: SurgeCastTracker,
+        *,
+        fusion: TrackingFusion | None = None,
+        costmap_checker: CostmapChecker | None = None,
+        use_fusion: bool = True,
+        use_costmap: bool = True,
+    ) -> None:
+        super().__init__(name)
+        self._bb = bb
+        self._surge = surge_tracker          # DI: caller provides
+        self._fusion = fusion                # DI
+        self._costmap = costmap_checker      # DI
+        self._use_fusion = use_fusion
+        self._use_costmap = use_costmap
+        self._obstacle_count = 0
+
+    def initialise(self) -> None:
+        self._obstacle_count = 0
+
+    def update(self) -> Status:
+        concentration = self._bb.sensor.concentration or 0.0
+        robot_pose: Pose2D | None = self._bb.sensor.robot_pose
+        robot_yaw: float = self._bb.sensor.robot_yaw or 0.0
+
+        if robot_pose is None:
+            self.feedback_message = "no robot pose"
+            return Status.FAILURE
+
+        # -- detect obstacle avoidance via safety domain (Fix #1) ---------------
+        is_avoiding = self._bb.safety.obstacle_detected or False
+
+        if is_avoiding:
+            self._obstacle_count += 1
+        else:
+            self._obstacle_count = 0
+
+        # -- wind --------------------------------------------------------------
+        wind = self._bb.sensor.wind or self._bb.tracker.wind_estimate
+
+        # -- Surge-Cast update -------------------------------------------------
+        sc_pose = Pose2D(robot_pose.x, robot_pose.y)
+        action = self._surge.update(
+            concentration=concentration,
+            robot_pose=sc_pose,
+            robot_yaw=robot_yaw,
+            wind=wind,
+        )
+
+        # -- particle filter fusion --------------------------------------------
+        if self._use_fusion and self._fusion is not None:
+            pf_pos = self._bb.sensor.pf_estimate
+            pf_conf = self._bb.sensor.pf_confidence or 0.0
+            if pf_pos is not None:
+                action = self._fusion.compute_fused_action(
+                    surge_action=action,
+                    pf_position=pf_pos,
+                    pf_confidence=pf_conf,
+                    concentration=concentration,
+                    robot_pose=sc_pose,
+                )
+
+        # -- costmap guard -----------------------------------------------------
+        if self._use_costmap and self._costmap is not None:
+            action = self._costmap.safe_tracking_action(
+                action, sc_pose, max_search_radius=2.0
+            )
+
+        # -- lock target during avoidance --------------------------------------
+        if is_avoiding:
+            self._bb.tracker.target_locked = True
+            if self._obstacle_count > 20:
+                new_step = min(action.step_size * 1.5, 1.0)
+                action = type(action)(
+                    target=action.target,
+                    state=action.state,
+                    heading=action.heading,
+                    step_size=new_step,
+                    use_particle_filter=action.use_particle_filter,
+                )
+        else:
+            self._bb.tracker.target_locked = False
+
+        # -- write outputs -----------------------------------------------------
+        self._bb.tracker.target = action.target
+        self._bb.tracker.state = action.state
+        self._bb.tracker.heading = action.heading
+        self._bb.tracker.step_size = action.step_size
+
+        self.feedback_message = (
+            f"{action.state.name} -> ({action.target.x:.2f}, {action.target.y:.2f})"
+        )
+        return Status.SUCCESS
+
+    def terminate(self, new_status: Status) -> None:
+        pass
+
+    def reset_tracker(self) -> None:
+        self._surge.reset()

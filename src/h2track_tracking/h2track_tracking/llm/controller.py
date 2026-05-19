@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections import deque
 from datetime import datetime, timezone
 import threading
-from typing import Any
+from typing import Any, Protocol
 
 from .actions import (
     ALLOWED_COMMAND_PREFIXES,
@@ -32,6 +32,20 @@ def _now_iso() -> str:
     return datetime.now(tz=timezone.utc).isoformat()
 
 
+class SupportsSimControl(Protocol):
+    """Protocol defining the interface LLM controller requires of a sim.
+
+    This seam allows the LLM controller to be tested with mock sims
+    without importing SimulationController.
+    """
+
+    def status(self) -> dict[str, Any]: ...
+    def start_with_profile(self, profile: dict[str, Any]) -> tuple[bool, str]: ...
+    def stop(self) -> tuple[bool, str]: ...
+    def export_diagnostics(self, scene: str) -> str: ...
+    def export_run_report(self, scene: str) -> str: ...
+
+
 class LlmController:
     """Controller for LLM-based chat and action execution.
 
@@ -49,14 +63,14 @@ class LlmController:
     def __init__(
         self,
         *,
-        sim: Any,
+        sim: SupportsSimControl,
         profile_store: LlmProfileStore | None = None,
         client: OpenAICompatClient | None = None,
     ) -> None:
         """Initialize the LLM controller.
 
         Args:
-            sim: SimulationController instance for simulation management.
+            sim: Any object satisfying SupportsSimControl protocol.
             profile_store: Optional LlmProfileStore for API configurations.
             client: Optional OpenAICompatClient for API calls.
         """

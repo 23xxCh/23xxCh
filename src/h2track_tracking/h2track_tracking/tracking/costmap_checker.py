@@ -19,6 +19,20 @@ from .types import Pose2D, TrackingAction
 
 
 @dataclass(frozen=True)
+class SafetyAssessment:
+    """Immutable result of safety evaluation.
+
+    Attributes:
+        obstacle_detected: True if target is in obstacle or robot is stuck.
+        suggested_action: One of "continue", "replan", "wait".
+        alternative_target: Projected free-space target, or None.
+    """
+    obstacle_detected: bool = False
+    suggested_action: str = "continue"
+    alternative_target: Pose2D | None = None
+
+
+@dataclass(frozen=True)
 class CostmapConfig:
     """Configuration for costmap validation.
 
@@ -323,6 +337,54 @@ class CostmapChecker:
             heading=action.heading,
             step_size=0.0,
             use_particle_filter=False,
+        )
+
+    def evaluate_safety(
+        self,
+        target: Pose2D,
+        robot_pose: Pose2D,
+        *,
+        nav_status: str = "idle",
+        path_deviation: float = 0.0,
+        max_deviation: float = 2.0,
+    ) -> SafetyAssessment:
+        """Evaluate safety of a navigation target.
+
+        Encapsulates the domain logic for obstacle/stuck detection previously
+        spread across CostmapGuardNode.
+
+        Args:
+            target: Navigation target to evaluate.
+            robot_pose: Current robot position.
+            nav_status: Nav2 status string (idle/navigating/succeeded/failed).
+            path_deviation: Current path deviation from Nav2.
+            max_deviation: Threshold beyond which the robot is considered stuck.
+
+        Returns:
+            SafetyAssessment with obstacle/stuck verdict and suggested action.
+        """
+        is_valid = self.is_valid_target(target)
+        is_stuck = nav_status == "navigating" and path_deviation > max_deviation
+
+        alternative_target = None
+        suggested_action = "continue"
+
+        if is_stuck:
+            projected = self.project_to_free_space(
+                target, robot_pose, max_search_radius=3.0
+            )
+            if projected is None:
+                suggested_action = "wait"
+            else:
+                suggested_action = "replan"
+                alternative_target = projected
+        elif not is_valid:
+            suggested_action = "replan"
+
+        return SafetyAssessment(
+            obstacle_detected=(not is_valid) or is_stuck,
+            suggested_action=suggested_action,
+            alternative_target=alternative_target,
         )
 
     @property

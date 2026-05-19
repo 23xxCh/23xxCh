@@ -7,15 +7,9 @@ without ROS infrastructure.
 
 from __future__ import annotations
 
-import asyncio
 import ast
 import math
 from typing import TYPE_CHECKING
-
-import rclpy
-from nav2_msgs.action import NavigateToPose
-from rclpy.action import ActionClient
-from rclpy.node import Node
 
 if TYPE_CHECKING:
     from .gas_model import GasFieldModel, Pose2D
@@ -41,6 +35,101 @@ def map_pose_from_amcl(msg) -> tuple["Pose2D", float]:
     return Pose2D(position.x, position.y), yaw
 
 
+def _gradient_search_target(
+    current_pose: "Pose2D",
+    current_yaw: float,
+    history: list[tuple["Pose2D", float]],
+    step_size: float,
+    sweep_angle: float,
+    wind_x: float,
+    wind_y: float,
+) -> "Pose2D":
+    """Gradient-ascent target selection with upwind bias (pure function).
+
+    Formerly part of gas_model.next_search_target.  Extracted here so that
+    gas_model.py stays a pure physics module.
+    """
+    from .gas_model import Pose2D  # re-exported canonical type
+
+    if not history:
+        return Pose2D(
+            x=current_pose.x + step_size * math.cos(current_yaw),
+            y=current_pose.y + step_size * math.sin(current_yaw),
+        )
+
+    best_pose, best_conc = max(history, key=lambda h: h[1])
+    current_conc = history[-1][1]
+
+    wind_norm = math.hypot(wind_x, wind_y)
+    upwind_x, upwind_y = 0.0, 0.0
+    if wind_norm > 0.1:
+        upwind_x = -wind_x / wind_norm
+        upwind_y = -wind_y / wind_norm
+
+    if best_conc > current_conc + 0.1:
+        dx = best_pose.x - current_pose.x
+        dy = best_pose.y - current_pose.y
+        distance = math.hypot(dx, dy)
+        if distance > step_size:
+            heading = math.atan2(dy, dx)
+            if wind_norm > 0.1:
+                upwind_heading = math.atan2(upwind_y, upwind_x)
+                upwind_weight = min(0.5, current_conc / 20.0)
+                combined_x = (1 - upwind_weight) * math.cos(heading) + upwind_weight * math.cos(upwind_heading)
+                combined_y = (1 - upwind_weight) * math.sin(heading) + upwind_weight * math.sin(upwind_heading)
+                heading = math.atan2(combined_y, combined_x)
+            return Pose2D(
+                x=current_pose.x + step_size * math.cos(heading),
+                y=current_pose.y + step_size * math.sin(heading),
+            )
+        else:
+            explore_heading = current_yaw + sweep_angle
+            if wind_norm > 0.1:
+                upwind_heading = math.atan2(upwind_y, upwind_x)
+                explore_heading = 0.5 * explore_heading + 0.5 * upwind_heading
+            return Pose2D(
+                x=current_pose.x + step_size * math.cos(explore_heading),
+                y=current_pose.y + step_size * math.sin(explore_heading),
+            )
+
+    if len(history) >= 2:
+        prev_pose, prev_conc = history[-2]
+        curr_pose, curr_conc = history[-1]
+        if curr_conc > prev_conc:
+            dx = curr_pose.x - prev_pose.x
+            dy = curr_pose.y - prev_pose.y
+            if abs(dx) > 1e-6 or abs(dy) > 1e-6:
+                heading = math.atan2(dy, dx)
+                if wind_norm > 0.1:
+                    upwind_heading = math.atan2(upwind_y, upwind_x)
+                    upwind_weight = min(0.4, current_conc / 30.0)
+                    combined_x = (1 - upwind_weight) * math.cos(heading) + upwind_weight * math.cos(upwind_heading)
+                    combined_y = (1 - upwind_weight) * math.sin(heading) + upwind_weight * math.sin(upwind_heading)
+                    heading = math.atan2(combined_y, combined_x)
+                return Pose2D(
+                    x=current_pose.x + step_size * math.cos(heading),
+                    y=current_pose.y + step_size * math.sin(heading),
+                )
+        else:
+            heading = current_yaw + sweep_angle
+            if wind_norm > 0.1:
+                upwind_heading = math.atan2(upwind_y, upwind_x)
+                heading = 0.3 * heading + 0.7 * upwind_heading
+            return Pose2D(
+                x=current_pose.x + step_size * math.cos(heading),
+                y=current_pose.y + step_size * math.sin(heading),
+            )
+
+    if wind_norm > 0.1:
+        heading = math.atan2(upwind_y, upwind_x)
+    else:
+        heading = current_yaw + sweep_angle
+    return Pose2D(
+        x=current_pose.x + step_size * math.cos(heading),
+        y=current_pose.y + step_size * math.sin(heading),
+    )
+
+
 def select_tracking_target(
     gas_model: "GasFieldModel",
     current_pose: "Pose2D",
@@ -57,7 +146,7 @@ def select_tracking_target(
     to guide the robot back toward the source.
 
     Args:
-        gas_model: Gas field model for gradient calculation.
+        gas_model: Gas field model for wind parameters.
         current_pose: Current robot position.
         current_yaw: Current robot heading in radians.
         history: Recent (position, concentration) samples.
@@ -76,12 +165,14 @@ def select_tracking_target(
         if strongest_concentration >= source_threshold and strongest_index < len(history) - 1:
             return strongest_pose
 
-    return gas_model.next_search_target(
+    return _gradient_search_target(
         current_pose=current_pose,
         current_yaw=current_yaw,
         history=history,
         step_size=step_size,
         sweep_angle=sweep_angle,
+        wind_x=gas_model.params.wind_x,
+        wind_y=gas_model.params.wind_y,
     )
 
 
@@ -177,82 +268,3 @@ def determine_nav_action_on_result(
 
     return None
 
-
-class NavigationExecutor:
-    """ROS 2 navigation executor using Nav2 Action Server.
-
-    This class provides an async interface to Nav2's NavigateToPose action,
-    allowing the robot to navigate to specified poses in the map frame.
-    """
-
-    def __init__(self, node: Node) -> None:
-        """Initialize the navigation executor.
-
-        Args:
-            node: ROS 2 node instance for creating clients and logging.
-        """
-        self._node = node
-
-        # Nav2 Action Client
-        self._nav_to_pose_client = ActionClient(
-            node, NavigateToPose, 'navigate_to_pose'
-        )
-
-    async def navigate_to_pose(
-        self,
-        target_x: float,
-        target_y: float,
-        target_yaw: float = 0.0,
-        timeout: float = 30.0
-    ) -> bool:
-        """Navigate to a target pose using Nav2.
-
-        Args:
-            target_x: Target x coordinate.
-            target_y: Target y coordinate.
-            target_yaw: Target yaw angle (radians).
-            timeout: Timeout in seconds.
-
-        Returns:
-            True if navigation succeeded.
-        """
-        if not self._nav_to_pose_client.wait_for_server(timeout_sec=2.0):
-            self._node.get_logger().warning("Nav2 server not available")
-            return False
-
-        goal_msg = NavigateToPose.Goal()
-        goal_msg.pose.header.frame_id = "map"
-        goal_msg.pose.header.stamp = self._node.get_clock().now().to_msg()
-        goal_msg.pose.pose.position.x = target_x
-        goal_msg.pose.pose.position.y = target_y
-        goal_msg.pose.pose.position.z = 0.0
-
-        # Convert yaw to quaternion
-        from tf_transformations import quaternion_from_euler
-        q = quaternion_from_euler(0, 0, target_yaw)
-        goal_msg.pose.pose.orientation.x = q[0]
-        goal_msg.pose.pose.orientation.y = q[1]
-        goal_msg.pose.pose.orientation.z = q[2]
-        goal_msg.pose.pose.orientation.w = q[3]
-
-        self._node.get_logger().info(
-            f"Navigating to ({target_x:.2f}, {target_y:.2f})"
-        )
-
-        send_goal_future = self._nav_to_pose_client.send_goal_async(goal_msg)
-
-        try:
-            goal_handle = await asyncio.wait_for(
-                send_goal_future, timeout=timeout
-            )
-            if not goal_handle.accepted:
-                self._node.get_logger().warning("Navigation goal rejected")
-                return False
-
-            result_future = goal_handle.get_result_async()
-            result = await asyncio.wait_for(result_future, timeout=timeout)
-
-            return result.status == 4  # SUCCEEDED
-        except asyncio.TimeoutError:
-            self._node.get_logger().error("Navigation timeout")
-            return False

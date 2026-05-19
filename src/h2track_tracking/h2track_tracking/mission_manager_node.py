@@ -1,4 +1,8 @@
-"""ROS node that manages patrol and hydrogen tracking goals."""
+"""DEPRECATED: Use bt_node_runner.py instead.
+
+This legacy node is kept for fallback.  The BT-based bt_node_runner uses
+py_trees for orchestration while keeping identical ROS I/O functionality.
+"""
 
 from __future__ import annotations
 
@@ -20,6 +24,7 @@ from .navigation_executor import (
     coerce_patrol_points,
     determine_nav_action_on_result,
     map_pose_from_amcl,
+    select_tracking_target,
     should_skip_patrol_goal,
 )
 from .tracking import (
@@ -30,26 +35,60 @@ from .tracking import (
     TrackingAction,
     TrackingFusion,
     TrackingState,
-    ParticleFilterIntegrator,
     WindEstimator,
     WindEstimatorConfig,
 )
+
+_DEFAULT_PATROL = "[3.0, 3.0, -3.0, 3.0, -3.0, -3.0, 3.0, -3.0]"
+
+
+def _build_surge_cast_config(node: Node, use_pf: bool, pf_conf: float) -> SurgeCastConfig:
+    """Factory: build SurgeCastConfig from ROS parameters (single source of defaults)."""
+    return SurgeCastConfig(
+        plume_found_threshold=float(node.get_parameter("enter_threshold").value),
+        plume_lost_threshold=float(node.get_parameter("exit_threshold").value),
+        source_threshold=float(node.get_parameter("source_threshold").value),
+        surge_step=float(node.get_parameter("surge_step").value),
+        cast_step=float(node.get_parameter("cast_step").value),
+        cast_distance_limit=float(node.get_parameter("cast_distance_limit").value),
+        wind_x=float(node.get_parameter("wind_x").value),
+        wind_y=float(node.get_parameter("wind_y").value),
+        use_particle_filter=use_pf,
+        min_pf_confidence=pf_conf,
+        source_radius=float(node.get_parameter("source_radius").value),
+        source_hold_steps=int(node.get_parameter("source_hold_steps").value),
+    )
+
+
+def _build_fusion_config(node: Node, pf_conf: float) -> FusionConfig:
+    """Factory: build FusionConfig from ROS parameters."""
+    return FusionConfig(
+        blending_mode=str(node.get_parameter("fusion_mode").value),
+        pf_weight_base=float(node.get_parameter("fusion_pf_weight").value),
+        surge_weight=float(node.get_parameter("fusion_surge_weight").value),
+        pf_confidence_threshold=pf_conf,
+    )
 
 
 class MissionManagerNode(Node):
     def __init__(self) -> None:
         super().__init__("mission_manager_node")
+
+        # -- canonical defaults from dataclasses (single source of truth) --
+        _mc = MissionConfig(patrol_points=[])
+        _sc = SurgeCastConfig()
+
         self.declare_parameter("initial_pose_x", 0.0)
         self.declare_parameter("initial_pose_y", 0.0)
         self.declare_parameter("initial_pose_yaw", 0.0)
-        self.declare_parameter("patrol_points", "[3.0, 3.0, -3.0, 3.0, -3.0, -3.0, 3.0, -3.0]")
-        self.declare_parameter("enter_threshold", 4.0)
-        self.declare_parameter("exit_threshold", 1.5)
-        self.declare_parameter("source_threshold", 8.0)
-        self.declare_parameter("confirm_samples", 3)
-        self.declare_parameter("track_exit_samples", 3)
-        self.declare_parameter("source_radius", 0.6)
-        self.declare_parameter("source_hold_steps", 3)
+        self.declare_parameter("patrol_points", _DEFAULT_PATROL)
+        self.declare_parameter("enter_threshold", _mc.enter_threshold)
+        self.declare_parameter("exit_threshold", _mc.exit_threshold)
+        self.declare_parameter("source_threshold", _mc.source_threshold)
+        self.declare_parameter("confirm_samples", _mc.confirm_samples)
+        self.declare_parameter("track_exit_samples", _mc.track_exit_samples or _mc.confirm_samples)
+        self.declare_parameter("source_radius", _mc.source_radius)
+        self.declare_parameter("source_hold_steps", _mc.source_hold_steps)
         self.declare_parameter("track_step", 0.7)
         self.declare_parameter("sweep_angle_deg", 30.0)
         self.declare_parameter("source_x", -3.5)
@@ -60,15 +99,15 @@ class MissionManagerNode(Node):
         self.declare_parameter("use_slam", False)
         self.declare_parameter("publish_initial_pose", True)
         self.declare_parameter("use_particle_filter_estimate", True)
-        self.declare_parameter("particle_filter_min_confidence", 0.3)
+        self.declare_parameter("particle_filter_min_confidence", _sc.min_pf_confidence)
 
         # Surge-Cast parameters
         self.declare_parameter("use_surge_cast", True)
-        self.declare_parameter("surge_step", 0.5)
-        self.declare_parameter("cast_step", 0.3)
-        self.declare_parameter("cast_distance_limit", 3.0)
-        self.declare_parameter("wind_x", 0.4)
-        self.declare_parameter("wind_y", 0.0)
+        self.declare_parameter("surge_step", _sc.surge_step)
+        self.declare_parameter("cast_step", _sc.cast_step)
+        self.declare_parameter("cast_distance_limit", _sc.cast_distance_limit)
+        self.declare_parameter("wind_x", _sc.wind_x)
+        self.declare_parameter("wind_y", _sc.wind_y)
 
         # Wind estimation parameters
         self.declare_parameter("estimate_wind", True)
@@ -81,24 +120,25 @@ class MissionManagerNode(Node):
         self.declare_parameter("fusion_surge_weight", 0.7)
 
         # Validate numeric parameters
-        enter_threshold = self._get_positive_float("enter_threshold", 4.0)
-        exit_threshold = self._get_positive_float("exit_threshold", 1.5)
-        source_threshold = self._get_positive_float("source_threshold", 8.0)
-        source_radius = self._get_positive_float("source_radius", 0.6)
+        enter_threshold = self._get_positive_float("enter_threshold", _mc.enter_threshold)
+        exit_threshold = self._get_positive_float("exit_threshold", _mc.exit_threshold)
+        source_threshold = self._get_positive_float("source_threshold", _mc.source_threshold)
+        source_radius = self._get_positive_float("source_radius", _mc.source_radius)
         track_step = self._get_positive_float("track_step", 0.7)
-        surge_step = self._get_positive_float("surge_step", 0.5)
-        cast_step = self._get_positive_float("cast_step", 0.3)
-        cast_distance_limit = self._get_positive_float("cast_distance_limit", 3.0)
+        surge_step = self._get_positive_float("surge_step", _sc.surge_step)
+        cast_step = self._get_positive_float("cast_step", _sc.cast_step)
+        cast_distance_limit = self._get_positive_float("cast_distance_limit", _sc.cast_distance_limit)
         patrol_goal_timeout_sec = self._get_positive_float("patrol_goal_timeout_sec", 45.0)
         goal_reject_retry_sec = self._get_positive_float("goal_reject_retry_sec", 2.0)
 
         # Validate integer parameters
-        confirm_samples = self._get_positive_int("confirm_samples", 3)
-        track_exit_samples = self._get_positive_int("track_exit_samples", 3)
-        source_hold_steps = self._get_positive_int("source_hold_steps", 3)
+        _track_exit = _mc.track_exit_samples or _mc.confirm_samples
+        confirm_samples = self._get_positive_int("confirm_samples", _mc.confirm_samples)
+        track_exit_samples = self._get_positive_int("track_exit_samples", _track_exit)
+        source_hold_steps = self._get_positive_int("source_hold_steps", _mc.source_hold_steps)
 
         # Validate confidence parameter
-        pf_confidence = self._get_clamped_float("particle_filter_min_confidence", 0.3, 0.0, 1.0)
+        pf_confidence = self._get_clamped_float("particle_filter_min_confidence", _sc.min_pf_confidence, 0.0, 1.0)
 
         patrol_points = coerce_patrol_points(self.get_parameter("patrol_points").value)
         config = MissionConfig(
@@ -162,24 +202,12 @@ class MissionManagerNode(Node):
         self._particle_filter_estimate: Pose2D | None = None
         self._particle_filter_confidence: float = 0.0
 
-        # Surge-Cast tracker - uses enter/exit thresholds from mission config
+        # Surge-Cast tracker
         self._use_surge_cast = bool(self.get_parameter("use_surge_cast").value)
-        self._surge_cast_config = SurgeCastConfig(
-            plume_found_threshold=float(self.get_parameter("enter_threshold").value),
-            plume_lost_threshold=float(self.get_parameter("exit_threshold").value),
-            source_threshold=float(self.get_parameter("source_threshold").value),
-            surge_step=float(self.get_parameter("surge_step").value),
-            cast_step=float(self.get_parameter("cast_step").value),
-            cast_distance_limit=float(self.get_parameter("cast_distance_limit").value),
-            wind_x=float(self.get_parameter("wind_x").value),
-            wind_y=float(self.get_parameter("wind_y").value),
-            use_particle_filter=self._use_particle_filter_estimate,
-            min_pf_confidence=self._particle_filter_min_confidence,
-            source_radius=float(self.get_parameter("source_radius").value),
-            source_hold_steps=int(self.get_parameter("source_hold_steps").value),
+        self._surge_cast_config = _build_surge_cast_config(
+            self, self._use_particle_filter_estimate, self._particle_filter_min_confidence
         )
         self._surge_cast_tracker = SurgeCastTracker(self._surge_cast_config)
-        self._pf_integrator = ParticleFilterIntegrator()
 
         # Costmap validation for tracking targets
         self._costmap_checker = CostmapChecker()
@@ -193,17 +221,11 @@ class MissionManagerNode(Node):
         ))
         self._estimated_wind: tuple[float, float] | None = None
 
-        # Algorithm fusion: combines Surge-Cast and Particle Filter estimates
+        # Algorithm fusion
         self._use_fusion = bool(self.get_parameter("use_fusion").value)
-        fusion_mode = str(self.get_parameter("fusion_mode").value)
-        pf_weight = float(self.get_parameter("fusion_pf_weight").value)
-        surge_weight = float(self.get_parameter("fusion_surge_weight").value)
-        self._tracking_fusion = TrackingFusion(FusionConfig(
-            blending_mode=fusion_mode,
-            pf_weight_base=pf_weight,
-            surge_weight=surge_weight,
-            pf_confidence_threshold=self._particle_filter_min_confidence,
-        ))
+        self._tracking_fusion = TrackingFusion(
+            _build_fusion_config(self, self._particle_filter_min_confidence)
+        )
 
         self.create_subscription(PoseWithCovarianceStamped, "/amcl_pose", self._amcl_pose_callback, 10)
         self.create_subscription(PoseWithCovarianceStamped, "/estimated_source", self._particle_filter_callback, 10)
@@ -281,13 +303,6 @@ class MissionManagerNode(Node):
             self._particle_filter_confidence = min(1.0, 1.0 / (np.sqrt(cov_x * cov_y) + 0.1))
         else:
             self._particle_filter_confidence = 0.0
-
-        # Update particle filter integrator
-        self._pf_integrator.update(
-            position=(msg.pose.pose.position.x, msg.pose.pose.position.y),
-            confidence=self._particle_filter_confidence,
-            covariance=(cov_x, cov_y, msg.pose.covariance[1], msg.pose.covariance[6]),
-        )
 
     def _costmap_callback(self, msg: Costmap) -> None:
         """Update costmap for tracking target validation."""
@@ -412,12 +427,14 @@ class MissionManagerNode(Node):
                 target = Pose2D(target_x, target_y)
             else:
                 # Fall back to gradient-based tracking
-                target = self._gas_model.next_search_target(
+                target = select_tracking_target(
+                    gas_model=self._gas_model,
                     current_pose=self._current_pose,
                     current_yaw=self._current_yaw,
                     history=self._history,
                     step_size=float(self.get_parameter("track_step").value),
                     sweep_angle=math.radians(float(self.get_parameter("sweep_angle_deg").value)),
+                    source_threshold=float(self.get_parameter("source_threshold").value),
                 )
 
             # Validate target using costmap

@@ -18,12 +18,12 @@ class MissionMode(Enum):
 @dataclass(frozen=True)
 class MissionConfig:
     patrol_points: list[tuple[float, float]]
-    enter_threshold: float
-    exit_threshold: float
-    source_threshold: float
-    confirm_samples: int
-    source_radius: float
-    source_hold_steps: int
+    enter_threshold: float = 4.0          # Gas concentration to trigger SEEK_CONFIRM
+    exit_threshold: float = 1.5           # Below this, return to PATROL
+    source_threshold: float = 8.0         # Concentration indicating source proximity
+    confirm_samples: int = 3              # Consecutive readings to confirm a transition
+    source_radius: float = 0.6            # Meters from source for SOURCE_FOUND
+    source_hold_steps: int = 3            # Consecutive source detections needed
     track_exit_samples: int | None = None
     actual_source: tuple[float, float] | None = None
 

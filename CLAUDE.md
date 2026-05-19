@@ -20,7 +20,8 @@ pytest src/h2track_tracking/test/ -v
 # Run single test file
 pytest src/h2track_tracking/test/test_surge_cast.py -v
 pytest src/h2track_tracking/test/test_plume_detector.py -v
-pytest src/h2track_tracking/test/test_pf_integrator.py -v
+pytest src/h2track_tracking/test/test_gas_model.py -v
+pytest src/h2track_tracking/test/test_navigation_executor.py -v
 
 # Run with coverage
 pytest src/h2track_tracking/test/ --cov=src/h2track_tracking/h2track_tracking --cov-report=term-missing
@@ -28,12 +29,13 @@ pytest src/h2track_tracking/test/ --cov=src/h2track_tracking/h2track_tracking --
 
 ## Package Structure
 
-Two ROS 2 packages:
+Three ROS 2 packages:
 
 | Package | Build Type | Purpose |
 |---------|------------|---------|
 | `h2track_sim` | ament_cmake | Launch files, scene configs, Gazebo worlds, URDF |
 | `h2track_tracking` | ament_python | Tracking logic, gas model, mission state machine |
+| `h2track_interfaces` | ament_cmake | Custom message types (RobotState, SourceEstimate, RoleAssignment) |
 
 ## Core Architecture
 
@@ -54,7 +56,8 @@ PATROL → SEEK_CONFIRM → SEEK_TRACK → SOURCE_FOUND
 
 | Node | File | Purpose |
 |------|------|---------|
-| `mission_manager_node` | `mission_manager_node.py` | State machine, Nav2 goal management |
+| `mission_manager_node` | `mission_manager_node.py` | (DEPRECATED) Legacy state machine — use `bt_node_runner` |
+| `bt_node_runner` | `bt_node_runner.py` | **Primary** BT-based orchestrator — replaces mission_manager_node |
 | `gas_field_node` | `gas_field_node.py` | Simplified plume simulation (use_gaden:=false) |
 | `gaden_adapter_node` | `gaden_adapter_node.py` | Converts GADEN sensor readings to `/gas_concentration` |
 | `gaden_sensor_gate_node` | `gaden_sensor_gate.py` | Waits for TF before launching simulated_gas_sensor |
@@ -121,7 +124,6 @@ Gas source localization using `tracking/` module with wind-aware navigation:
   - SURGE: Move upwind when plume detected
   - CAST: Lateral search when plume lost
 - **PlumeDetector**: Detects plume boundaries using concentration thresholds
-- **PfIntegrator**: Integrates particle filter estimates with surge-cast navigation
 
 State transitions:
 ```
@@ -143,6 +145,43 @@ Estimates wind direction from gas concentration gradients using `tracking/wind_e
 Key parameters:
 - `estimate_wind`: Enable wind estimation (default: true)
 - `wind_estimation_min_samples`: Minimum samples before estimating (default: 10)
+
+### Behavior Tree Pipeline
+
+The **primary** orchestration approach uses py_trees (`bt/` module).  The legacy `mission_manager_node` is deprecated.
+
+**Tree structure** (`tree_factory.py`):
+```
+MissionRoot (Selector)
+├── SourceFound
+├── SeekTrack (Sequence)
+│   ├── StateMachine  →  CostmapGuard  →  Tracker  →  Nav2Client
+├── SeekConfirm (Sequence)
+│   └── StateMachine
+└── Patrol (Sequence)
+    └── StateMachine  →  CostmapGuard  →  Nav2Client
+```
+
+**BT nodes** (`bt/nodes/`):
+| Node | Purpose |
+|------|---------|
+| `SensorReaderNode` | Writes sensor data to blackboard (10Hz) |
+| `StateMachineNode` | Wraps MissionStateMachine, reads/writes `mission.*` |
+| `TrackerNode` | Runs SurgeCastTracker + Fusion + CostmapChecker |
+| `CostmapGuardNode` | Monitors costmap, writes `safety.obstacle_detected` |
+| `Nav2ClientNode` | Sends NavigateToPose goals via ActionClient |
+| `RecoveryNode` | Detects stuck conditions, triggers replan |
+
+**Blackboard namespaces** (`bt/blackboard.py`):
+- `sensor.*` — concentration, robot_pose, robot_yaw, wind, pf_estimate
+- `nav2.*` — status, target_pose, path_deviation, recovery_needed
+- `tracker.*` — target, state, heading, step_size
+- `mission.*` — mode, source_estimate, patrol_target
+- `safety.*` — obstacle_detected, suggested_action, alternative_target
+
+All domain objects (SurgeCastTracker, TrackingFusion, CostmapChecker, MissionStateMachine) are injected via constructor (DI), never instantiated inside nodes.
+
+**Launch:** `ros2 run h2track_tracking bt_node_runner` (accepts same ROS params as legacy node).
 
 ### Algorithm Fusion
 
@@ -249,6 +288,27 @@ gaden:
 
 Available scenes: `baseline`, `warehouse`
 
+## Console Scripts (Entry Points)
+
+Available executables from `h2track_tracking`:
+
+| Command | Module | Purpose |
+|---------|--------|---------|
+| `mission_manager_node` | `mission_manager_node.py` | (DEPRECATED) Legacy state machine |
+| `bt_node_runner` | `bt_node_runner.py` | **Primary** BT-based orchestrator |
+| `particle_filter_node` | `particle_filter/particle_filter_node.py` | Source localization |
+| `gas_field_node` | `gas_field_node.py` | Simplified gas simulation |
+| `gaden_adapter_node` | `gaden_adapter_node.py` | GADEN integration |
+| `gaden_sensor_gate_node` | `gaden_sensor_gate_node.py` | TF-gated sensor launch |
+| `nav2_startup_gate_node` | `nav2_startup_gate_node.py` | Nav2 lifecycle monitor |
+| `gas_sensor_node` | `gas_sensor/gas_sensor_node.py` | Hardware sensor interface |
+| `demo_prep` | `demo_prep.py` | Clear stale processes |
+| `demo_selfcheck` | `demo_selfcheck.py` | Stack verification |
+| `demo_regression` | `demo_regression.py` | Multi-round stability testing |
+| `demo_web_server` | `demo_web_server.py` | FastAPI web console |
+| `slam_save_map` | `slam_save_map.py` | Save SLAM map |
+| `activate_localization` | `activate_localization.py` | AMCL activation |
+
 ## Launch Files
 
 | Launch File | Purpose |
@@ -297,6 +357,8 @@ ros2 run h2track_tracking demo_selfcheck --timeout 5.0
 - **GADEN workspace**: `/home/user/gaden_ws` must be sourced for `use_gaden:=true`
 - GADEN requires preprocessed environment and scenario files
 - `olfaction_msgs` for `GasSensor` message type
+- **py_trees**: `sudo apt install ros-humble-py-trees ros-humble-py-trees-ros` (required for BT pipeline)
+- **Nav2**: `nav2_simple_commander` for legacy node; BT uses `nav2_msgs.action.NavigateToPose` directly
 
 ## Security Requirements
 
@@ -311,6 +373,11 @@ ros2 run h2track_tracking demo_selfcheck --timeout 5.0
 - Scene configs use YAML; launch files load via `scene_loader.py`
 - State machine in `MissionStateMachine` class uses dataclass config
 - `MissionConfig` and `GasFieldParams` are frozen dataclasses for immutability
+- **Canonical Pose2D**: `tracking/types.py` defines the single source-of-truth `Pose2D`; `gas_model.py` re-exports it
+- **Config defaults**: `MissionConfig` and `SurgeCastConfig` dataclass defaults are the single source of truth for ROS parameter defaults
+- **Factory functions**: `navigation_executor.py` houses `_gradient_search_target` (pure gradient nav) and `select_tracking_target` (high-level target selector)
+- **Recovery**: Detection functions use public `controller.metrics_snapshot()` — never `controller._metrics`
+- **LLM**: `SupportsSimControl` Protocol in `llm/controller.py` defines the sim interface contract
 
 ### Module Organization
 
@@ -321,11 +388,16 @@ h2track_tracking/
 │   ├── filter.py         # Core filter (supports vectorized ops)
 │   ├── motion_model.py   # Random walk motion model
 │   └── observation_model.py  # Gaussian plume observation model
+├── bt/                   # Behavior Tree pipeline (primary orchestrator)
+│   ├── blackboard.py     # 5-namespace shared state
+│   ├── tree_factory.py   # BT assembly with DI
+│   └── nodes/            # py_trees Behaviour implementations
 ├── tracking/             # Gas tracking algorithms
-│   ├── types.py          # Pose2D, TrackingState, TrackingAction
+│   ├── types.py          # Canonical Pose2D, TrackingState, SurgeCastConfig
 │   ├── surge_cast.py     # Surge-Cast source localization
 │   ├── plume_detector.py # Plume boundary detection
-│   └── pf_integrator.py  # Particle filter integration
+│   ├── wind_estimator.py # Wind direction from concentration gradients
+│   └── fusion.py         # Algorithm fusion (surge-cast + PF)
 ├── heatmap/              # Concentration visualization
 │   ├── grid.py           # 3D concentration grid
 │   └── history_store.py  # Time series snapshots
@@ -338,13 +410,29 @@ h2track_tracking/
 │   ├── controller.py     # Chat and action execution
 │   ├── actions.py        # LLM-triggered actions
 │   └── profile_store.py  # Profile management
-└── web/                  # FastAPI web console
-    ├── app.py            # Application factory
-    ├── routes.py         # REST and WebSocket endpoints
-    ├── websocket.py      # Connection manager, heatmap streaming
-    ├── auth.py           # API key authentication
-    └── simulation_controller.py  # Simulation lifecycle
+├── web/                  # FastAPI web console
+│   ├── app.py            # Application factory
+│   ├── routes.py         # REST and WebSocket endpoints
+│   ├── websocket.py      # Connection manager, heatmap streaming
+│   ├── auth.py           # API key authentication
+│   └── simulation_controller.py  # Simulation lifecycle
+├── multi_robot/          # Multi-robot coordination
+│   └── coordinator_node.py  # Role assignment, information fusion
+├── evaluation/           # Performance metrics
+│   └── metrics.py        # TrackingMetrics, BenchmarkResult dataclasses
+├── benchmark/            # Algorithm benchmarking
+│   └── performance_benchmark.py  # Timing benchmarks for algorithms
+└── gas_sensor/           # Hardware sensor integration
+    └── gas_sensor_node.py  # MQ-series sensors, simulation mode
 ```
+
+### Custom Messages (h2track_interfaces)
+
+| Message | Fields | Purpose |
+|---------|--------|---------|
+| `RobotState.msg` | robot_id, x, y, yaw, mode, concentration, timestamp | Robot state for multi-robot coordination |
+| `SourceEstimate.msg` | robot_id, x, y, confidence, covariance[4], timestamp | Source estimate with uncertainty |
+| `RoleAssignment.msg` | robot_id, role, target_x, target_y, timestamp | Role assignment for multi-robot |
 
 ## Web Console
 
@@ -390,3 +478,17 @@ Run multi-round stability checks:
 ```bash
 ros2 run h2track_tracking demo_regression --scene warehouse --use-gaden true --rounds 3 --run-timeout-sec 110
 ```
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Uses default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` at the repo root. See `docs/agents/domain.md`.

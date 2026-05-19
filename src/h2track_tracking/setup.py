@@ -31,6 +31,8 @@ setup(
         f"{package_name}.particle_filter",
         f"{package_name}.tracking",
         f"{package_name}.gas_sensor",
+        f"{package_name}.bt",
+        f"{package_name}.bt.nodes",
     ],
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
@@ -58,6 +60,7 @@ setup(
             "slam_save_map = h2track_tracking.slam_save_map:main",
             "demo_web_server = h2track_tracking.demo_web_server:main",
             "activate_localization = h2track_tracking.activate_localization:main",
+            "bt_node_runner = h2track_tracking.bt_node_runner:main",
         ],
     },
 )

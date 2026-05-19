@@ -77,10 +77,7 @@ def create_default_policies(
         if not state.get("simulation_running", False):
             return False
         # Check metrics store for navigation staleness
-        metrics = getattr(controller, "_metrics", None)
-        if metrics is None:
-            return False
-        snapshot = metrics.snapshot(limit=10)
+        snapshot = controller.metrics_snapshot(limit=10)
         topic_health = snapshot.get("topic_health", {})
         nav_status = controller.status()
         if nav_status.get("state") != "running":
@@ -125,10 +122,7 @@ def create_default_policies(
         if profile.get("use_gaden", "true") != "true":
             return False
 
-        metrics = getattr(controller, "_metrics", None)
-        if metrics is None:
-            return False
-        snapshot = metrics.snapshot(limit=10)
+        snapshot = controller.metrics_snapshot(limit=10)
         topic_health = snapshot.get("topic_health", {})
         gas_stale = topic_health.get("/gas_concentration", {}).get("stale_sec", 0)
         raw_stale = topic_health.get("/gaden/sensor_reading", {}).get("stale_sec", 0)
@@ -147,10 +141,7 @@ def create_default_policies(
         if nav_status.get("state") != "running":
             return False
 
-        metrics = getattr(controller, "_metrics", None)
-        if metrics is None:
-            return False
-        snapshot = metrics.snapshot(limit=10)
+        snapshot = controller.metrics_snapshot(limit=10)
         topic_health = snapshot.get("topic_health", {})
         odom_stale = topic_health.get("/odom", {}).get("stale_sec", 0)
 
