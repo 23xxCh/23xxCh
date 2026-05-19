@@ -222,10 +222,10 @@ class BTNodeRunner(Node):
         bb = self._bb
         mode = bb.mission.mode
 
-        if mode == MissionMode.SRC_TRACK and bb.tracker.target is not None:
+        if mode == MissionMode.SEEK_TRACK and bb.tracker.target is not None:
             bb.nav2.target_pose = bb.tracker.target
             bb.nav2.target_yaw = bb.tracker.heading
-        elif mode in (MissionMode.PATROL, MissionMode.SRC_CONFIRM):
+        elif mode in (MissionMode.PATROL, MissionMode.SEEK_CONFIRM):
             patrol = bb.mission.patrol_target
             if patrol is not None:
                 bb.nav2.target_pose = patrol

@@ -60,11 +60,6 @@ class TreeFactory:
           └── Patrol         → CheckMissionMode + CostmapGuard + Nav2Client
         """
 
-        guard_node = CostmapGuardNode(
-            name="CostmapGuard",
-            bb=self._bb,
-            costmap_checker=self._costmap_checker,
-        )
         tracker_node = TrackerNode(
             name="Tracker",
             bb=self._bb,
@@ -72,26 +67,19 @@ class TreeFactory:
             fusion=self._fusion,
             costmap_checker=self._costmap_checker,
         )
-        nav_node = Nav2ClientNode(
-            name="NavToTarget",
-            bb=self._bb,
-            node=self._node,
-            action_server_name=self._action_server,
-            timeout=30.0,
-        )
 
         root = py_trees.composites.Selector(
             name="MissionRoot",
             memory=False,
             children=[
                 self._make_source_found_branch(),
-                self._make_seek_track_branch(guard_node, tracker_node, nav_node),
+                self._make_seek_track_branch(tracker_node),
                 self._make_seek_confirm_branch(),
-                self._make_patrol_branch(guard_node, nav_node),
+                self._make_patrol_branch(),
             ],
         )
 
-        tree = py_trees.BehaviourTree(root)
+        tree = py_trees.trees.BehaviourTree(root)
         tree.setup(timeout=15)
         return tree
 
@@ -99,18 +87,19 @@ class TreeFactory:
     # Branch builders
     # ------------------------------------------------------------------
 
-    def _make_patrol_branch(
-        self,
-        guard_node: CostmapGuardNode,
-        nav_node: Nav2ClientNode,
-    ) -> py_trees.composites.Sequence:
+    def _make_patrol_branch(self) -> py_trees.composites.Sequence:
         return py_trees.composites.Sequence(
             name="Patrol",
             memory=True,
             children=[
                 CheckMissionMode("CheckPatrol", self._bb, MissionMode.PATROL),
-                guard_node,
-                nav_node,
+                CostmapGuardNode(
+                    "PatrolGuard", self._bb, costmap_checker=self._costmap_checker
+                ),
+                Nav2ClientNode(
+                    "PatrolNav", self._bb, self._node,
+                    action_server_name=self._action_server, timeout=30.0,
+                ),
             ],
         )
 
@@ -119,24 +108,27 @@ class TreeFactory:
             name="SeekConfirm",
             memory=True,
             children=[
-                CheckMissionMode("CheckSeekConfirm", self._bb, MissionMode.SRC_CONFIRM),
+                CheckMissionMode("CheckSeekConfirm", self._bb, MissionMode.SEEK_CONFIRM),
             ],
         )
 
     def _make_seek_track_branch(
         self,
-        guard_node: CostmapGuardNode,
         tracker_node: TrackerNode,
-        nav_node: Nav2ClientNode,
     ) -> py_trees.composites.Sequence:
         return py_trees.composites.Sequence(
             name="SeekTrack",
             memory=True,
             children=[
-                CheckMissionMode("CheckSeekTrack", self._bb, MissionMode.SRC_TRACK),
-                guard_node,
+                CheckMissionMode("CheckSeekTrack", self._bb, MissionMode.SEEK_TRACK),
+                CostmapGuardNode(
+                    "TrackGuard", self._bb, costmap_checker=self._costmap_checker
+                ),
                 tracker_node,
-                nav_node,
+                Nav2ClientNode(
+                    "TrackNav", self._bb, self._node,
+                    action_server_name=self._action_server, timeout=30.0,
+                ),
             ],
         )
 
