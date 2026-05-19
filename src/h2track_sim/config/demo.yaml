@@ -7,3 +7,4 @@ scene_config: scenes/warehouse/scene.yaml
 mission_manager_delay: 15.0
 gaden_sensor_gate_timeout: 60.0
 gaden_sensor_gate_poll_period: 0.5
+use_bt: false

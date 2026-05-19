@@ -91,6 +91,7 @@ def _scene_actions(context, *, pkg_share: str, bringup_path: str, default_use_ga
                 'headless': LaunchConfiguration('headless'),
                 'use_gaden': LaunchConfiguration('use_gaden'),
                 'use_slam': LaunchConfiguration('use_slam'),
+                'use_bt': LaunchConfiguration('use_bt'),
                 'nav2_map_file': nav2_map_file,
                 'nav2_params_file': LaunchConfiguration('nav2_params_file'),
             }.items(),
@@ -113,6 +114,7 @@ def generate_launch_description():
     declare_use_gaden = DeclareLaunchArgument('use_gaden', default_value='')
     declare_nav2_map_file = DeclareLaunchArgument('nav2_map_file', default_value='')
     declare_nav2_params_file = DeclareLaunchArgument('nav2_params_file', default_value='')
+    declare_use_bt = DeclareLaunchArgument('use_bt', default_value=str(demo.get('use_bt', False)).lower())
 
     set_demo_values = [
         SetLaunchConfiguration('mission_manager_delay', str(demo.get('mission_manager_delay', 10.0))),
@@ -138,6 +140,7 @@ def generate_launch_description():
         declare_use_gaden,
         declare_nav2_map_file,
         declare_nav2_params_file,
+        declare_use_bt,
         *set_demo_values,
         configure_scene,
     ])
