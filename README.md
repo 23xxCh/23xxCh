@@ -1,306 +1,297 @@
-# h2track-xian
+# H2Track — 氢气泄漏源自主追踪仿真 | Hydrogen Gas Source Tracking Simulation
 
-A clean ASCII-path rebuild of the H2 hydrogen tracking simulation workspace.
+[English](#english) | [中文](#中文)
 
-## Features
+---
 
-- **Hydrogen Source Tracking**: Gradient-based tracking with particle filter localization
-- **GADEN Gas Simulation**: Realistic filament-based gas dispersion modeling
-- **SLAM/AMCL Navigation**: Autonomous mapping and localization with Nav2
-- **Obstacle Avoidance**: Full Nav2 stack with costmap-based collision avoidance
+# English
 
-## Layout
+## Overview
 
-- Project root: `/home/user/h2track-xian`
-- External GADEN workspace: `/home/user/gaden_ws`
+H2Track is a ROS 2 Humble simulation workspace for autonomous hydrogen (H2) gas source localization. A robot patrols a Gazebo environment, detects gas concentration changes, and uses gradient-based tracking algorithms to locate the hydrogen leak source.
 
-## Build
+## Architecture
 
-```bash
-cd /home/user/h2track-xian
-source /opt/ros/humble/setup.bash
-source /home/user/gaden_ws/install/setup.bash
-colcon build
 ```
+┌─────────────────────────────────────────────────────────┐
+│                    Behavior Tree (py_trees)              │
+│  ┌──────────┐  ┌──────────┐  ┌───────────────────────┐  │
+│  │ Tracker  │  │ Costmap  │  │      Nav2Client       │  │
+│  │(SurgeCast│  │  Guard   │  │  (NavigateToPose)     │  │
+│  └──────────┘  └──────────┘  └───────────────────────┘  │
+├─────────────────────────────────────────────────────────┤
+│              Mission State Machine                       │
+│  PATROL → SEEK_CONFIRM → SEEK_TRACK → SOURCE_FOUND     │
+├─────────────────────────────────────────────────────────┤
+│  Gas Model  │  Nav2 Stack  │  AMCL/SLAM  │  Costmap    │
+├─────────────────────────────────────────────────────────┤
+│              Gazebo Classic + URDF Robot                 │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Three ROS 2 Packages
+
+| Package | Build Type | Purpose |
+|---------|------------|---------|
+| `h2track_sim` | ament_cmake | Launch files, scene configs, Gazebo worlds, URDF |
+| `h2track_tracking` | ament_python | Tracking logic, gas model, mission state machine, BT |
+| `h2track_interfaces` | ament_cmake | Custom message types |
+
+### Key Algorithms
+
+- **Surge-Cast**: Wind-aware two-phase algorithm (SURGE upwind + CAST lateral search)
+- **Particle Filter**: Probabilistic gas source localization with vectorized operations
+- **Wind Estimator**: Infers wind direction from concentration gradients
+- **Algorithm Fusion**: Combines Surge-Cast and Particle Filter estimates
 
 ## Quick Start
 
-### Launch with GADEN gas simulation (recommended)
-
-```bash
-cd /home/user/h2track-xian
-source /opt/ros/humble/setup.bash
-source /home/user/gaden_ws/install/setup.bash
-source install/setup.bash
-ros2 launch h2track_sim demo.launch.py scene:=warehouse use_rviz:=true
-```
-
-### Launch with simplified gas field (no GADEN dependency)
-
-```bash
-cd /home/user/h2track-xian
-source /opt/ros/humble/setup.bash
-source install/setup.bash
-ros2 launch h2track_sim demo.launch.py scene:=warehouse use_gaden:=false use_rviz:=true
-```
-
-## Standard Demo Rehearsal Flow
-
-This section describes the standard demo rehearsal flow for testing the gas source localization system.
-
 ### Prerequisites
 
-1. GADEN simulation environment running
-2. Gazebo world loaded with gas source
-3. Nav2 navigation stack active
+- ROS 2 Humble
+- Gazebo Classic 11
+- Nav2 stack
+- (Optional) GADEN workspace at `/home/user/gaden_ws`
 
-### Step-by-Step Flow
+### Build
 
-1. **Launch Simulation**
-   ```bash
-   ros2 launch h2track_sim bringup.launch.py scene:=warehouse
-   ```
+```bash
+source /opt/ros/humble/setup.bash
+source /home/user/gaden_ws/install/setup.bash  # Required for GADEN mode
+colcon build
+```
 
-2. **Start Tracking**
-   ```bash
-   ros2 run h2track_tracking mission_manager_node
-   ```
+### Run Simulation
 
-3. **Monitor Progress**
-   - Open Web Console: http://localhost:8080
-   - Check gas concentration readings
-   - Observe robot navigation to source
+```bash
+source install/setup.bash
 
-4. **Verify Source Found**
-   - Robot enters SOURCE_FOUND mode
-   - Concentration drops below threshold
-   - Position estimate converges
+# With simplified gas model (no GADEN dependency)
+ros2 launch h2track_sim bringup.launch.py scene:=baseline use_gaden:=false use_bt:=true
 
-### Expected Behavior
+# With GADEN realistic gas simulation
+ros2 launch h2track_sim bringup.launch.py scene:=warehouse use_gaden:=true use_bt:=true
+```
 
-| Phase | Mode | Duration |
-|-------|------|----------|
-| Initialize | PATROL | 10-30s |
-| Detect Gas | SEEK_CONFIRM | 5-15s |
-| Track Source | SEEK_TRACK | 30-120s |
-| Complete | SOURCE_FOUND | - |
+### Run Tests
 
-### Troubleshooting
+```bash
+python3 -m pytest src/h2track_tracking/test/ -v
+```
 
-If any step fails, do not start the formal demo. Check:
-1. GADEN simulation is running
-2. Nav2 server is available
-3. Robot is spawned in Gazebo
+## Mission State Machine
 
-## GADEN Gas Simulation Notes
+The robot transitions through four modes:
 
-### Hydrogen Gas Behavior
+| Mode | Description | Trigger |
+|------|-------------|---------|
+| **PATROL** | Navigate waypoints via Nav2 | Initial state |
+| **SEEK_CONFIRM** | Verify gas detection | Concentration >= `enter_threshold` |
+| **SEEK_TRACK** | Gradient ascent toward source (Surge-Cast) | Confirmed detection |
+| **SOURCE_FOUND** | Publish estimated source position | Near source with high concentration |
 
-Hydrogen (H₂) is 14x lighter than air, causing it to rapidly rise toward the ceiling. The GADEN simulation correctly models this physical phenomenon:
+## Scene Configuration
 
-- Gas source at floor level (z=0.3m)
-- Filaments rise to ceiling level (z≈1.8-1.9m)
-- Gas sensor must be positioned at elevated height to detect rising gas
-
-### Sensor Configuration
-
-The gas sensor is positioned at 1.5m height in the robot URDF to detect the rising H₂ plume. Scene configurations use `gas_sensor_link` as the sensor frame:
+Scenes are defined in `src/h2track_sim/scenes/<scene>/scene.yaml`:
 
 ```yaml
-gaden:
-  sensor_frame: gas_sensor_link  # Elevated sensor for H2 detection
-  fixed_frame: gaden_map
-```
-
-If you need to modify the sensor height, edit `src/h2track_sim/urdf/h2track_bot.urdf.xacro`:
-
-```xml
-<joint name="gas_sensor_joint" type="fixed">
-  <parent link="base_link"/>
-  <child link="gas_sensor_link"/>
-  <origin xyz="0 0 1.5"/>  <!-- Adjust z-value as needed -->
-</joint>
-```
-
-## Launch with SLAM mapping
-
-```bash
-cd /home/user/h2track-xian
-source /opt/ros/humble/setup.bash
-source /home/user/gaden_ws/install/setup.bash
-source install/setup.bash
-ros2 launch h2track_sim slam_demo.launch.py use_rviz:=true
-```
-
-## Save map from SLAM
-
-After SLAM run is stable, save the built map:
-
-```bash
-cd /home/user/h2track-xian
-source /opt/ros/humble/setup.bash
-source install/setup.bash
-ros2 run h2track_tracking slam_save_map --output /home/user/h2track-xian/src/h2track_sim/scenes/warehouse/maps/warehouse_slam_map
-```
-
-## Demo Prep
-
-Run this before launching the demo to clear stale processes:
-
-```bash
-cd /home/user/h2track-xian
-source /opt/ros/humble/setup.bash
-source /home/user/gaden_ws/install/setup.bash
-source install/setup.bash
-ros2 run h2track_tracking demo_prep --scene warehouse
-```
-
-Preview mode (no changes):
-
-```bash
-ros2 run h2track_tracking demo_prep --scene warehouse --dry-run
-```
-
-## Web Console
-
-Install dependencies:
-
-```bash
-sudo apt-get update
-sudo apt-get install -y python3-fastapi python3-uvicorn
-```
-
-Start the web console:
-
-```bash
-cd /home/user/h2track-xian
-source /opt/ros/humble/setup.bash
-source /home/user/gaden_ws/install/setup.bash
-source install/setup.bash
-ros2 run h2track_tracking demo_web_server --host 0.0.0.0 --port 18080
-```
-
-Open in browser: `http://<your-machine-ip>:18080`
-
-### Web Console Features
-
-- One-click simulation start/stop
-- Real-time gas concentration monitoring
-- Topic and node health panels
-- Phase timeline visualization
-- AI assistant integration (OpenAI-compatible)
-- Diagnostic export and run reports
-
-## Demo Self-Check
-
-Verify the stack after bringup:
-
-```bash
-ros2 run h2track_tracking demo_selfcheck --timeout 5.0
-```
-
-## Demo Regression Testing
-
-Run multi-round stability checks:
-
-```bash
-ros2 run h2track_tracking demo_regression --scene warehouse --use-gaden true --rounds 3 --run-timeout-sec 110
+scene_name: baseline
+gas_source: {x: -4.0, y: 1.95}
+gas_field:
+  source_strength: 120.0
+  decay_rate: 0.55
+  wind_x: 0.4
+  wind_y: 0.0
+mission_manager:
+  enter_threshold: 5.0
+  exit_threshold: 2.0
+  source_threshold: 20.0
+  source_radius: 1.0
+  source_hold_steps: 2
 ```
 
 ## Available Scenes
 
-| Scene | GADEN | SLAM | Description |
-|-------|-------|------|-------------|
-| `warehouse` | ✅ | ✅ | AWS RoboMaker Small Warehouse |
-| `baseline` | ✅ | ❌ | H2Track Lab environment |
+| Scene | Description |
+|-------|-------------|
+| `baseline` | H2Track Lab environment |
+| `warehouse` | AWS RoboMaker Small Warehouse |
 
-## Key Topics
+## Key ROS Topics
 
-| Topic | Type | Description |
-|-------|------|-------------|
-| `/gas_concentration` | `Float32` | Normalized gas sensor reading |
-| `/robot_mode` | `String` | Current mission state |
+| Topic | Type | Purpose |
+|-------|------|---------|
+| `/gas_concentration` | `Float32` | Gas sensor reading (normalized) |
+| `/robot_mode` | `String` | Current mission mode |
 | `/source_found` | `Bool` | Source detection signal |
-| `/estimated_source` | `PoseWithCovarianceStamped` | Particle filter estimate |
-| `/map` | `OccupancyGrid` | SLAM/localization map |
+| `/estimated_source` | `PoseWithCovarianceStamped` | Source estimate with covariance |
+| `/estimated_wind` | `String` | Wind vector: "wind_x,wind_y,confidence" |
+| `/fusion_state` | `String` | Fusion state: "mode,pf_contrib,surge_contrib" |
 
-## Scene Assets
+## Supported Gases
 
-- `src/h2track_sim/scenes/warehouse/` vendors assets from `aws-robotics/aws-robomaker-small-warehouse-world` under MIT-0 license.
-
-## Configuration Notes
-
-- `use_gaden:=false` uses simplified `gas_field_node` for gas simulation
-- `use_gaden:=true` starts full GADEN stack with realistic filament-based dispersion
-- `use_slam:=true` enables `slam_toolbox` for mapping
-- `use_slam:=false` uses AMCL with pre-existing map
-
-## Troubleshooting
-
-### Gas concentration always zero
-
-If using GADEN mode, ensure:
-1. Sensor frame is `gas_sensor_link` (not `base_link`)
-2. GADEN workspace is sourced: `source /home/user/gaden_ws/install/setup.bash`
-3. Preprocessed GADEN data exists for the scene
-
-### TF tree disconnected
-
-Verify TF chain: `gaden_map` → `map` → `odom` → `base_link` → `gas_sensor_link`
-
-```bash
-ros2 run tf2_ros tf2_echo gaden_map gas_sensor_link
-```
-
-### Nav2 not navigating
-
-Check lifecycle nodes are active:
-
-```bash
-ros2 lifecycle list /controller_server
-ros2 lifecycle list /planner_server
-```
-
-## Project Statistics
-
-- **Total Lines of Code**: ~15,000+
-- **Test Coverage**: 117 tests, 100% pass rate
-- **Packages**: 2 (h2track_sim, h2track_tracking)
-- **Supported Gases**: 4 (H2, CH4, CO, C3H8)
-- **Algorithms**: 4 (Surge-Cast, Particle Filter, Gradient, Random Walk, Spiral)
-
-## Algorithm Performance
-
-| Algorithm | Avg Time | Description |
-|-----------|----------|-------------|
-| Surge-Cast | < 0.1ms | Wind-aware navigation |
-| Particle Filter | < 1ms | Probabilistic localization |
-| Wind Estimator | < 0.2ms | Gradient-based estimation |
-| Fusion | < 0.05ms | Algorithm combination |
-
-## Citation
-
-If you use this project in your research, please cite:
-
-```bibtex
-@software{h2track2026,
-  title = {H2Track: Hydrogen Gas Source Localization with ROS2},
-  author = {H2Track Team},
-  year = {2026},
-  url = {https://github.com/your-repo/h2track-xian}
-}
-```
+| Gas | Formula | Sensor Height | Alarm Threshold |
+|-----|---------|---------------|-----------------|
+| Hydrogen | H2 | 1.5m | 250 ppm |
+| Methane | CH4 | 1.2m | 5000 ppm |
+| Carbon Monoxide | CO | 0.5m | 50 ppm |
+| Propane | C3H8 | 0.3m | 1000 ppm |
 
 ## License
 
 MIT License
 
-## Acknowledgments
+---
 
-- GADEN gas dispersion simulation
-- Nav2 navigation stack
-- ROS2 community
+# 中文
 
-## Contact
+## 项目概述
 
-For questions or collaboration opportunities, please open an issue on GitHub.
+H2Track 是一个基于 ROS 2 Humble 的氢气（H2）泄漏源自主定位仿真工作区。机器人在 Gazebo 环境中巡逻，检测气体浓度变化，并使用基于梯度的追踪算法定位氢气泄漏源。
+
+## 系统架构
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                   行为树 (py_trees)                       │
+│  ┌──────────┐  ┌──────────┐  ┌───────────────────────┐  │
+│  │ 追踪器   │  │ 防撞检查 │  │     Nav2 导航客户端    │  │
+│  │(SurgeCast│  │(Costmap  │  │  (NavigateToPose)     │  │
+│  └──────────┘  │ Guard)   │  └───────────────────────┘  │
+│                └──────────┘                              │
+├─────────────────────────────────────────────────────────┤
+│                  任务状态机                               │
+│  巡逻 → 确认检测 → 追踪源头 → 找到源头                    │
+│  PATROL → SEEK_CONFIRM → SEEK_TRACK → SOURCE_FOUND      │
+├─────────────────────────────────────────────────────────┤
+│  气体模型  │  Nav2 导航栈  │  AMCL/SLAM  │  代价地图      │
+├─────────────────────────────────────────────────────────┤
+│               Gazebo Classic + 机器人 URDF                │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 三个 ROS 2 功能包
+
+| 功能包 | 构建类型 | 用途 |
+|--------|----------|------|
+| `h2track_sim` | ament_cmake | 启动文件、场景配置、Gazebo 世界、URDF |
+| `h2track_tracking` | ament_python | 追踪逻辑、气体模型、任务状态机、行为树 |
+| `h2track_interfaces` | ament_cmake | 自定义消息类型 |
+
+### 核心算法
+
+- **Surge-Cast（冲刺-扫射）**：风感知的两阶段算法，SURGE 逆风追踪 + CAST 横向搜索
+- **粒子滤波器**：基于概率的气体源定位，支持向量化加速
+- **风向估计器**：从浓度梯度推断风向
+- **算法融合**：结合 Surge-Cast 和粒子滤波器的估计结果
+
+## 快速开始
+
+### 环境要求
+
+- ROS 2 Humble
+- Gazebo Classic 11
+- Nav2 导航栈
+- （可选）GADEN 工作区 `/home/user/gaden_ws`
+
+### 构建
+
+```bash
+source /opt/ros/humble/setup.bash
+source /home/user/gaden_ws/install/setup.bash  # GADEN 模式需要
+colcon build
+```
+
+### 运行仿真
+
+```bash
+source install/setup.bash
+
+# 使用简化气体模型（无需 GADEN）
+ros2 launch h2track_sim bringup.launch.py scene:=baseline use_gaden:=false use_bt:=true
+
+# 使用 GADEN 真实气体仿真
+ros2 launch h2track_sim bringup.launch.py scene:=warehouse use_gaden:=true use_bt:=true
+```
+
+### 运行测试
+
+```bash
+python3 -m pytest src/h2track_tracking/test/ -v
+```
+
+## 任务状态机
+
+机器人依次经历四个阶段：
+
+| 阶段 | 说明 | 切换条件 |
+|------|------|----------|
+| **PATROL（巡逻）** | 按航点导航 | 初始状态 |
+| **SEEK_CONFIRM（确认）** | 验证气体检测 | 浓度 >= `enter_threshold` |
+| **SEEK_TRACK（追踪）** | 沿浓度梯度追踪（Surge-Cast） | 确认检测到气体 |
+| **SOURCE_FOUND（找到源）** | 发布估计的源位置 | 靠近源且浓度高 |
+
+## 场景配置
+
+场景定义在 `src/h2track_sim/scenes/<scene>/scene.yaml`：
+
+```yaml
+scene_name: baseline
+gas_source: {x: -4.0, y: 1.95}          # 气体源位置
+gas_field:
+  source_strength: 120.0                  # 源强度
+  decay_rate: 0.55                        # 衰减率
+  wind_x: 0.4                             # 风向 X 分量
+  wind_y: 0.0                             # 风向 Y 分量
+mission_manager:
+  enter_threshold: 5.0                    # 进入确认阈值
+  exit_threshold: 2.0                     # 退出阈值
+  source_threshold: 20.0                  # 源检测阈值
+  source_radius: 1.0                      # 源判定半径（米）
+  source_hold_steps: 2                    # 连续命中次数
+```
+
+## 可用场景
+
+| 场景 | 说明 |
+|------|------|
+| `baseline` | H2Track 实验室环境 |
+| `warehouse` | AWS RoboMaker 小型仓库 |
+
+## 关键 ROS 话题
+
+| 话题 | 类型 | 用途 |
+|------|------|------|
+| `/gas_concentration` | `Float32` | 气体传感器读数（归一化） |
+| `/robot_mode` | `String` | 当前任务模式 |
+| `/source_found` | `Bool` | 源检测信号 |
+| `/estimated_source` | `PoseWithCovarianceStamped` | 带协方差的源估计 |
+| `/estimated_wind` | `String` | 风向量："wind_x,wind_y,confidence" |
+| `/fusion_state` | `String` | 融合状态："mode,pf_contrib,surge_contrib" |
+
+## 支持的气体类型
+
+| 气体 | 分子式 | 传感器高度 | 报警阈值 |
+|------|--------|-----------|----------|
+| 氢气 | H2 | 1.5m | 250 ppm |
+| 甲烷 | CH4 | 1.2m | 5000 ppm |
+| 一氧化碳 | CO | 0.5m | 50 ppm |
+| 丙烷 | C3H8 | 0.3m | 1000 ppm |
+
+## 运行回归测试
+
+```bash
+# 十轮回归测试
+ros2 run h2track_tracking demo_regression --scene baseline --rounds 10 --run-timeout-sec 110
+```
+
+## Web 控制台
+
+```bash
+ros2 run h2track_tracking demo_web_server --host 0.0.0.0 --port 18080
+# 浏览器打开 http://<IP>:18080
+```
+
+## 许可证
+
+MIT License
