@@ -27,7 +27,7 @@ class TrackerNode(py_trees.behaviour.Behaviour):
         safety.avoiding   <-- NEW: reads safety domain, not nav2
 
     Outputs (blackboard):
-        tracker.target, tracker.state, tracker.heading, tracker.step_size
+        tracker.target, tracker.heading
     """
 
     def __init__(
@@ -81,6 +81,7 @@ class TrackerNode(py_trees.behaviour.Behaviour):
             robot_yaw=robot_yaw,
             wind=wind,
         )
+        pre_costmap_target = action.target
 
         # -- particle filter fusion --------------------------------------------
         if self._use_fusion and self._fusion is not None:
@@ -101,26 +102,9 @@ class TrackerNode(py_trees.behaviour.Behaviour):
                 action, sc_pose, max_search_radius=2.0
             )
 
-        # -- lock target during avoidance --------------------------------------
-        if is_avoiding:
-            self._bb.tracker.target_locked = True
-            if self._obstacle_count > 20:
-                new_step = min(action.step_size * 1.5, 1.0)
-                action = type(action)(
-                    target=action.target,
-                    state=action.state,
-                    heading=action.heading,
-                    step_size=new_step,
-                    use_particle_filter=action.use_particle_filter,
-                )
-        else:
-            self._bb.tracker.target_locked = False
-
         # -- write outputs -----------------------------------------------------
         self._bb.tracker.target = action.target
-        self._bb.tracker.state = action.state
         self._bb.tracker.heading = action.heading
-        self._bb.tracker.step_size = action.step_size
 
         self.feedback_message = (
             f"{action.state.name} -> ({action.target.x:.2f}, {action.target.y:.2f})"

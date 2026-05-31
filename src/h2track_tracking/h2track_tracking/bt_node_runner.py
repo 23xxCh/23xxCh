@@ -118,7 +118,7 @@ class BTNodeRunner(Node):
             surge_weight=self._pf("fusion_surge_weight"),
             pf_confidence_threshold=self._pf("particle_filter_min_confidence"),
         ))
-        costmap = CostmapChecker()
+        self._costmap_checker = CostmapChecker()
         self._state_machine = MissionStateMachine(mission_cfg)
 
         # -- blackboard & tree -----------------------------------------------
@@ -128,7 +128,7 @@ class BTNodeRunner(Node):
             node=self,
             surge_tracker=surge_tracker,
             fusion=fusion,
-            costmap_checker=costmap,
+            costmap_checker=self._costmap_checker,
         )
         self._tree = self._tree_factory.create_tree()
 
@@ -172,7 +172,6 @@ class BTNodeRunner(Node):
         self._source_pub = self.create_publisher(Bool, "/source_found", 10)
         self._estimate_pub = self.create_publisher(PoseStamped, "/estimated_source_pose", 10)
         self._wind_pub = self.create_publisher(String, "/estimated_wind", 10)
-        self._fusion_pub = self.create_publisher(String, "/fusion_state", 10)
 
         self._last_mode: MissionMode | None = None
         self._source_announced = False
@@ -298,11 +297,6 @@ class BTNodeRunner(Node):
             robot_position=(self._current_pose.x, self._current_pose.y),
             goal_reached=bool(bb.nav2.goal_reached_count),
         )
-        if bb.mission.mode != mode:
-            bb.mission.mode_changed = True
-            bb.mission.new_mode = mode
-        else:
-            bb.mission.mode_changed = False
         bb.mission.mode = mode
         bb.mission.source_estimate = self._state_machine.source_estimate
 
@@ -313,9 +307,12 @@ class BTNodeRunner(Node):
         goal = self._state_machine.current_patrol_goal
         bb.mission.patrol_target = Pose2D(goal[0], goal[1])
 
-        # -- route targets to nav2 (mode-aware) -----------------------------
-        self._sync_to_blackboard()
         bb.nav2.nav_ready = self._nav_ready
+
+        # tick the behavior tree FIRST so tracker produces a fresh target,
+        # then route targets to nav2 (mode-aware)
+        self._tree.tick()
+        self._sync_to_blackboard()
 
         # diagnostic
         if self._tick_count % 50 == 1:
@@ -323,9 +320,6 @@ class BTNodeRunner(Node):
             self.get_logger().info(
                 f"nav2 target=({tp.x:.2f},{tp.y:.2f})" if tp else "nav2 target=None"
             )
-
-        # tick the behavior tree
-        self._tree.tick()
 
         # publish results to ROS topics
         self._sync_from_blackboard()
@@ -360,7 +354,7 @@ class BTNodeRunner(Node):
             self._particle_filter_confidence = 0.0
 
     def _on_costmap(self, msg: Costmap) -> None:
-        pass  # handled by CostmapChecker via blackboard
+        self._costmap_checker.update_costmap(msg)
 
     # ------------------------------------------------------------------
     # helpers

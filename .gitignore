@@ -11,3 +11,5 @@ frames_*.gv
 frames_*.pdf
 .coverage
 src/h2track_tracking/web_console/node_modules/
+.claude-flow/
+ruvector.db

@@ -48,8 +48,11 @@ def _gradient_search_target(
 
     Formerly part of gas_model.next_search_target.  Extracted here so that
     gas_model.py stays a pure physics module.
+
+    Deprecated: the BT pipeline uses SurgeCastTracker instead.  This remains
+    for the legacy mission_manager_node.
     """
-    from .gas_model import Pose2D  # re-exported canonical type
+    from .gas_model import Pose2D
 
     if not history:
         return Pose2D(
@@ -141,21 +144,12 @@ def select_tracking_target(
 ) -> "Pose2D":
     """Select the next tracking target based on gas concentration history.
 
+    Deprecated: the BT pipeline uses SurgeCastTracker instead.  This remains
+    for the legacy mission_manager_node.
+
     When a strong source signal is detected in history but the current
     position shows lower concentration, returns the strongest position
     to guide the robot back toward the source.
-
-    Args:
-        gas_model: Gas field model for wind parameters.
-        current_pose: Current robot position.
-        current_yaw: Current robot heading in radians.
-        history: Recent (position, concentration) samples.
-        step_size: Distance to move toward target.
-        sweep_angle: Angle to sweep when concentration decreases.
-        source_threshold: Concentration threshold indicating source proximity.
-
-    Returns:
-        Target position for next navigation goal.
     """
     if history:
         strongest_index, (strongest_pose, strongest_concentration) = max(

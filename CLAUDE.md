@@ -153,31 +153,26 @@ The **primary** orchestration approach uses py_trees (`bt/` module).  The legacy
 **Tree structure** (`tree_factory.py`):
 ```
 MissionRoot (Selector)
-├── SourceFound
-├── SeekTrack (Sequence)
-│   ├── StateMachine  →  CostmapGuard  →  Tracker  →  Nav2Client
-├── SeekConfirm (Sequence)
-│   └── StateMachine
-└── Patrol (Sequence)
-    └── StateMachine  →  CostmapGuard  →  Nav2Client
+├── SourceFound    → CheckMissionMode(SOURCE_FOUND)
+├── SeekTrack      → CostmapGuard  →  Tracker  →  Nav2Client
+└── Patrol         → CostmapGuard  →  Nav2Client         (also handles SEEK_CONFIRM)
 ```
+SensorReaderNode and StateMachineNode are inlined into `bt_node_runner._tick()`.
 
 **BT nodes** (`bt/nodes/`):
 | Node | Purpose |
 |------|---------|
-| `SensorReaderNode` | Writes sensor data to blackboard (10Hz) |
-| `StateMachineNode` | Wraps MissionStateMachine, reads/writes `mission.*` |
 | `TrackerNode` | Runs SurgeCastTracker + Fusion + CostmapChecker |
 | `CostmapGuardNode` | Monitors costmap, writes `safety.obstacle_detected` |
 | `Nav2ClientNode` | Sends NavigateToPose goals via ActionClient |
-| `RecoveryNode` | Detects stuck conditions, triggers replan |
+| `CheckMissionMode` | Gates tree branches by `mission.mode` |
 
 **Blackboard namespaces** (`bt/blackboard.py`):
-- `sensor.*` — concentration, robot_pose, robot_yaw, wind, pf_estimate
-- `nav2.*` — status, target_pose, path_deviation, recovery_needed
-- `tracker.*` — target, state, heading, step_size
+- `sensor.*` — concentration, robot_pose, robot_yaw, wind, pf_estimate, pf_confidence
+- `nav2.*` — target_pose, target_yaw, status, task_complete, goal_reached_count, nav_ready
+- `tracker.*` — target, heading, wind_estimate
 - `mission.*` — mode, source_estimate, patrol_target
-- `safety.*` — obstacle_detected, suggested_action, alternative_target
+- `safety.*` — obstacle_detected
 
 All domain objects (SurgeCastTracker, TrackingFusion, CostmapChecker, MissionStateMachine) are injected via constructor (DI), never instantiated inside nodes.
 

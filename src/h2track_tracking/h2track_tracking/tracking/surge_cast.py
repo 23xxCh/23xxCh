@@ -208,23 +208,36 @@ class SurgeCastTracker:
             )
 
         elif self.state == TrackingState.SURGE:
-            # Move upwind
+            # Determine primary heading
             wind_norm = math.hypot(wind_x, wind_y)
-            if wind_norm > 0.1:
-                upwind_heading = math.atan2(-wind_y, -wind_x)
-            else:
-                upwind_heading = robot_yaw
-
-            # Add slight variation to avoid getting stuck
             best = self._history.get_best_position()
-            if best and best[1] > self._plume_detector.current_concentration + 1.0:
-                # Move toward best position with upwind bias
-                best_pose = best[0]
+
+            if best:
+                best_pose, best_conc = best
                 dx = best_pose.x - robot_pose.x
                 dy = best_pose.y - robot_pose.y
-                target_heading = math.atan2(dy, dx)
-                # Blend toward best position
-                upwind_heading = 0.7 * upwind_heading + 0.3 * target_heading
+                dist_to_best = math.hypot(dx, dy)
+
+                if dist_to_best > 0.05 and best_conc > self._plume_detector.current_concentration:
+                    # Gradient toward best position
+                    gradient_heading = math.atan2(dy, dx)
+                else:
+                    gradient_heading = None
+            else:
+                gradient_heading = None
+
+            if wind_norm > 0.1:
+                upwind_heading = math.atan2(-wind_y, -wind_x)
+                if gradient_heading is not None:
+                    # Blend upwind with gradient
+                    upwind_weight = min(0.8, wind_norm)
+                    combined_x = upwind_weight * math.cos(upwind_heading) + (1 - upwind_weight) * math.cos(gradient_heading)
+                    combined_y = upwind_weight * math.sin(upwind_heading) + (1 - upwind_weight) * math.sin(gradient_heading)
+                    upwind_heading = math.atan2(combined_y, combined_x)
+            elif gradient_heading is not None:
+                upwind_heading = gradient_heading
+            else:
+                upwind_heading = robot_yaw
 
             target = Pose2D(
                 robot_pose.x + self.config.surge_step * math.cos(upwind_heading),

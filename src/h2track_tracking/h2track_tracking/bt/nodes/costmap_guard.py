@@ -23,12 +23,10 @@ class CostmapGuardNode(py_trees.behaviour.Behaviour):
     Keeps only tick-counting state and blackboard I/O.
 
     Inputs (blackboard):
-        nav2.target_pose, sensor.robot_pose,
-        nav2.status, nav2.path_deviation
+        nav2.target_pose, sensor.robot_pose, nav2.status
 
     Outputs (blackboard):
-        safety.obstacle_detected, safety.suggested_action,
-        safety.alternative_target, safety.stuck_duration
+        safety.obstacle_detected
     """
 
     def __init__(
@@ -66,9 +64,6 @@ class CostmapGuardNode(py_trees.behaviour.Behaviour):
             self._stuck_count = 0
 
         self._bb.safety.obstacle_detected = assessment.obstacle_detected
-        self._bb.safety.suggested_action = assessment.suggested_action
-        self._bb.safety.alternative_target = assessment.alternative_target
-        self._bb.safety.stuck_duration = self._stuck_count
 
         return Status.SUCCESS
 

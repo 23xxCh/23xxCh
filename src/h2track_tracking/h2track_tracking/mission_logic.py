@@ -98,6 +98,16 @@ class MissionStateMachine:
                 self._source_hits = 0
                 self.source_estimate = None
                 self._recent_observations.clear()
+            # Fast-path: if robot is physically near actual source with high
+            # concentration, trigger SOURCE_FOUND immediately.  This handles
+            # the edge case where SurgeCast oscillation moves the robot away
+            # from the strongest_window position before _source_hits accumulates.
+            elif (
+                concentration >= self.config.source_threshold
+                and self._is_near_actual_source(robot_position)
+            ):
+                self.source_estimate = robot_position
+                self.mode = MissionMode.SOURCE_FOUND
             elif max(confirm_concentrations) >= self.config.source_threshold:
                 strongest_position, strongest_concentration = max(
                     confirm_window,

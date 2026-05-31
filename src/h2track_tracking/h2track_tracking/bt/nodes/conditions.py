@@ -14,23 +14,24 @@ from ...mission_logic import MissionMode
 
 
 class CheckMissionMode(py_trees.behaviour.Behaviour):
-    """Gate: succeed only when ``mission.mode`` matches the expected mode.
+    """Gate: succeed when ``mission.mode`` is one of the expected modes.
 
     Inputs (blackboard):
         mission.mode
 
     Returns:
-        SUCCESS if mode matches, FAILURE otherwise.
+        SUCCESS if mode matches any accepted mode, FAILURE otherwise.
     """
 
-    def __init__(self, name: str, bb: "H2TrackBlackboard", mode: MissionMode) -> None:
+    def __init__(self, name: str, bb: "H2TrackBlackboard", *modes: MissionMode) -> None:
         super().__init__(name)
         self._bb = bb
-        self._mode = mode
+        self._modes = modes
 
     def update(self) -> Status:
         current = self._bb.mission.mode
-        if current == self._mode:
+        if current in self._modes:
             return Status.SUCCESS
-        self.feedback_message = f"mode is {current}, expected {self._mode}"
+        expected = "|".join(m.name for m in self._modes)
+        self.feedback_message = f"mode is {current}, expected {expected}"
         return Status.FAILURE

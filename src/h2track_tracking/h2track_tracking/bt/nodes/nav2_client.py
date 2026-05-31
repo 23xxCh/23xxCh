@@ -99,7 +99,6 @@ class Nav2ClientNode(py_trees.behaviour.Behaviour):
                 if elapsed > self._timeout:
                     self._nav_status = "failed"
                     self._bb.nav2.status = "failed"
-                    self._bb.nav2.recovery_needed = True
                     self.feedback_message = "timeout"
                     return Status.FAILURE
             return Status.RUNNING
@@ -112,7 +111,6 @@ class Nav2ClientNode(py_trees.behaviour.Behaviour):
             return Status.SUCCESS
 
         if self._nav_status == "failed":
-            self._bb.nav2.recovery_needed = True
             return Status.FAILURE
 
         return Status.RUNNING
@@ -144,8 +142,6 @@ class Nav2ClientNode(py_trees.behaviour.Behaviour):
         if result is not None and result.status == 4:  # SUCCEEDED
             self._nav_status = "succeeded"
             self._bb.nav2.status = "succeeded"
-            self._bb.nav2.result = "SUCCEEDED"
         else:
             self._nav_status = "failed"
             self._bb.nav2.status = "failed"
-            self._bb.nav2.result = "FAILED"

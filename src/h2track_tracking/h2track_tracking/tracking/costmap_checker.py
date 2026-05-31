@@ -171,8 +171,13 @@ class CostmapChecker:
         row, col = indices
         cost = int(self._costmap[row, col])
 
-        # Unknown (-1) or free (0) or low cost are valid
-        return cost < self.config.free_threshold or cost == self.config.unknown_cost_value
+        # Nav2 Costmap uses 255 for NO_INFORMATION (unknown), which is
+        # traversable when the global planner has allow_unknown: true.
+        # 254 is LETHAL_OBSTACLE.  OccupancyGrid uses -1 for unknown.
+        if cost == 255 or cost == self.config.unknown_cost_value:
+            return True
+        # Free (0) or low cost are valid
+        return cost < self.config.free_threshold
 
     def get_cost_at(self, target: Pose2D) -> int:
         """Get cost value at target position.

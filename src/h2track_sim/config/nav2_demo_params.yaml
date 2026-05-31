@@ -231,14 +231,23 @@ behavior_server:
       plugin: nav2_behaviors/DriveOnHeading
     wait:
       plugin: nav2_behaviors/Wait
-lifecycle_manager:
+lifecycle_manager_localization:
   ros__parameters:
     use_sim_time: true
     autostart: true
+    bond_timeout: 12.0
     node_names:
     - map_server
     - amcl
+
+lifecycle_manager_navigation:
+  ros__parameters:
+    use_sim_time: true
+    autostart: true
+    bond_timeout: 12.0
+    node_names:
     - planner_server
     - controller_server
     - behavior_server
     - bt_navigator
+    - smoother_server

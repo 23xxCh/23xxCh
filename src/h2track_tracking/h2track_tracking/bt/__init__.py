@@ -9,8 +9,6 @@ from .tree_factory import TreeFactory
 from .nodes.nav2_client import Nav2ClientNode
 from .nodes.tracker import TrackerNode
 from .nodes.costmap_guard import CostmapGuardNode
-from .nodes.state_machine import StateMachineNode
-from .nodes.sensor_reader import SensorReaderNode
 
 __all__ = [
     "H2TrackBlackboard",
@@ -18,6 +16,4 @@ __all__ = [
     "Nav2ClientNode",
     "TrackerNode",
     "CostmapGuardNode",
-    "StateMachineNode",
-    "SensorReaderNode",
 ]

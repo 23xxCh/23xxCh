@@ -67,6 +67,8 @@ def generate_launch_description():
     source_radius = LaunchConfiguration("source_radius")
     source_hold_steps = LaunchConfiguration("source_hold_steps")
     track_step = LaunchConfiguration("track_step")
+    surge_step = LaunchConfiguration("surge_step")
+    cast_step = LaunchConfiguration("cast_step")
     sweep_angle_deg = LaunchConfiguration("sweep_angle_deg")
     source_x = LaunchConfiguration("source_x")
     source_y = LaunchConfiguration("source_y")
@@ -107,7 +109,7 @@ def generate_launch_description():
     declare_headless = DeclareLaunchArgument("headless", default_value="false")
     declare_world = DeclareLaunchArgument("world", default_value="")
     declare_gazebo_model_path = DeclareLaunchArgument("gazebo_model_path", default_value="")
-    declare_use_gaden = DeclareLaunchArgument("use_gaden", default_value="false")
+    declare_use_gaden = DeclareLaunchArgument("use_gaden", default_value="")
     declare_use_slam = DeclareLaunchArgument("use_slam", default_value="")
     declare_nav2_map_file = DeclareLaunchArgument("nav2_map_file", default_value="")
     declare_nav2_params_file = DeclareLaunchArgument("nav2_params_file", default_value="")
@@ -121,22 +123,24 @@ def generate_launch_description():
     declare_gaden_sensor_gate_timeout = DeclareLaunchArgument("gaden_sensor_gate_timeout", default_value="60.0")
     declare_gaden_sensor_gate_poll_period = DeclareLaunchArgument("gaden_sensor_gate_poll_period", default_value="0.5")
     declare_gaden_sensor_gate_stable_ready_count = DeclareLaunchArgument("gaden_sensor_gate_stable_ready_count", default_value="3")
-    declare_initial_pose_x = DeclareLaunchArgument("initial_pose_x", default_value="0.0")
-    declare_initial_pose_y = DeclareLaunchArgument("initial_pose_y", default_value="0.0")
-    declare_initial_pose_yaw = DeclareLaunchArgument("initial_pose_yaw", default_value="0.0")
-    declare_patrol_goal_timeout_sec = DeclareLaunchArgument("patrol_goal_timeout_sec", default_value="45.0")
-    declare_patrol_points = DeclareLaunchArgument("patrol_points", default_value="[3.0, 3.0, -3.0, 3.0, -3.0, -3.0, 3.0, -3.0]")
-    declare_enter_threshold = DeclareLaunchArgument("enter_threshold", default_value="4.0")
-    declare_exit_threshold = DeclareLaunchArgument("exit_threshold", default_value="1.5")
-    declare_source_threshold = DeclareLaunchArgument("source_threshold", default_value="8.0")
-    declare_confirm_samples = DeclareLaunchArgument("confirm_samples", default_value="3")
-    declare_track_exit_samples = DeclareLaunchArgument("track_exit_samples", default_value="3")
-    declare_source_radius = DeclareLaunchArgument("source_radius", default_value="0.6")
-    declare_source_hold_steps = DeclareLaunchArgument("source_hold_steps", default_value="3")
-    declare_track_step = DeclareLaunchArgument("track_step", default_value="0.7")
-    declare_sweep_angle_deg = DeclareLaunchArgument("sweep_angle_deg", default_value="30.0")
-    declare_source_x = DeclareLaunchArgument("source_x", default_value="-3.2")
-    declare_source_y = DeclareLaunchArgument("source_y", default_value="-3.0")
+    declare_initial_pose_x = DeclareLaunchArgument("initial_pose_x", default_value="")
+    declare_initial_pose_y = DeclareLaunchArgument("initial_pose_y", default_value="")
+    declare_initial_pose_yaw = DeclareLaunchArgument("initial_pose_yaw", default_value="")
+    declare_patrol_goal_timeout_sec = DeclareLaunchArgument("patrol_goal_timeout_sec", default_value="")
+    declare_patrol_points = DeclareLaunchArgument("patrol_points", default_value="")
+    declare_enter_threshold = DeclareLaunchArgument("enter_threshold", default_value="")
+    declare_exit_threshold = DeclareLaunchArgument("exit_threshold", default_value="")
+    declare_source_threshold = DeclareLaunchArgument("source_threshold", default_value="")
+    declare_confirm_samples = DeclareLaunchArgument("confirm_samples", default_value="")
+    declare_track_exit_samples = DeclareLaunchArgument("track_exit_samples", default_value="")
+    declare_source_radius = DeclareLaunchArgument("source_radius", default_value="")
+    declare_source_hold_steps = DeclareLaunchArgument("source_hold_steps", default_value="")
+    declare_track_step = DeclareLaunchArgument("track_step", default_value="")
+    declare_surge_step = DeclareLaunchArgument("surge_step", default_value="")
+    declare_cast_step = DeclareLaunchArgument("cast_step", default_value="")
+    declare_sweep_angle_deg = DeclareLaunchArgument("sweep_angle_deg", default_value="")
+    declare_source_x = DeclareLaunchArgument("source_x", default_value="")
+    declare_source_y = DeclareLaunchArgument("source_y", default_value="")
     declare_localizer_node = DeclareLaunchArgument("localizer_node", default_value="")
     declare_publish_initial_pose = DeclareLaunchArgument("publish_initial_pose", default_value="")
     declare_gas_source_strength = DeclareLaunchArgument("gas_source_strength", default_value="")
@@ -173,8 +177,16 @@ def generate_launch_description():
         scene_profile = load_scene_profile(pkg_share, scene_name)
         gas_field = scene_profile.get("gas_field", {})
         gaden = scene_profile.get("gaden")
-        use_gaden_value = use_gaden.perform(context).strip().lower()
-        use_gaden_enabled = use_gaden_value in ("1", "true", "yes", "on")
+        mission_mgr = scene_profile.get("mission_manager", {})
+        gas_source = scene_profile.get("gas_source", {})
+
+        # -- use_gaden: if user didn't set, read from scene
+        requested_use_gaden = use_gaden.perform(context).strip().lower()
+        if requested_use_gaden:
+            use_gaden_enabled = requested_use_gaden in ("1", "true", "yes", "on")
+        else:
+            use_gaden_enabled = bool(scene_profile.get("use_gaden", False))
+
         requested_use_slam = use_slam.perform(context).strip().lower()
         if requested_use_slam:
             use_slam_enabled = requested_use_slam in ("1", "true", "yes", "on")
@@ -224,6 +236,42 @@ def generate_launch_description():
         resolved_gas_publish_rate_hz = gas_publish_rate_hz.perform(context).strip() or str(gas_field.get("publish_rate_hz", 5.0))
         # Resolve particle filter bounds - use default warehouse bounds
         resolved_particle_filter_bounds = particle_filter_bounds.perform(context).strip() or "[-6.0, -6.0, 6.0, 6.0]"
+
+        # -- mission_manager defaults --------------------------------------------
+        mm_initial = mission_mgr.get("initial_pose", {})
+        resolved_initial_pose_x = initial_pose_x.perform(context).strip() or str(mm_initial.get("x", "0.0"))
+        resolved_initial_pose_y = initial_pose_y.perform(context).strip() or str(mm_initial.get("y", "0.0"))
+        resolved_initial_pose_yaw = initial_pose_yaw.perform(context).strip() or str(mm_initial.get("yaw", "0.0"))
+        resolved_patrol_goal_timeout = patrol_goal_timeout_sec.perform(context).strip() or str(mission_mgr.get("patrol_goal_timeout_sec", "45.0"))
+
+        # patrol_points: scene.yaml [[x,y],[x,y],...] → flat string "[x, y, x, y, ...]"
+        raw_patrol = patrol_points.perform(context).strip()
+        if raw_patrol:
+            resolved_patrol_points = raw_patrol
+        else:
+            pp = mission_mgr.get("patrol_points", [])
+            if pp:
+                flat = [str(v) for point in pp for v in point]
+                resolved_patrol_points = "[" + ", ".join(flat) + "]"
+            else:
+                resolved_patrol_points = ""
+
+        resolved_enter_threshold = enter_threshold.perform(context).strip() or str(mission_mgr.get("enter_threshold", 2.0))
+        resolved_exit_threshold = exit_threshold.perform(context).strip() or str(mission_mgr.get("exit_threshold", 1.0))
+        resolved_source_threshold = source_threshold.perform(context).strip() or str(mission_mgr.get("source_threshold", 10.0))
+        resolved_confirm_samples = confirm_samples.perform(context).strip() or str(mission_mgr.get("confirm_samples", 3))
+        resolved_track_exit_samples = track_exit_samples.perform(context).strip() or str(mission_mgr.get("track_exit_samples", 3))
+        resolved_source_radius = source_radius.perform(context).strip() or str(mission_mgr.get("source_radius", 1.0))
+        resolved_source_hold_steps = source_hold_steps.perform(context).strip() or str(mission_mgr.get("source_hold_steps", 5))
+        resolved_track_step = track_step.perform(context).strip() or str(mission_mgr.get("track_step", 0.7))
+        resolved_surge_step = surge_step.perform(context).strip() or str(mission_mgr.get("track_step", 0.5))
+        resolved_cast_step = cast_step.perform(context).strip() or str(mission_mgr.get("cast_step", 0.3))
+        resolved_sweep_angle_deg = sweep_angle_deg.perform(context).strip() or str(mission_mgr.get("sweep_angle_deg", 30.0))
+
+        # -- gas_source ----------------------------------------------------------
+        resolved_source_x = source_x.perform(context).strip() or str(gas_source.get("x", -3.5))
+        resolved_source_y = source_y.perform(context).strip() or str(gas_source.get("y", -3.5))
+
         if use_gaden_enabled:
             if not gaden:
                 raise RuntimeError(f"Scene '{scene_name}' is missing a gaden configuration block")
@@ -274,6 +322,27 @@ def generate_launch_description():
             SetLaunchConfiguration("gaden_map_pitch", resolved_gaden_map_pitch),
             SetLaunchConfiguration("gaden_map_yaw", resolved_gaden_map_yaw),
             SetLaunchConfiguration("particle_filter_bounds", resolved_particle_filter_bounds),
+            SetLaunchConfiguration("use_gaden", str(use_gaden_enabled).lower()),
+            # mission_manager
+            SetLaunchConfiguration("initial_pose_x", resolved_initial_pose_x),
+            SetLaunchConfiguration("initial_pose_y", resolved_initial_pose_y),
+            SetLaunchConfiguration("initial_pose_yaw", resolved_initial_pose_yaw),
+            SetLaunchConfiguration("patrol_goal_timeout_sec", resolved_patrol_goal_timeout),
+            SetLaunchConfiguration("patrol_points", resolved_patrol_points),
+            SetLaunchConfiguration("enter_threshold", resolved_enter_threshold),
+            SetLaunchConfiguration("exit_threshold", resolved_exit_threshold),
+            SetLaunchConfiguration("source_threshold", resolved_source_threshold),
+            SetLaunchConfiguration("confirm_samples", resolved_confirm_samples),
+            SetLaunchConfiguration("track_exit_samples", resolved_track_exit_samples),
+            SetLaunchConfiguration("source_radius", resolved_source_radius),
+            SetLaunchConfiguration("source_hold_steps", resolved_source_hold_steps),
+            SetLaunchConfiguration("track_step", resolved_track_step),
+            SetLaunchConfiguration("surge_step", resolved_surge_step),
+            SetLaunchConfiguration("cast_step", resolved_cast_step),
+            SetLaunchConfiguration("sweep_angle_deg", resolved_sweep_angle_deg),
+            # gas_source
+            SetLaunchConfiguration("source_x", resolved_source_x),
+            SetLaunchConfiguration("source_y", resolved_source_y),
         ]
 
     scene_defaults = OpaqueFunction(function=_scene_defaults)
@@ -523,6 +592,8 @@ def generate_launch_description():
                 "source_radius": source_radius,
                 "source_hold_steps": source_hold_steps,
                 "track_step": track_step,
+                "surge_step": surge_step,
+                "cast_step": cast_step,
                 "sweep_angle_deg": sweep_angle_deg,
                 "source_x": source_x,
                 "source_y": source_y,
@@ -621,6 +692,8 @@ def generate_launch_description():
             declare_source_radius,
             declare_source_hold_steps,
             declare_track_step,
+            declare_surge_step,
+            declare_cast_step,
             declare_sweep_angle_deg,
             declare_source_x,
             declare_source_y,

@@ -56,8 +56,7 @@ class TreeFactory:
           MissionRoot (Selector)
           ├── SourceFound    → CheckMissionMode(SOURCE_FOUND)
           ├── SeekTrack      → CheckMissionMode + CostmapGuard + Tracker + Nav2Client
-          ├── SeekConfirm    → CheckMissionMode(SEEK_CONFIRM)
-          └── Patrol         → CheckMissionMode + CostmapGuard + Nav2Client
+          └── Patrol         → CheckMissionMode(PATROL|SEEK_CONFIRM) + CostmapGuard + Nav2Client
         """
 
         tracker_node = TrackerNode(
@@ -74,7 +73,6 @@ class TreeFactory:
             children=[
                 self._make_source_found_branch(),
                 self._make_seek_track_branch(tracker_node),
-                self._make_seek_confirm_branch(),
                 self._make_patrol_branch(),
             ],
         )
@@ -92,7 +90,7 @@ class TreeFactory:
             name="Patrol",
             memory=True,
             children=[
-                CheckMissionMode("CheckPatrol", self._bb, MissionMode.PATROL),
+                CheckMissionMode("CheckPatrol", self._bb, MissionMode.PATROL, MissionMode.SEEK_CONFIRM),
                 CostmapGuardNode(
                     "PatrolGuard", self._bb, costmap_checker=self._costmap_checker
                 ),
@@ -100,15 +98,6 @@ class TreeFactory:
                     "PatrolNav", self._bb, self._node,
                     action_server_name=self._action_server, timeout=30.0,
                 ),
-            ],
-        )
-
-    def _make_seek_confirm_branch(self) -> py_trees.composites.Sequence:
-        return py_trees.composites.Sequence(
-            name="SeekConfirm",
-            memory=True,
-            children=[
-                CheckMissionMode("CheckSeekConfirm", self._bb, MissionMode.SEEK_CONFIRM),
             ],
         )
 
