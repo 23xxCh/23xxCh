@@ -131,7 +131,7 @@ class MissionStateMachine:
                         else:
                             self._source_hits = 1
                         self.source_estimate = strongest_position
-                    if self._source_hits >= self.config.source_hold_steps and self._is_near_actual_source(self.source_estimate):
+                    if self._source_hits >= self.config.source_hold_steps:
                         self.mode = MissionMode.SOURCE_FOUND
                 else:
                     self._source_hits = 0
@@ -142,7 +142,7 @@ class MissionStateMachine:
                 )
                 if radius <= self.config.source_radius:
                     self._source_hits += 1
-                    if self._source_hits >= self.config.source_hold_steps and self._is_near_actual_source(self.source_estimate):
+                    if self._source_hits >= self.config.source_hold_steps:
                         self.mode = MissionMode.SOURCE_FOUND
                 else:
                     self._source_hits = 0

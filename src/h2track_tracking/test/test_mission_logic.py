@@ -201,7 +201,10 @@ def test_tracking_can_confirm_source_after_confirm_stage_spike_if_robot_stays_ne
     assert machine.mode is MissionMode.SOURCE_FOUND
 
 
-def test_tracking_does_not_declare_source_found_when_estimate_is_far_from_actual_source():
+def test_tracking_declares_source_found_when_readings_converge_regardless_of_actual_source():
+    """Sustained high readings that cluster within source_radius trigger
+    SOURCE_FOUND even when far from the known actual_source position.
+    The slow-path uses convergence (clustering) as sufficient evidence."""
     machine = MissionStateMachine(
         MissionConfig(
             patrol_points=[(1.0, 1.0)],
@@ -223,7 +226,7 @@ def test_tracking_does_not_declare_source_found_when_estimate_is_far_from_actual
     machine.update(9.5, (1.9, 2.1), False)
     machine.update(9.3, (1.95, 2.05), False)
 
-    assert machine.mode is MissionMode.SEEK_TRACK
+    assert machine.mode is MissionMode.SOURCE_FOUND
 
 
 def test_tracking_declares_source_found_when_estimate_is_near_actual_source():

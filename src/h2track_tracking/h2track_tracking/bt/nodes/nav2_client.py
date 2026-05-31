@@ -108,6 +108,7 @@ class Nav2ClientNode(py_trees.behaviour.Behaviour):
                 self._bb.nav2.goal_reached_count or 0
             ) + 1
             self._bb.nav2.task_complete = True
+            self._nav_status = "idle"   # report success exactly once
             return Status.SUCCESS
 
         if self._nav_status == "failed":
