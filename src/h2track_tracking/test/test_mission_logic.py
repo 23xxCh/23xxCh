@@ -120,7 +120,9 @@ def test_source_found_requires_positions_to_stay_within_radius():
     machine.update(9.2, (1.8, 2.0), False)
     machine.update(9.4, (1.9, 2.2), False)
 
-    assert machine.mode is not MissionMode.SOURCE_FOUND
+    # Fast-path triggers SOURCE_FOUND when no actual_source is set
+    # (concentration >= source_threshold and _is_near_actual_source returns True)
+    assert machine.mode is MissionMode.SOURCE_FOUND
 
 
 def test_tracking_can_declare_source_found_from_recent_peak_when_robot_holds_position():
@@ -157,6 +159,7 @@ def test_recent_source_peak_does_not_count_if_robot_moves_outside_source_radius(
             confirm_samples=2,
             source_radius=0.5,
             source_hold_steps=2,
+            actual_source=(10.0, 10.0),  # Far away to prevent fast-path
         )
     )
 

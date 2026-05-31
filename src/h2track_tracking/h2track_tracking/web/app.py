@@ -7,7 +7,10 @@ for running the H2Track web console server.
 from __future__ import annotations
 
 import argparse
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 from typing import Any
 
 from .config import DEFAULT_LAUNCH_PROFILE
@@ -121,7 +124,7 @@ def create_app(
     from fastapi import FastAPI
     from fastapi.staticfiles import StaticFiles
 
-    from ..llm_agent import LlmController
+    from ..llm import LlmController
     from .websocket import ConnectionManager
 
     app = FastAPI(title="H2Track Web Console")
@@ -186,12 +189,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if not FASTAPI_AVAILABLE:
-        print("FastAPI/Starlette not installed. Install with: pip install fastapi uvicorn")
+        logger.error("FastAPI/Starlette not installed. Install with: pip install fastapi uvicorn")
         return 1
     try:
         import uvicorn
     except Exception:
-        print("uvicorn not installed. Install with: pip install uvicorn")
+        logger.error("uvicorn not installed. Install with: pip install uvicorn")
         return 1
 
     app = create_app(start_topic_collector=True)

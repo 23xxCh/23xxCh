@@ -79,6 +79,25 @@ ros2 launch h2track_sim bringup.launch.py scene:=warehouse use_gaden:=true use_b
 python3 -m pytest src/h2track_tracking/test/ -v
 ```
 
+## Standard Demo Rehearsal Flow
+
+1. **Prep**: Clear stale processes
+   ```bash
+   ros2 run h2track_tracking demo_prep --scene warehouse
+   ```
+
+2. **Launch**: Start the simulation
+   ```bash
+   ros2 launch h2track_sim demo.launch.py
+   ```
+
+3. **Self-check**: Verify the stack (separate terminal)
+   ```bash
+   ros2 run h2track_tracking demo_selfcheck --timeout 5.0
+   ```
+
+If any step fails, do not start the formal demo.
+
 ## Mission State Machine
 
 The robot transitions through four modes:

@@ -42,7 +42,6 @@ def generate_launch_description():
     gazebo_model_path = LaunchConfiguration("gazebo_model_path")
     use_gaden = LaunchConfiguration("use_gaden")
     use_slam = LaunchConfiguration("use_slam")
-    use_bt = LaunchConfiguration("use_bt")
     nav2_map_file = LaunchConfiguration("nav2_map_file")
     nav2_params_file = LaunchConfiguration("nav2_params_file")
     nav2_autostart = LaunchConfiguration("nav2_autostart")
@@ -116,7 +115,6 @@ def generate_launch_description():
     declare_nav2_autostart = DeclareLaunchArgument("nav2_autostart", default_value="")
     declare_nav2_launch_delay = DeclareLaunchArgument("nav2_launch_delay", default_value="12.0")
     declare_mission_manager_delay = DeclareLaunchArgument("mission_manager_delay", default_value="10.0")
-    declare_use_bt = DeclareLaunchArgument("use_bt", default_value="false")
     declare_nav2_startup_gate_timeout = DeclareLaunchArgument("nav2_startup_gate_timeout", default_value="30.0")
     declare_nav2_startup_gate_poll_period = DeclareLaunchArgument("nav2_startup_gate_poll_period", default_value="0.5")
     declare_nav2_startup_gate_stable_ready_count = DeclareLaunchArgument("nav2_startup_gate_stable_ready_count", default_value="2")
@@ -534,44 +532,8 @@ def generate_launch_description():
         ],
     )
 
-    # Legacy mission manager (used when use_bt:=false)
-    mission_manager_node = Node(
-        condition=UnlessCondition(use_bt),
-        package="h2track_tracking",
-        executable="mission_manager_node",
-        name="mission_manager_node",
-        output="screen",
-        parameters=[
-            {"use_sim_time": use_sim_time},
-            {
-                "initial_pose_x": initial_pose_x,
-                "initial_pose_y": initial_pose_y,
-                "initial_pose_yaw": initial_pose_yaw,
-                "patrol_goal_timeout_sec": patrol_goal_timeout_sec,
-                "patrol_points": ParameterValue(patrol_points, value_type=str),
-                "enter_threshold": enter_threshold,
-                "exit_threshold": exit_threshold,
-                "source_threshold": source_threshold,
-                "confirm_samples": confirm_samples,
-                "track_exit_samples": track_exit_samples,
-                "source_radius": source_radius,
-                "source_hold_steps": source_hold_steps,
-                "track_step": track_step,
-                "sweep_angle_deg": sweep_angle_deg,
-                "source_x": source_x,
-                "source_y": source_y,
-                "wind_x": gas_wind_x,
-                "wind_y": gas_wind_y,
-                "localizer_node": localizer_node,
-                "use_slam": ParameterValue(use_slam, value_type=bool),
-                "publish_initial_pose": ParameterValue(publish_initial_pose, value_type=bool),
-            },
-        ],
-    )
-
-    # BT-based mission manager (used when use_bt:=true)
+    # BT-based mission manager
     bt_mission_node = Node(
-        condition=IfCondition(use_bt),
         package="h2track_tracking",
         executable="bt_node_runner",
         name="bt_node_runner",
@@ -611,7 +573,7 @@ def generate_launch_description():
 
     mission_manager = TimerAction(
         period=PythonExpression([nav2_launch_delay, " + ", mission_manager_delay]),
-        actions=[mission_manager_node, bt_mission_node],
+        actions=[bt_mission_node],
     )
 
     # Activate localization nodes (AMCL, map_server) when not using SLAM
@@ -672,7 +634,6 @@ def generate_launch_description():
             declare_nav2_autostart,
             declare_nav2_launch_delay,
             declare_mission_manager_delay,
-            declare_use_bt,
             declare_nav2_startup_gate_timeout,
             declare_nav2_startup_gate_poll_period,
             declare_nav2_startup_gate_stable_ready_count,

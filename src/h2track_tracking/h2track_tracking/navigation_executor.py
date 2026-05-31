@@ -12,7 +12,7 @@ import math
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .gas_model import GasFieldModel, Pose2D
+    from .gas_model import Pose2D
 
 
 def map_pose_from_amcl(msg) -> tuple["Pose2D", float]:
@@ -33,141 +33,6 @@ def map_pose_from_amcl(msg) -> tuple["Pose2D", float]:
         1.0 - 2.0 * (orientation.y * orientation.y + orientation.z * orientation.z),
     )
     return Pose2D(position.x, position.y), yaw
-
-
-def _gradient_search_target(
-    current_pose: "Pose2D",
-    current_yaw: float,
-    history: list[tuple["Pose2D", float]],
-    step_size: float,
-    sweep_angle: float,
-    wind_x: float,
-    wind_y: float,
-) -> "Pose2D":
-    """Gradient-ascent target selection with upwind bias (pure function).
-
-    Formerly part of gas_model.next_search_target.  Extracted here so that
-    gas_model.py stays a pure physics module.
-
-    Deprecated: the BT pipeline uses SurgeCastTracker instead.  This remains
-    for the legacy mission_manager_node.
-    """
-    from .gas_model import Pose2D
-
-    if not history:
-        return Pose2D(
-            x=current_pose.x + step_size * math.cos(current_yaw),
-            y=current_pose.y + step_size * math.sin(current_yaw),
-        )
-
-    best_pose, best_conc = max(history, key=lambda h: h[1])
-    current_conc = history[-1][1]
-
-    wind_norm = math.hypot(wind_x, wind_y)
-    upwind_x, upwind_y = 0.0, 0.0
-    if wind_norm > 0.1:
-        upwind_x = -wind_x / wind_norm
-        upwind_y = -wind_y / wind_norm
-
-    if best_conc > current_conc + 0.1:
-        dx = best_pose.x - current_pose.x
-        dy = best_pose.y - current_pose.y
-        distance = math.hypot(dx, dy)
-        if distance > step_size:
-            heading = math.atan2(dy, dx)
-            if wind_norm > 0.1:
-                upwind_heading = math.atan2(upwind_y, upwind_x)
-                upwind_weight = min(0.5, current_conc / 20.0)
-                combined_x = (1 - upwind_weight) * math.cos(heading) + upwind_weight * math.cos(upwind_heading)
-                combined_y = (1 - upwind_weight) * math.sin(heading) + upwind_weight * math.sin(upwind_heading)
-                heading = math.atan2(combined_y, combined_x)
-            return Pose2D(
-                x=current_pose.x + step_size * math.cos(heading),
-                y=current_pose.y + step_size * math.sin(heading),
-            )
-        else:
-            explore_heading = current_yaw + sweep_angle
-            if wind_norm > 0.1:
-                upwind_heading = math.atan2(upwind_y, upwind_x)
-                explore_heading = 0.5 * explore_heading + 0.5 * upwind_heading
-            return Pose2D(
-                x=current_pose.x + step_size * math.cos(explore_heading),
-                y=current_pose.y + step_size * math.sin(explore_heading),
-            )
-
-    if len(history) >= 2:
-        prev_pose, prev_conc = history[-2]
-        curr_pose, curr_conc = history[-1]
-        if curr_conc > prev_conc:
-            dx = curr_pose.x - prev_pose.x
-            dy = curr_pose.y - prev_pose.y
-            if abs(dx) > 1e-6 or abs(dy) > 1e-6:
-                heading = math.atan2(dy, dx)
-                if wind_norm > 0.1:
-                    upwind_heading = math.atan2(upwind_y, upwind_x)
-                    upwind_weight = min(0.4, current_conc / 30.0)
-                    combined_x = (1 - upwind_weight) * math.cos(heading) + upwind_weight * math.cos(upwind_heading)
-                    combined_y = (1 - upwind_weight) * math.sin(heading) + upwind_weight * math.sin(upwind_heading)
-                    heading = math.atan2(combined_y, combined_x)
-                return Pose2D(
-                    x=current_pose.x + step_size * math.cos(heading),
-                    y=current_pose.y + step_size * math.sin(heading),
-                )
-        else:
-            heading = current_yaw + sweep_angle
-            if wind_norm > 0.1:
-                upwind_heading = math.atan2(upwind_y, upwind_x)
-                heading = 0.3 * heading + 0.7 * upwind_heading
-            return Pose2D(
-                x=current_pose.x + step_size * math.cos(heading),
-                y=current_pose.y + step_size * math.sin(heading),
-            )
-
-    if wind_norm > 0.1:
-        heading = math.atan2(upwind_y, upwind_x)
-    else:
-        heading = current_yaw + sweep_angle
-    return Pose2D(
-        x=current_pose.x + step_size * math.cos(heading),
-        y=current_pose.y + step_size * math.sin(heading),
-    )
-
-
-def select_tracking_target(
-    gas_model: "GasFieldModel",
-    current_pose: "Pose2D",
-    current_yaw: float,
-    history: list[tuple["Pose2D", float]],
-    step_size: float,
-    sweep_angle: float,
-    source_threshold: float,
-) -> "Pose2D":
-    """Select the next tracking target based on gas concentration history.
-
-    Deprecated: the BT pipeline uses SurgeCastTracker instead.  This remains
-    for the legacy mission_manager_node.
-
-    When a strong source signal is detected in history but the current
-    position shows lower concentration, returns the strongest position
-    to guide the robot back toward the source.
-    """
-    if history:
-        strongest_index, (strongest_pose, strongest_concentration) = max(
-            enumerate(history),
-            key=lambda sample: sample[1][1],
-        )
-        if strongest_concentration >= source_threshold and strongest_index < len(history) - 1:
-            return strongest_pose
-
-    return _gradient_search_target(
-        current_pose=current_pose,
-        current_yaw=current_yaw,
-        history=history,
-        step_size=step_size,
-        sweep_angle=sweep_angle,
-        wind_x=gas_model.params.wind_x,
-        wind_y=gas_model.params.wind_y,
-    )
 
 
 def coerce_patrol_points(raw_value: object) -> list[tuple[float, float]]:
@@ -228,37 +93,3 @@ def should_skip_patrol_goal(
     if goal_started_at_sec is None:
         return False
     return (current_time_sec - goal_started_at_sec) > timeout_sec
-
-
-def determine_nav_action_on_result(
-    mode_name: str,
-    nav_result: str | None,
-    task_complete: bool,
-) -> str | None:
-    """Determine navigation action based on mode and navigation result.
-
-    Args:
-        mode_name: Current mission mode name ("PATROL", "SEEK_TRACK", etc.).
-        nav_result: Navigation result ("SUCCEEDED", "FAILED", "CANCELED", or None).
-        task_complete: Whether navigation task has completed.
-
-    Returns:
-        Action to take: "send_patrol", "send_track", "skip_patrol", "retry_track", or None.
-    """
-    if not task_complete:
-        return None
-
-    if mode_name == "PATROL":
-        if nav_result == "SUCCEEDED":
-            return "send_patrol"
-        elif nav_result in ("FAILED", "CANCELED"):
-            return "skip_patrol"
-
-    elif mode_name == "SEEK_TRACK":
-        if nav_result == "SUCCEEDED":
-            return "send_track"
-        elif nav_result in ("FAILED", "CANCELED"):
-            return "retry_track"
-
-    return None
-

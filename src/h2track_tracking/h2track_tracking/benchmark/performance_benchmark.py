@@ -9,10 +9,13 @@ Benchmarks:
 
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass
 from typing import List, Tuple
 import statistics
+
+logger = logging.getLogger(__name__)
 
 from ..tracking import (
     SurgeCastTracker,
@@ -132,14 +135,14 @@ def run_all_benchmarks(iterations: int = 1000) -> List[BenchmarkResult]:
     """Run all benchmarks and return results."""
     results = []
     
-    print("Running benchmarks...")
-    print(f"{'Algorithm':<20} {'Avg (ms)':<12} {'Min (ms)':<12} {'Max (ms)':<12} {'Std (ms)':<12}")
-    print("-" * 68)
-    
+    logger.info("Running benchmarks...")
+    logger.info("%-20s %-12s %-12s %-12s %-12s", "Algorithm", "Avg (ms)", "Min (ms)", "Max (ms)", "Std (ms)")
+    logger.info("-" * 68)
+
     for benchmark_fn in [benchmark_surge_cast, benchmark_wind_estimator, benchmark_fusion]:
         result = benchmark_fn(iterations)
         results.append(result)
-        print(f"{result.name:<20} {result.avg_time_ms:<12.4f} {result.min_time_ms:<12.4f} {result.max_time_ms:<12.4f} {result.std_dev_ms:<12.4f}")
+        logger.info("%-20s %-12.4f %-12.4f %-12.4f %-12.4f", result.name, result.avg_time_ms, result.min_time_ms, result.max_time_ms, result.std_dev_ms)
     
     return results
 

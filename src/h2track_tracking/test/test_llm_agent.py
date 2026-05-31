@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from h2track_tracking import llm_agent
+from h2track_tracking import llm as llm_agent
 
 
 def test_profile_store_round_trip(tmp_path):
