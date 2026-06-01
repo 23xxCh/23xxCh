@@ -11,14 +11,11 @@ import math
 
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 from nav2_msgs.msg import Costmap
-from nav2_simple_commander.robot_navigator import BasicNavigator
 import numpy as np
 import rclpy
 from rclpy.node import Node
-from rclpy.time import Time
 from std_msgs.msg import Bool, Float32, String
 from tf2_ros import Buffer, TransformException, TransformListener
-
 
 from h2track_tracking.bt.blackboard import H2TrackBlackboard
 from h2track_tracking.bt.tree_factory import TreeFactory
@@ -33,6 +30,10 @@ from h2track_tracking.navigation_executor import (
     should_skip_patrol_goal,
 )
 from h2track_tracking.mission_logic import MissionConfig, MissionMode, MissionStateMachine
+from h2track_tracking.nav2_lifecycle import Nav2Lifecycle
+
+
+_DEFAULT_PATROL = "[3.0, 3.0, -3.0, 3.0, -3.0, -3.0, 3.0, -3.0]"
 
 
 class BTNodeRunner(Node):
@@ -115,7 +116,7 @@ class BTNodeRunner(Node):
         fusion = TrackingFusion(FusionConfig(
             blending_mode=str(self.get_parameter("fusion_mode").value),
             pf_weight_base=self._pf("fusion_pf_weight"),
-            surge_weight=self._pf("fusion_surge_weight"),
+            surge_weight_base=self._pf("fusion_surge_weight"),
             pf_confidence_threshold=self._pf("particle_filter_min_confidence"),
         ))
         self._costmap_checker = CostmapChecker()
@@ -133,20 +134,22 @@ class BTNodeRunner(Node):
         self._tree = self._tree_factory.create_tree()
 
         # -- Nav2 lifecycle --------------------------------------------------
-        self._navigator = BasicNavigator()
+        localizer = str(self.get_parameter("localizer_node").value).strip().lower()
+        use_slam = bool(self.get_parameter("use_slam").value)
+        if not localizer:
+            localizer = "none" if use_slam else "amcl"
+
+        self._nav2 = Nav2Lifecycle(
+            node=self,
+            initial_pose=Pose2D(self._pf("initial_pose_x"), self._pf("initial_pose_y")),
+            initial_yaw=self._pf("initial_pose_yaw"),
+            localizer_node=localizer,
+            publish_initial_pose=bool(self.get_parameter("publish_initial_pose").value),
+        )
         self._tf_buffer = Buffer()
         self._tf_listener = TransformListener(self._tf_buffer, self, spin_thread=False)
-        self._initial_pose = Pose2D(self._pf("initial_pose_x"), self._pf("initial_pose_y"))
-        self._initial_yaw = self._pf("initial_pose_yaw")
-        self._localizer_node = str(self.get_parameter("localizer_node").value).strip().lower()
-        self._use_slam = bool(self.get_parameter("use_slam").value)
-        self._publish_initial_pose = bool(self.get_parameter("publish_initial_pose").value)
-        self._nav_ready = False
-        self._initial_pose_sent = False
-        if not self._localizer_node:
-            self._localizer_node = "none" if self._use_slam else "amcl"
 
-        # -- ROS I/O ---------------------------------------------------------
+        # -- ROS I/O state --------------------------------------------------
         self._current_pose = Pose2D(0.0, 0.0)
         self._current_yaw = 0.0
         self._current_concentration = 0.0
@@ -175,9 +178,9 @@ class BTNodeRunner(Node):
 
         self._last_mode: MissionMode | None = None
         self._source_announced = False
-        self._active_mode = None
 
         # -- main loop (10 Hz) -----------------------------------------------
+        self._tick_count = 0
         self.create_timer(0.1, self._tick)
         self.get_logger().info("BT Node Runner initialized (full replacement)")
 
@@ -192,31 +195,72 @@ class BTNodeRunner(Node):
         return int(self.get_parameter(name).value)
 
     # ------------------------------------------------------------------
-    # Nav2 lifecycle
+    # main loop (decomposed)
     # ------------------------------------------------------------------
 
-    def _nav2_ready(self) -> bool:
-        if not self._publish_initial_pose and self._initial_pose_sent:
-            return True
-        initial = self._make_pose_stamped(self._initial_pose, self._initial_yaw)
-        self._navigator.setInitialPose(initial)
-        self._initial_pose_sent = True
-        if self._localizer_node in ("", "none", "slam_toolbox", "slam"):
-            if not self._nav_to_pose_client_ready():
-                return False
-            self._navigator._waitForNodeToActivate("bt_navigator")
-        else:
-            self._navigator.waitUntilNav2Active(localizer=self._localizer_node)
-        return True
+    def _tick(self) -> None:
+        # ensure Nav2 is ready
+        if not self._nav2.ready:
+            if not self._nav2.check_ready():
+                return
+            self.get_logger().info("Nav2 ready, starting main loop")
 
-    def _nav_to_pose_client_ready(self) -> bool:
-        return self._navigator.nav_to_pose_client.wait_for_server(timeout_sec=0.2)
+        self._tick_count += 1
+        self._log_diagnostics()
 
-    # ------------------------------------------------------------------
-    # blackboard sync helpers
-    # ------------------------------------------------------------------
+        # push sensor data to blackboard
+        self._sync_sensor_to_blackboard()
 
-    def _sync_to_blackboard(self) -> None:
+        # update mission state machine
+        self._update_state_machine()
+
+        # tick the behavior tree and route targets
+        self._tree.tick()
+        self._sync_targets_to_blackboard()
+
+        # publish results to ROS topics
+        self._publish_state()
+
+    def _log_diagnostics(self) -> None:
+        if self._tick_count % 50 == 1:
+            self.get_logger().info(
+                f"tick #{self._tick_count} mode={self._last_mode} "
+                f"pose=({self._current_pose.x:.2f},{self._current_pose.y:.2f}) "
+                f"conc={self._current_concentration:.3f}"
+            )
+            tp = self._bb.nav2.target_pose
+            self.get_logger().info(
+                f"nav2 target=({tp.x:.2f},{tp.y:.2f})" if tp else "nav2 target=None"
+            )
+
+    def _sync_sensor_to_blackboard(self) -> None:
+        bb = self._bb
+        bb.sensor.concentration = self._current_concentration
+        bb.sensor.robot_pose = self._current_pose
+        bb.sensor.robot_yaw = self._current_yaw
+        bb.sensor.pf_estimate = self._particle_filter_estimate
+        bb.sensor.pf_confidence = self._particle_filter_confidence
+        bb.sensor.wind = self._estimated_wind
+
+    def _update_state_machine(self) -> None:
+        bb = self._bb
+        mode = self._state_machine.update(
+            concentration=self._current_concentration,
+            robot_position=(self._current_pose.x, self._current_pose.y),
+            goal_reached=bool(bb.nav2.goal_reached_count),
+        )
+        bb.mission.mode = mode
+        bb.mission.source_estimate = self._state_machine.source_estimate
+
+        # consume accumulated goal completions (edge-triggered counter)
+        bb.nav2.goal_reached_count = 0
+
+        # patrol target from state machine
+        goal = self._state_machine.current_patrol_goal
+        bb.mission.patrol_target = Pose2D(goal[0], goal[1])
+        bb.nav2.nav_ready = self._nav2.ready
+
+    def _sync_targets_to_blackboard(self) -> None:
         """Route tracking/patrol targets to nav2 based on current mission mode."""
         bb = self._bb
         mode = bb.mission.mode
@@ -228,101 +272,33 @@ class BTNodeRunner(Node):
             patrol = bb.mission.patrol_target
             if patrol is not None:
                 bb.nav2.target_pose = patrol
-                # Compute yaw toward patrol target from current pose
                 dx = patrol.x - self._current_pose.x
                 dy = patrol.y - self._current_pose.y
                 bb.nav2.target_yaw = math.atan2(dy, dx)
 
-    def _sync_from_blackboard(self) -> None:
-        """Push BT outputs to ROS topics."""
+    def _publish_state(self) -> None:
         bb = self._bb
-        # mode publication
         mode = bb.mission.mode
         if mode is not None and mode != self._last_mode:
             self.get_logger().info(f"Mode change: {self._last_mode} -> {mode}")
             self._mode_pub.publish(String(data=mode.name))
             self._last_mode = mode
 
-        # source found
         if bb.mission.mode is not None and bb.mission.mode.name == "SOURCE_FOUND":
             if not self._source_announced:
                 self._source_pub.publish(Bool(data=True))
                 est = bb.mission.source_estimate
                 if est is not None:
-                    self._estimate_pub.publish(self._make_pose_stamped(
-                        Pose2D(est[0], est[1]), 0.0
+                    self._estimate_pub.publish(_make_pose_stamped(
+                        self, Pose2D(est[0], est[1]), 0.0
                     ))
                 self._source_announced = True
         else:
             self._source_announced = False
 
-        # wind estimate
         if self._estimated_wind is not None:
             wx, wy = self._estimated_wind
             self._wind_pub.publish(String(data=f"{wx:.3f},{wy:.3f},{0.5:.2f}"))
-
-    # ------------------------------------------------------------------
-    # main loop
-    # ------------------------------------------------------------------
-
-    def _tick(self) -> None:
-        # ensure Nav2 is ready
-        if not self._nav_ready:
-            if not self._nav2_ready():
-                return
-            self._nav_ready = True
-            self.get_logger().info("Nav2 ready, starting main loop")
-
-        # - diagnostic: log every 50 ticks (~5s)
-        self._tick_count = getattr(self, '_tick_count', 0) + 1
-        if self._tick_count % 50 == 1:
-            self.get_logger().info(
-                f"tick #{self._tick_count} mode={self._last_mode} "
-                f"pose=({self._current_pose.x:.2f},{self._current_pose.y:.2f}) "
-                f"conc={self._current_concentration:.3f}"
-            )
-
-        # -- push sensor data to blackboard (was SensorReaderNode) ----------
-        bb = self._bb
-        bb.sensor.concentration = self._current_concentration
-        bb.sensor.robot_pose = self._current_pose
-        bb.sensor.robot_yaw = self._current_yaw
-        bb.sensor.pf_estimate = self._particle_filter_estimate
-        bb.sensor.pf_confidence = self._particle_filter_confidence
-        bb.sensor.wind = self._estimated_wind
-
-        # -- update mission state machine (was StateMachineNode) ------------
-        mode = self._state_machine.update(
-            concentration=self._current_concentration,
-            robot_position=(self._current_pose.x, self._current_pose.y),
-            goal_reached=bool(bb.nav2.goal_reached_count),
-        )
-        bb.mission.mode = mode
-        bb.mission.source_estimate = self._state_machine.source_estimate
-
-        # Consume accumulated goal completions (edge-triggered counter)
-        bb.nav2.goal_reached_count = 0
-
-        # -- patrol target (from state machine) -----------------------------
-        goal = self._state_machine.current_patrol_goal
-        bb.mission.patrol_target = Pose2D(goal[0], goal[1])
-
-        bb.nav2.nav_ready = self._nav_ready
-
-        # tick the behavior tree FIRST so tracker produces a fresh target,
-        # then route targets to nav2 (mode-aware)
-        self._tree.tick()
-        self._sync_to_blackboard()
-
-        # diagnostic
-        if self._tick_count % 50 == 1:
-            tp = bb.nav2.target_pose
-            self.get_logger().info(
-                f"nav2 target=({tp.x:.2f},{tp.y:.2f})" if tp else "nav2 target=None"
-            )
-
-        # publish results to ROS topics
-        self._sync_from_blackboard()
 
     # ------------------------------------------------------------------
     # ROS callbacks
@@ -356,22 +332,16 @@ class BTNodeRunner(Node):
     def _on_costmap(self, msg: Costmap) -> None:
         self._costmap_checker.update_costmap(msg)
 
-    # ------------------------------------------------------------------
-    # helpers
-    # ------------------------------------------------------------------
 
-    def _make_pose_stamped(self, pose: Pose2D, yaw: float = 0.0) -> PoseStamped:
-        goal = PoseStamped()
-        goal.header.frame_id = "map"
-        goal.header.stamp = self.get_clock().now().to_msg()
-        goal.pose.position.x = pose.x
-        goal.pose.position.y = pose.y
-        goal.pose.orientation.z = math.sin(yaw / 2.0)
-        goal.pose.orientation.w = math.cos(yaw / 2.0)
-        return goal
-
-
-_DEFAULT_PATROL = "[3.0, 3.0, -3.0, 3.0, -3.0, -3.0, 3.0, -3.0]"
+def _make_pose_stamped(node: Node, pose: Pose2D, yaw: float = 0.0) -> PoseStamped:
+    goal = PoseStamped()
+    goal.header.frame_id = "map"
+    goal.header.stamp = node.get_clock().now().to_msg()
+    goal.pose.position.x = pose.x
+    goal.pose.position.y = pose.y
+    goal.pose.orientation.z = math.sin(yaw / 2.0)
+    goal.pose.orientation.w = math.cos(yaw / 2.0)
+    return goal
 
 
 def main(args=None):
