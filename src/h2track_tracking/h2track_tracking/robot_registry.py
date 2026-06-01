@@ -18,38 +18,12 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Deque
 
+from .tracking.types import Pose2D
+
 
 def _now_utc() -> datetime:
     """Return current UTC datetime."""
     return datetime.now(tz=timezone.utc)
-
-
-@dataclass(frozen=True)
-class Pose2D:
-    """2D pose representation for robot position and orientation.
-
-    Attributes:
-        x: X coordinate in meters
-        y: Y coordinate in meters
-        yaw: Orientation in radians
-    """
-
-    x: float = 0.0
-    y: float = 0.0
-    yaw: float = 0.0
-
-    def to_dict(self) -> dict[str, float]:
-        """Convert pose to dictionary representation."""
-        return {"x": self.x, "y": self.y, "yaw": self.yaw}
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Pose2D:
-        """Create Pose2D from dictionary."""
-        return cls(
-            x=float(data.get("x", 0.0)),
-            y=float(data.get("y", 0.0)),
-            yaw=float(data.get("yaw", 0.0)),
-        )
 
 
 @dataclass(frozen=True)
