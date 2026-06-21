@@ -76,10 +76,10 @@ def generate_launch_description() -> LaunchDescription:
     )
     
     # Mission manager node
-    mission_manager_node = Node(
+    bt_node_runner = Node(
         package="h2track_tracking",
-        executable="mission_manager_node",
-        name="mission_manager_node",
+        executable="bt_node_runner",
+        name="bt_node_runner",
         parameters=[{
             "use_sim_time": LaunchConfiguration("use_sim_time"),
         }],
@@ -109,7 +109,7 @@ def generate_launch_description() -> LaunchDescription:
         + [
             LogInfo(msg="Starting H2Track + Fishbot integration..."),
             gas_sensor_node,
-            mission_manager_node,
+            bt_node_runner,
             rviz_node,
         ]
     )

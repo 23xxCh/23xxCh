@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from h2track_tracking.demo_prep import (
+from h2track_utils.demo_prep import (
     MatchedProcess,
     check_required_packages,
     cleanup_fastdds_lock_files,
@@ -31,7 +31,7 @@ def test_matches_only_h2track_demo_processes():
 def test_dry_run_reports_not_ready_when_stale_processes_exist():
     report = evaluate_prep_result(
         processes=[MatchedProcess(pid=10001, kind="gazebo", command="gzserver ...")],
-        package_status={"h2track_sim": True, "h2track_tracking": True, "simulated_gas_sensor": True, "gaden_player": True},
+        package_status={"h2track_bringup": True, "h2track_tracking": True, "simulated_gas_sensor": True, "gaden_player": True},
         dry_run=True,
         kill_failures=[],
     )
@@ -43,7 +43,7 @@ def test_dry_run_reports_not_ready_when_stale_processes_exist():
 def test_missing_packages_fail_the_report():
     report = evaluate_prep_result(
         processes=[],
-        package_status={"h2track_sim": True, "h2track_tracking": True, "simulated_gas_sensor": False, "gaden_player": True},
+        package_status={"h2track_bringup": True, "h2track_tracking": True, "simulated_gas_sensor": False, "gaden_player": True},
         dry_run=False,
         kill_failures=[],
     )
@@ -55,7 +55,7 @@ def test_missing_packages_fail_the_report():
 def test_package_check_marks_missing_packages():
     status = check_required_packages(lambda name: None if name == "gaden_player" else f"/prefix/{name}")
 
-    assert status["h2track_sim"] is True
+    assert status["h2track_bringup"] is True
     assert status["h2track_tracking"] is True
     assert status["simulated_gas_sensor"] is True
     assert status["gaden_player"] is False
@@ -124,7 +124,7 @@ user       12001    1282  0 00:00 ?        00:00:00 /home/user/gaden_ws/install/
 user       12002    1282  0 00:00 ?        00:00:00 /home/user/gaden_ws/install/gaden_player/lib/gaden_player/player --ros-args -r __node:=gaden_player
 user       12003    1282  0 00:00 ?        00:00:00 /usr/bin/python3 /home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/gaden_sensor_gate_node --ros-args -r __node:=gaden_sensor_gate_node
 user       12004    1282  0 00:00 ?        00:00:00 /usr/bin/python3 /home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/gaden_adapter_node --ros-args -r __node:=gaden_adapter_node
-user       12005    1282  0 00:00 ?        00:00:00 /usr/bin/python3 /home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/mission_manager_node --ros-args -r __node:=mission_manager_node
+user       12005    1282  0 00:00 ?        00:00:00 /usr/bin/python3 /home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/bt_node_runner --ros-args -r __node:=bt_node_runner
 """
 
 
@@ -238,7 +238,7 @@ def test_matches_gaden_and_mission_processes_for_cleanup():
         MatchedProcess(
             pid=12005,
             kind='mission_manager',
-            command='/usr/bin/python3 /home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/mission_manager_node --ros-args -r __node:=mission_manager_node',
+            command='/usr/bin/python3 /home/user/h2track-xian/install/h2track_tracking/lib/h2track_tracking/bt_node_runner --ros-args -r __node:=bt_node_runner',
         ),
     ]
 
@@ -257,7 +257,7 @@ def test_cli_warehouse_auto_mode_skips_gaden_package_requirement(capsys):
 
     captured = capsys.readouterr().out
     assert exit_code == 0
-    assert 'package ok: h2track_sim' in captured
+    assert 'package ok: h2track_bringup' in captured
     assert 'package ok: h2track_tracking' in captured
     assert 'DEMO PREP OK' in captured
     assert 'missing package: simulated_gas_sensor' not in captured

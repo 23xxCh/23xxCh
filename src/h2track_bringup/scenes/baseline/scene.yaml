@@ -1,0 +1,58 @@
+world: scenes/baseline/h2track_lab.world
+map: maps/h2track_map.yaml
+nav2_params: config/nav2_demo_params.yaml
+scene_name: baseline
+use_gaden: true
+use_slam: false
+nav2_autostart: true
+localizer_node: amcl
+use_rviz: true
+headless: false
+mission_manager:
+  initial_pose:
+    x: 3.2
+    y: 2.6
+    yaw: 3.14159
+  patrol_points:
+  - - 2.6
+    - 2.6
+  - - 0.8
+    - 2.4
+  - - -1.8
+    - 2.45
+  - - -3.45
+    - 2.45
+  enter_threshold: 5.0
+  exit_threshold: 2.0
+  source_threshold: 20.0
+  confirm_samples: 2
+  source_radius: 1.0
+  source_hold_steps: 2
+  track_step: 0.4
+  sweep_angle_deg: 30.0
+gas_source:
+  x: -4.0
+  y: 1.95
+gaden:
+  enabled: true
+  project_path: /home/user/gaden_ws/install/test_env/share/test_env/scenarios/Exp_C/environment_configurations/config1
+  playback_id: scene1
+  player_freq: 1.0
+  sensor_topic: /gaden/sensor_reading
+  sensor_frame: gas_sensor_link
+  fixed_frame: gaden_map
+  map_offset_x: 5.0
+  map_offset_y: 3.0
+  map_offset_z: 0.0
+  map_roll: 0.0
+  map_pitch: 0.0
+  map_yaw: 0.0
+gas_field:
+  source_strength: 120.0
+  decay_rate: 0.55
+  plume_stddev: 1.2
+  wind_x: 0.4
+  wind_y: 0.0
+  noise_stddev: 0.05
+  gas_type: "H2"
+  publish_rate_hz: 5.0

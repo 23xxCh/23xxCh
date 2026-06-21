@@ -1,4 +1,4 @@
-"""Tests for particle filter ROS node."""
+"""Tests for particle filter ROS node (LifecycleNode variant)."""
 
 from __future__ import annotations
 
@@ -10,11 +10,27 @@ import pytest
 import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from geometry_msgs.msg import PoseArray, PoseWithCovarianceStamped
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Float32
 
 from h2track_tracking.particle_filter.particle_filter_node import ParticleFilterNode
+
+
+def _configure_and_activate(node):
+    """Trigger lifecycle transitions for testing."""
+    from rclpy.lifecycle import LifecycleState
+    dummy_state = type("FakeState", (), {"label": "unconfigured"})()
+    node.on_configure(dummy_state)
+    node.on_activate(dummy_state)
+
+
+def _configure_only(node):
+    """Trigger only configure transition (no publishers/timers)."""
+    from rclpy.lifecycle import LifecycleState
+    dummy_state = type("FakeState", (), {"label": "unconfigured"})()
+    node.on_configure(dummy_state)
 
 
 class TestParticleFilterNodeInit:
@@ -77,11 +93,12 @@ class TestParticleFilterNodeInit:
             if rclpy.ok():
                 rclpy.shutdown()
 
-    def test_publishers_created(self):
-        """Test that required publishers are created."""
+    def test_publishers_created_after_activate(self):
+        """Test that required publishers are created after activation."""
         rclpy.init()
         try:
             node = ParticleFilterNode()
+            _configure_and_activate(node)
             publisher_names = [pub.topic_name for pub in node.publishers]
             assert "/estimated_source" in publisher_names
             assert "/particle_cloud" in publisher_names
@@ -90,11 +107,12 @@ class TestParticleFilterNodeInit:
             if rclpy.ok():
                 rclpy.shutdown()
 
-    def test_subscriptions_created(self):
-        """Test that required subscriptions are created."""
+    def test_subscriptions_created_after_configure(self):
+        """Test that required subscriptions are created after configuration."""
         rclpy.init()
         try:
             node = ParticleFilterNode()
+            _configure_only(node)
             subscription_names = [sub.topic_name for sub in node.subscriptions]
             assert "/gas_concentration" in subscription_names
             assert "/odom" in subscription_names
@@ -112,6 +130,7 @@ class TestParticleFilterNodeCallbacks:
         rclpy.init()
         try:
             node = ParticleFilterNode()
+            _configure_only(node)
             node._robot_position = (5.0, 5.0)
 
             msg = Float32(data=0.75)
@@ -128,6 +147,7 @@ class TestParticleFilterNodeCallbacks:
         rclpy.init()
         try:
             node = ParticleFilterNode()
+            _configure_only(node)
 
             msg = Odometry()
             msg.pose.pose.position.x = 3.5
@@ -147,6 +167,7 @@ class TestParticleFilterNodeCallbacks:
         rclpy.init()
         try:
             node = ParticleFilterNode()
+            _configure_only(node)
 
             old_positions = [p.position.copy() for p in node._filter.particles]
 
@@ -178,6 +199,7 @@ class TestParticleFilterNodePublishing:
         rclpy.init(args=["--ros-args", "-p", "publish_rate:=10.0"])
         try:
             node = ParticleFilterNode()
+            _configure_and_activate(node)
 
             published_estimates = []
             published_particles = []
@@ -192,13 +214,14 @@ class TestParticleFilterNodePublishing:
                 PoseWithCovarianceStamped,
                 "/estimated_source",
                 estimate_callback,
-                10
+                QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE,
+                           durability=DurabilityPolicy.TRANSIENT_LOCAL)
             )
             node.create_subscription(
                 PoseArray,
                 "/particle_cloud",
                 particle_callback,
-                10
+                QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
             )
 
             start_time = time.time()
@@ -217,6 +240,7 @@ class TestParticleFilterNodePublishing:
         rclpy.init()
         try:
             node = ParticleFilterNode()
+            _configure_only(node)
 
             node._robot_position = (0.0, 0.0)
             msg = Float32(data=0.5)
@@ -240,6 +264,7 @@ class TestParticleFilterNodePublishing:
         rclpy.init()
         try:
             node = ParticleFilterNode()
+            _configure_only(node)
 
             node._publish_particle_cloud()
 
@@ -258,6 +283,7 @@ class TestParticleFilterNodeResampling:
         rclpy.init()
         try:
             node = ParticleFilterNode()
+            _configure_only(node)
 
             for i, p in enumerate(node._filter.particles):
                 p.weight = 100.0 if i == 0 else 0.001
@@ -278,6 +304,7 @@ class TestParticleFilterNodeResampling:
         rclpy.init(args=["--ros-args", "-p", "resample_threshold:=0.3"])
         try:
             node = ParticleFilterNode()
+            _configure_only(node)
             assert node._filter.config.resample_threshold == 0.3
             node.destroy_node()
         finally:
@@ -293,6 +320,7 @@ class TestParticleFilterNodeBounds:
         rclpy.init(args=["--ros-args", "-p", "bounds:=[2.0, 3.0, 8.0, 12.0]"])
         try:
             node = ParticleFilterNode()
+            _configure_only(node)
             bounds = [2.0, 3.0, 8.0, 12.0]
 
             for p in node._filter.particles:
@@ -309,6 +337,7 @@ class TestParticleFilterNodeBounds:
         rclpy.init()
         try:
             node = ParticleFilterNode()
+            _configure_only(node)
 
             # Manually test the bounds validation by setting invalid bounds
             # The node should handle this gracefully

@@ -131,11 +131,11 @@ def test_build_demo_launch_command_omits_use_slam_when_auto():
 def test_extract_round_metrics_parses_key_nav_and_mode_signals():
     log_text = """
     [controller_server] Failed to make progress
-    [mission_manager_node] Patrol goal timed out; skipping to next waypoint.
+    [bt_node_runner] Patrol goal timed out; skipping to next waypoint.
     [bt_navigator] Goal succeeded
-    [mission_manager_node] Mode transition: PATROL -> SEEK_CONFIRM (conc=0.8, pose=(1.0, 1.0))
-    [mission_manager_node] Mode transition: SEEK_CONFIRM -> SEEK_TRACK (conc=1.2, pose=(1.1, 1.1))
-    [mission_manager_node] Mode transition: SEEK_TRACK -> SOURCE_FOUND (conc=3.5, pose=(3.4, -2.9))
+    [bt_node_runner] Mode transition: PATROL -> SEEK_CONFIRM (conc=0.8, pose=(1.0, 1.0))
+    [bt_node_runner] Mode transition: SEEK_CONFIRM -> SEEK_TRACK (conc=1.2, pose=(1.1, 1.1))
+    [bt_node_runner] Mode transition: SEEK_TRACK -> SOURCE_FOUND (conc=3.5, pose=(3.4, -2.9))
     """
     metrics = extract_round_metrics(log_text)
     assert metrics["failed_to_make_progress"] == 1

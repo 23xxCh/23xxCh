@@ -11,7 +11,7 @@ from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
     default_world = PathJoinSubstitution([FindPackageShare("h2track_sim"), "scenes", "baseline", "h2track_lab.world"])
-    robot_xacro = PathJoinSubstitution([FindPackageShare("h2track_sim"), "urdf", "h2track_bot.urdf.xacro"])
+    robot_xacro = PathJoinSubstitution([FindPackageShare("h2track_description"), "urdf", "h2track_bot.urdf.xacro"])
 
     use_sim_time = LaunchConfiguration("use_sim_time")
     world = LaunchConfiguration("world")

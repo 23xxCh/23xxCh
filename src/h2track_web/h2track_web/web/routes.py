@@ -1,0 +1,491 @@
+"""FastAPI route definitions for the web console.
+
+This module contains all FastAPI route handlers extracted from demo_web_server.py.
+Each route delegates to SimulationController, LlmController, or MetricsStore.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+from typing import Any
+
+from .auth import get_auth_dependency, settings as auth_settings
+from .scene_registry import get_scene_registry
+
+# Configure logger
+logger = logging.getLogger(__name__)
+
+try:
+    from fastapi import HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+    from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
+
+    FASTAPI_AVAILABLE = True
+    WEBSOCKET_AVAILABLE = True
+except Exception:
+    FASTAPI_AVAILABLE = False
+    WEBSOCKET_AVAILABLE = False
+    HTTPException = None  # type: ignore[misc,assignment]
+    Query = None  # type: ignore[misc,assignment]
+    Request = None  # type: ignore[misc,assignment]
+    WebSocket = None  # type: ignore[misc,assignment]
+    WebSocketDisconnect = None  # type: ignore[misc,assignment]
+    FileResponse = None  # type: ignore[misc,assignment]
+    HTMLResponse = None  # type: ignore[misc,assignment]
+    JSONResponse = None  # type: ignore[misc,assignment]
+    Response = None  # type: ignore[misc,assignment]
+    StreamingResponse = None  # type: ignore[misc,assignment]
+
+
+# Type alias for Request that works when FastAPI is not available
+RequestType = Request if FASTAPI_AVAILABLE else Any  # type: ignore[misc]
+
+
+async def _read_json_dict(request: "RequestType") -> dict[str, Any]:
+    """Read and validate JSON dict from request body.
+
+    Args:
+        request: FastAPI Request object.
+
+    Returns:
+        Parsed JSON dictionary, or empty dict if invalid.
+
+    Raises:
+        HTTPException: If JSON is invalid or not a dict.
+    """
+    content_type = request.headers.get("content-type", "")
+    if "application/json" not in content_type.lower():
+        return {}
+    try:
+        body = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"invalid JSON payload: {exc}") from exc
+    if body is None:
+        return {}
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="JSON body must be an object")
+    return body
+
+
+def register_routes(
+    app: Any,
+    *,
+    sim: Any,
+    llm: Any,
+    registry: Any = None,
+    ui_meta: dict[str, Any],
+    resolve_static_index_html: Any,
+    html_page: str,
+    ws_manager: Any = None,
+) -> None:
+    """Register all FastAPI routes on the given app.
+
+    Args:
+        app: FastAPI application instance.
+        sim: SimulationController instance.
+        llm: LlmController instance.
+        registry: Optional RobotRegistry instance for fleet operations.
+        ui_meta: UI metadata dict with mode, bundle_ready, bundle_path.
+        resolve_static_index_html: Function to resolve static index.html path.
+        html_page: HTML content for legacy inline mode.
+        ws_manager: Optional ConnectionManager for WebSocket support.
+    """
+    # Get auth dependency - None if auth disabled or FastAPI unavailable
+    auth_dep = get_auth_dependency()
+
+    @app.get("/", response_class=HTMLResponse)
+    def index() -> Any:
+        """Root endpoint - serve static bundle or legacy HTML."""
+        index_path = resolve_static_index_html()
+        if index_path is not None:
+            return FileResponse(index_path, media_type="text/html")
+        return HTMLResponse(content=html_page)
+
+    @app.get("/api/ui/meta")
+    def get_ui_meta() -> Any:
+        """Get UI mode metadata (static bundle vs legacy inline)."""
+        return JSONResponse(content=ui_meta)
+
+    @app.get("/api/scenes")
+    def get_scenes() -> Any:
+        """Get list of available scenes for multi-map selection.
+
+        Returns:
+            JSON list of scene objects with id, name, description, and metadata.
+        """
+        try:
+            registry = get_scene_registry()
+            scenes = registry.list_scenes()
+            return JSONResponse(content={
+                "scenes": [scene.to_dict() for scene in scenes],
+                "default": registry.get_default_scene(),
+                "count": len(scenes),
+            })
+        except Exception as exc:
+            logger.exception("Failed to list scenes")
+            raise HTTPException(status_code=500, detail=f"Failed to list scenes: {exc}") from exc
+
+    @app.get("/api/scenes/{scene_id}")
+    def get_scene_detail(scene_id: str) -> Any:
+        """Get detailed information about a specific scene.
+
+        Args:
+            scene_id: Scene identifier
+
+        Returns:
+            Scene details including configuration and metadata.
+        """
+        try:
+            registry = get_scene_registry()
+            scene = registry.get_scene(scene_id)
+            if scene is None:
+                raise HTTPException(status_code=404, detail=f"Scene not found: {scene_id}")
+            return JSONResponse(content=scene.to_dict())
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.exception(f"Failed to get scene details for {scene_id}")
+            raise HTTPException(status_code=500, detail=f"Failed to get scene: {exc}") from exc
+
+    @app.post("/api/sim/start")
+    async def start_sim(request: "RequestType", _auth: str = auth_dep) -> Any:  # type: ignore[valid-type]
+        """Start simulation with optional launch profile."""
+        payload = await _read_json_dict(request)
+        ok, message = sim.start_with_profile(payload)
+        if not ok:
+            raise HTTPException(status_code=409, detail=message)
+        return JSONResponse(status_code=202, content={"ok": True, "message": message})
+
+    @app.post("/api/sim/stop")
+    def stop_sim(_auth: str = auth_dep) -> Any:
+        """Stop running simulation."""
+        ok, message = sim.stop()
+        if not ok:
+            raise HTTPException(status_code=409, detail=message)
+        return JSONResponse(status_code=202, content={"ok": True, "message": message})
+
+    @app.get("/api/sim/status")
+    def get_status() -> Any:
+        """Get current simulation status."""
+        return JSONResponse(content=sim.status())
+
+    @app.get("/api/logs/recent")
+    def get_recent(limit: int = Query(default=200, ge=1, le=2000)) -> Any:  # type: ignore[valid-type]
+        """Get recent log entries."""
+        logs = sim.recent_logs(limit=limit)
+        return JSONResponse(content={"logs": logs, "latest_id": sim.status()["latest_log_id"]})
+
+    @app.get("/api/metrics/recent")
+    def get_metrics_recent(limit: int = Query(default=120, ge=1, le=2000)) -> Any:  # type: ignore[valid-type]
+        """Get recent metrics snapshot."""
+        sim.refresh_metrics_from_topics_if_needed()
+        sim.refresh_runtime_health_if_needed()
+        return JSONResponse(content=sim.metrics_snapshot(limit=limit))
+
+    @app.get("/api/health/nodes")
+    def get_nodes_health() -> Any:
+        """Get node health status."""
+        sim.refresh_runtime_health_if_needed()
+        payload = sim.metrics_snapshot(limit=1).get("node_health", {})
+        return JSONResponse(content=payload)
+
+    @app.post("/api/diag/export")
+    def export_diag() -> Any:
+        """Export diagnostics to zip file."""
+        try:
+            path = sim.export_diagnostics(scene="warehouse")
+        except RuntimeError as exc:
+            logger.error(f"Runtime error exporting diagnostics: {exc}")
+            raise HTTPException(status_code=500, detail="Diagnostic export failed") from exc
+        except Exception as exc:
+            logger.exception(f"Unexpected error exporting diagnostics: {exc}")
+            raise HTTPException(status_code=500, detail="Diagnostic export failed") from exc
+        return JSONResponse(status_code=202, content={"ok": True, "path": path})
+
+    @app.post("/api/report/export")
+    def export_report() -> Any:
+        """Export run report as JSON and Markdown."""
+        try:
+            status_payload = sim.status()
+            profile = status_payload.get("launch_profile", {}) if isinstance(status_payload, dict) else {}
+            scene = str(profile.get("scene", "warehouse"))
+            artifacts = sim.export_run_report(scene=scene)
+        except RuntimeError as exc:
+            logger.error(f"Runtime error exporting run report: {exc}")
+            raise HTTPException(status_code=500, detail="Run report export failed") from exc
+        except Exception as exc:
+            logger.exception(f"Unexpected error exporting run report: {exc}")
+            raise HTTPException(status_code=500, detail="Run report export failed") from exc
+        return JSONResponse(status_code=202, content={"ok": True, **artifacts})
+
+    @app.get("/api/llm/profiles")
+    def get_llm_profiles() -> Any:
+        """List all LLM profiles."""
+        try:
+            payload = llm.list_profiles()
+        except RuntimeError as exc:
+            logger.error(f"Runtime error listing LLM profiles: {exc}")
+            raise HTTPException(status_code=500, detail="Internal server error") from exc
+        except Exception as exc:
+            logger.exception(f"Unexpected error listing LLM profiles: {exc}")
+            raise HTTPException(status_code=500, detail="Internal server error") from exc
+        return JSONResponse(content=payload)
+
+    @app.post("/api/llm/profiles")
+    async def save_llm_profile(request: "RequestType", _auth: str = auth_dep) -> Any:  # type: ignore[valid-type]
+        """Save or update an LLM profile."""
+        payload = await _read_json_dict(request)
+        try:
+            result = llm.save_profile(payload)
+        except ValueError as exc:
+            logger.warning(f"Invalid LLM profile data: {exc}")
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            logger.error(f"Runtime error saving LLM profile: {exc}")
+            raise HTTPException(status_code=500, detail="Internal server error") from exc
+        except Exception as exc:
+            logger.exception(f"Unexpected error saving LLM profile: {exc}")
+            raise HTTPException(status_code=500, detail="Internal server error") from exc
+        return JSONResponse(status_code=202, content=result)
+
+    @app.post("/api/llm/profiles/{profile_id}/activate")
+    def activate_llm_profile(profile_id: str, _auth: str = auth_dep) -> Any:
+        """Activate an LLM profile by ID."""
+        try:
+            result = llm.activate_profile(profile_id)
+        except ValueError as exc:
+            logger.warning(f"Failed to activate LLM profile {profile_id}: {exc}")
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except RuntimeError as exc:
+            logger.error(f"Runtime error activating LLM profile {profile_id}: {exc}")
+            raise HTTPException(status_code=500, detail="Internal server error") from exc
+        except Exception as exc:
+            logger.exception(f"Unexpected error activating LLM profile {profile_id}: {exc}")
+            raise HTTPException(status_code=500, detail="Internal server error") from exc
+        return JSONResponse(status_code=202, content=result)
+
+    @app.post("/api/llm/profiles/{profile_id}/check")
+    def check_llm_profile(profile_id: str, _auth: str = auth_dep) -> Any:
+        """Check connectivity for an LLM profile."""
+        try:
+            result = llm.check_profile(profile_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"profile check failed: {exc}") from exc
+        return JSONResponse(content=result)
+
+    @app.delete("/api/llm/profiles/{profile_id}")
+    def delete_llm_profile(profile_id: str, _auth: str = auth_dep) -> Any:
+        """Delete an LLM profile by ID."""
+        try:
+            result = llm.delete_profile(profile_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"delete profile failed: {exc}") from exc
+        return JSONResponse(status_code=202, content=result)
+
+    @app.post("/api/llm/chat")
+    async def llm_chat(request: "RequestType", _auth: str = auth_dep) -> Any:  # type: ignore[valid-type]
+        """Send a chat message to the LLM."""
+        payload = await _read_json_dict(request)
+        try:
+            result = llm.chat(payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"llm chat failed: {exc}") from exc
+        return JSONResponse(content=result)
+
+    @app.post("/api/llm/action/execute")
+    async def execute_llm_action(request: "RequestType", _auth: str = auth_dep) -> Any:  # type: ignore[valid-type]
+        """Execute an LLM-suggested action."""
+        payload = await _read_json_dict(request)
+        action = payload.get("action")
+        if not isinstance(action, dict):
+            raise HTTPException(status_code=400, detail="action object is required")
+        try:
+            result = llm.execute_action(action)
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"execute action failed: {exc}") from exc
+        status_code = 202 if result.get("ok") else 409
+        return JSONResponse(status_code=status_code, content=result)
+
+    @app.post("/api/llm/loop/run-once")
+    async def llm_loop_run_once(request: "RequestType", _auth: str = auth_dep) -> Any:  # type: ignore[valid-type]
+        """Run a single LLM autonomous loop iteration."""
+        payload = await _read_json_dict(request)
+        try:
+            result = llm.run_once(payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"run-once failed: {exc}") from exc
+        return JSONResponse(status_code=202, content=result)
+
+    @app.get("/api/llm/history")
+    def llm_history(limit: int = Query(default=50, ge=1, le=500)) -> Any:  # type: ignore[valid-type]
+        """Get LLM chat history."""
+        return JSONResponse(content=llm.history(limit=limit))
+
+    @app.get("/api/llm/audit")
+    def llm_audit(limit: int = Query(default=100, ge=1, le=1000)) -> Any:  # type: ignore[valid-type]
+        """Get LLM action audit log."""
+        return JSONResponse(content=llm.audit(limit=limit))
+
+    @app.get("/api/logs/stream")
+    async def stream_logs(request: "RequestType", after_id: int = Query(default=0, ge=0)) -> Any:  # type: ignore[valid-type]
+        """Stream logs via Server-Sent Events."""
+
+        async def _events() -> Any:
+            cursor = after_id
+            while True:
+                if await request.is_disconnected():
+                    break
+                new_entries = sim.logs_after(cursor)
+                if new_entries:
+                    for entry in new_entries:
+                        cursor = int(entry["id"])
+                        payload = json.dumps(entry, ensure_ascii=False)
+                        yield f"id: {cursor}\nevent: log\ndata: {payload}\n\n"
+                else:
+                    yield "event: ping\ndata: {}\n\n"
+                    await asyncio.sleep(1.0)
+
+        return StreamingResponse(_events(), media_type="text/event-stream")
+
+    @app.get("/metrics")
+    def get_prometheus_metrics() -> Any:
+        """Prometheus metrics endpoint for external monitoring."""
+        from .metrics_export import PrometheusMetricsExporter, is_prometheus_available
+
+        if not is_prometheus_available():
+            raise HTTPException(
+                status_code=503,
+                detail="prometheus_client not installed. Install with: pip install prometheus_client",
+            )
+        exporter = PrometheusMetricsExporter(sim._metrics)
+        try:
+            content, content_type = exporter.get_metrics_response()
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f"failed to generate prometheus metrics: {exc}",
+            ) from exc
+        return Response(content=content, media_type=content_type)
+
+    # -----------------------------------------------------------------
+    # Fleet API endpoints (multi-robot monitoring)
+    # -----------------------------------------------------------------
+
+    if registry is not None:
+
+        @app.get("/api/fleet/overview")
+        def get_fleet_overview() -> Any:
+            """Get fleet summary with per-robot status."""
+            return JSONResponse(content=registry.get_fleet_overview())
+
+        @app.get("/api/fleet/metrics")
+        def get_fleet_metrics() -> Any:
+            """Get aggregate fleet metrics."""
+            return JSONResponse(content=registry.get_fleet_metrics())
+
+        @app.get("/api/fleet/history")
+        def get_fleet_history(limit: int = Query(default=100, ge=1, le=1000)) -> Any:  # type: ignore[valid-type]
+            """Get historical fleet data."""
+            return JSONResponse(content=registry.get_fleet_history(limit=limit))
+
+        @app.post("/api/fleet/record-navigation-success/{robot_id}")
+        def record_navigation_success(robot_id: str) -> Any:
+            """Record a successful navigation for a robot."""
+            try:
+                registry.record_navigation_success(robot_id)
+            except KeyError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            return JSONResponse(status_code=202, content={"ok": True, "robot_id": robot_id})
+
+        @app.post("/api/fleet/record-navigation-failure/{robot_id}")
+        def record_navigation_failure(robot_id: str) -> Any:
+            """Record a failed navigation for a robot."""
+            try:
+                registry.record_navigation_failure(robot_id)
+            except KeyError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            return JSONResponse(status_code=202, content={"ok": True, "robot_id": robot_id})
+
+        @app.post("/api/fleet/record-distance/{robot_id}")
+        async def record_distance(robot_id: str, request: "RequestType") -> Any:  # type: ignore[valid-type]
+            """Record distance traveled for a robot."""
+            payload = await _read_json_dict(request)
+            distance_m = payload.get("distance_m")
+            if distance_m is None:
+                raise HTTPException(status_code=400, detail="distance_m is required")
+            try:
+                distance_float = float(distance_m)
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(status_code=400, detail="distance_m must be a number") from exc
+            try:
+                registry.record_distance(robot_id, distance_float)
+            except KeyError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            return JSONResponse(status_code=202, content={"ok": True, "robot_id": robot_id, "distance_m": distance_float})
+
+        @app.post("/api/fleet/record-snapshot")
+        def record_fleet_snapshot() -> Any:
+            """Record a historical snapshot of the fleet state."""
+            registry.record_fleet_snapshot()
+            return JSONResponse(status_code=202, content={"ok": True})
+
+    # WebSocket endpoint for real-time metrics streaming
+    if WEBSOCKET_AVAILABLE and ws_manager is not None:
+        from .websocket import websocket_endpoint
+
+        @app.websocket("/ws")
+        async def ws_metrics(websocket: WebSocket) -> None:
+            """WebSocket endpoint for real-time metrics streaming.
+
+            Supports client commands:
+            - pause: Pause metrics stream
+            - resume: Resume metrics stream
+            - subscribe:topic: Subscribe to specific data topics
+            - unsubscribe:topic: Unsubscribe from topics
+            """
+            await websocket_endpoint(
+                websocket,
+                ws_manager,
+                get_metrics=lambda: sim.metrics_snapshot(limit=120),
+            )
+
+        # Heatmap WebSocket endpoint for real-time visualization
+        from .websocket import HeatmapDataProvider, heatmap_websocket_endpoint
+
+        # Create heatmap provider instance (to be populated by ROS callbacks)
+        heatmap_provider = HeatmapDataProvider()
+
+        @app.websocket("/ws/heatmap")
+        async def ws_heatmap(websocket: WebSocket) -> None:
+            """WebSocket endpoint for real-time heatmap visualization.
+
+            Streams concentration grid data, particle filter particles,
+            and source estimates at 2 Hz.
+
+            Message Format:
+                {
+                    "type": "heatmap_update",
+                    "timestamp": "2026-04-05T12:00:00.000Z",
+                    "grid": {...},
+                    "particles": {...},
+                    "estimate": {...}
+                }
+            """
+            await heatmap_websocket_endpoint(
+                websocket,
+                ws_manager,
+                heatmap_provider=heatmap_provider,
+                broadcast_interval_sec=0.5,  # 2 Hz
+            )
+
+        # Expose heatmap_provider for ROS integration
+        app.state.heatmap_provider = heatmap_provider

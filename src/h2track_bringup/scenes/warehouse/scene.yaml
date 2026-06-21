@@ -1,0 +1,74 @@
+scene_name: warehouse
+world: scenes/warehouse/warehouse.world
+map: scenes/warehouse/maps/warehouse_map.yaml
+nav2_params: scenes/warehouse/nav2_params.yaml
+use_gaden: true
+use_slam: true
+nav2_autostart: false
+localizer_node: none
+model_path: scenes/warehouse/models
+upstream:
+  name: aws-robomaker-small-warehouse-world
+  license: MIT-0
+  source: https://github.com/aws-robotics/aws-robomaker-small-warehouse-world
+mission_manager:
+  initial_pose:
+    x: 0.5
+    y: 1.0
+    yaw: 0.0
+  patrol_goal_timeout_sec: 70.0
+  patrol_points:
+  - - 1.5
+    - 1.8
+  - - 2.4
+    - 1.1
+  - - 2.9
+    - -1.6
+  - - 3.2
+    - -2.45
+  - - 3.48
+    - -2.92
+  enter_threshold: 0.65
+  exit_threshold: 0.4
+  source_threshold: 3.4
+  confirm_samples: 1
+  track_exit_samples: 3
+  source_radius: 1.0
+  source_hold_steps: 1
+  track_step: 0.4
+  sweep_angle_deg: 30.0
+gas_source:
+  x: 3.6
+  y: -3.038551
+gaden:
+  enabled: true
+  project_path: /home/user/gaden_ws/install/test_env/share/test_env/scenarios/h2track_warehouse/environment_configurations/config1
+  playback_id: scene1
+  player_freq: 0.5
+  sensor_topic: /gaden/sensor_reading
+  sensor_frame: gas_sensor_link
+  fixed_frame: gaden_map
+  map_offset_x: 0.0
+  map_offset_y: 0.0
+  map_offset_z: 0.0
+  map_roll: 0.0
+  map_pitch: 0.0
+  map_yaw: 0.0
+gas_field:
+  source_strength: 200.0
+  decay_rate: 0.65
+  plume_stddev: 1.5
+  wind_x: 0.18
+  wind_y: -0.06
+  noise_stddev: 0.03
+  gas_type: "H2"
+  publish_rate_hz: 5.0
+fusion:
+  use_fusion: true
+  fusion_mode: weighted
+  pf_weight: 0.35
+  surge_weight: 0.65
+  pf_confidence_threshold: 0.3
+wind_estimation:
+  estimate_wind: true
+  min_samples: 8

@@ -1,4 +1,11 @@
-"""ROS 2 node that wraps ParticleFilter for gas source localization."""
+"""ROS 2 lifecycle node that wraps ParticleFilter for gas source localization.
+
+Converted to LifecycleNode following ros2-engineering-skills pattern:
+- on_configure: create filter, declare parameters, create subscriptions
+- on_activate: create publishers, start timer
+- on_deactivate: stop timer
+- on_cleanup: reset filter
+"""
 
 from __future__ import annotations
 
@@ -8,33 +15,24 @@ from geometry_msgs.msg import Pose, PoseArray, PoseWithCovarianceStamped
 from nav_msgs.msg import Odometry
 import numpy as np
 import rclpy
-from rclpy.node import Node
+from rclpy.lifecycle import LifecycleNode, LifecycleState, TransitionCallbackReturn
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from std_msgs.msg import Float32
 
 from .filter import ParticleFilter
 from .types import ParticleFilterConfig
 
 
-class ParticleFilterNode(Node):
-    """ROS 2 node for probabilistic gas source localization using particle filter.
+class ParticleFilterNode(LifecycleNode):
+    """ROS 2 lifecycle node for probabilistic gas source localization.
 
     Subscribers:
         /gas_concentration (Float32): Gas sensor reading
         /odom (Odometry): Robot odometry for position
 
-    Publishers:
+    Publishers (active only):
         /estimated_source (PoseWithCovarianceStamped): Estimated source position with covariance
         /particle_cloud (PoseArray): Particle positions for visualization
-
-    Parameters:
-        num_particles (int): Number of particles (default: 500)
-        motion_sigma (float): Motion noise standard deviation in meters (default: 0.3)
-        observation_sigma (float): Observation noise standard deviation (default: 0.5)
-        plume_sigma (float): Plume dispersion parameter (default: 2.0)
-        source_strength (float): Source strength parameter (default: 1.0)
-        bounds (double[]): Bounds as [min_x, min_y, max_x, max_y] (default: [-10, -10, 10, 10])
-        publish_rate (float): Publishing rate in Hz (default: 2.0)
-        resample_threshold (float): Effective particle ratio threshold for resampling (default: 0.5)
     """
 
     def __init__(self) -> None:
@@ -50,34 +48,39 @@ class ParticleFilterNode(Node):
         self.declare_parameter("publish_rate", 2.0)
         self.declare_parameter("resample_threshold", 0.5)
 
-        # Get parameters
+        # State (initialized in on_configure)
+        self._filter: ParticleFilter | None = None
+        self._bounds: tuple[float, float, float, float] = (-10, -10, 10, 10)
+        self._robot_position: tuple[float, float] = (0.0, 0.0)
+        self._last_odom_position: tuple[float, float] | None = None
+        self._estimate_pub = None
+        self._particle_pub = None
+        self._timer = None
+
+    def on_configure(self, state: LifecycleState) -> TransitionCallbackReturn:
+        """Create filter and subscriptions (no publishers or timers)."""
         num_particles = int(self.get_parameter("num_particles").value)
         motion_sigma = float(self.get_parameter("motion_sigma").value)
         observation_sigma = float(self.get_parameter("observation_sigma").value)
         plume_sigma = float(self.get_parameter("plume_sigma").value)
         source_strength = float(self.get_parameter("source_strength").value)
-        bounds_raw = self.get_parameter("bounds").value
-        publish_rate = float(self.get_parameter("publish_rate").value)
         resample_threshold = float(self.get_parameter("resample_threshold").value)
 
-        # Parse bounds - handle both string and list formats
+        # Parse bounds
+        bounds_raw = self.get_parameter("bounds").value
         if isinstance(bounds_raw, str):
             try:
                 bounds = ast.literal_eval(bounds_raw)
             except (ValueError, SyntaxError):
-                self.get_logger().warning(f"Failed to parse bounds string: {bounds_raw}, using defaults")
+                self.get_logger().warning(f"Failed to parse bounds string: {bounds_raw}")
                 bounds = [-10.0, -10.0, 10.0, 10.0]
         else:
             bounds = bounds_raw
-
-        # Validate bounds
         if not isinstance(bounds, (list, tuple)) or len(bounds) < 4:
-            self.get_logger().warning(f"Invalid bounds parameter: {bounds}, using defaults")
             bounds = [-10.0, -10.0, 10.0, 10.0]
-
         self._bounds = (float(bounds[0]), float(bounds[1]), float(bounds[2]), float(bounds[3]))
 
-        # Create filter config
+        # Create and initialize filter
         config = ParticleFilterConfig(
             num_particles=num_particles,
             motion_sigma=motion_sigma,
@@ -86,84 +89,69 @@ class ParticleFilterNode(Node):
             source_strength=source_strength,
             resample_threshold=resample_threshold,
         )
-
-        # Initialize filter
         self._filter = ParticleFilter(config)
         self._filter.initialize(self._bounds)
 
-        # Robot state
-        self._robot_position: tuple[float, float] = (0.0, 0.0)
-        self._last_odom_position: tuple[float, float] | None = None
-
-        # Create publishers
-        self._estimate_pub = self.create_publisher(
-            PoseWithCovarianceStamped,
-            "/estimated_source",
-            10
-        )
-        self._particle_pub = self.create_publisher(
-            PoseArray,
-            "/particle_cloud",
-            10
-        )
-
-        # Create subscriptions
-        self.create_subscription(
-            Float32,
-            "/gas_concentration",
-            self._gas_concentration_callback,
-            10
-        )
-        self.create_subscription(
-            Odometry,
-            "/odom",
-            self._odom_callback,
-            10
-        )
-
-        # Create timer for periodic publishing
-        if publish_rate > 0:
-            timer_period = 1.0 / publish_rate
-            self._timer = self.create_timer(timer_period, self._timer_callback)
-        else:
-            self._timer = None
+        # Create subscriptions (data flows even when inactive)
+        self.create_subscription(Float32, "/gas_concentration", self._gas_concentration_callback, 10)
+        self.create_subscription(Odometry, "/odom", self._odom_callback, 10)
 
         self.get_logger().info(
-            f"ParticleFilterNode initialized with {num_particles} particles, "
-            f"bounds={self._bounds}, publish_rate={publish_rate}Hz"
+            f"ParticleFilterNode configured with {num_particles} particles, bounds={self._bounds}"
         )
+        return TransitionCallbackReturn.SUCCESS
+
+    def on_activate(self, state: LifecycleState) -> TransitionCallbackReturn:
+        """Create publishers and start timer."""
+        state_qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE,
+                               durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        vis_qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
+        self._estimate_pub = self.create_publisher(PoseWithCovarianceStamped, "/estimated_source", state_qos)
+        self._particle_pub = self.create_publisher(PoseArray, "/particle_cloud", vis_qos)
+
+        publish_rate = float(self.get_parameter("publish_rate").value)
+        if publish_rate > 0:
+            self._timer = self.create_timer(1.0 / publish_rate, self._timer_callback)
+
+        self.get_logger().info("ParticleFilterNode activated")
+        return super().on_activate(state)
+
+    def on_deactivate(self, state: LifecycleState) -> TransitionCallbackReturn:
+        """Stop the timer."""
+        if self._timer is not None:
+            self._timer.cancel()
+            self._timer = None
+        self.get_logger().info("ParticleFilterNode deactivated")
+        return super().on_deactivate(state)
+
+    def on_cleanup(self, state: LifecycleState) -> TransitionCallbackReturn:
+        """Reset filter and release resources."""
+        self._filter = None
+        self._estimate_pub = None
+        self._particle_pub = None
+        self._robot_position = (0.0, 0.0)
+        self.get_logger().info("ParticleFilterNode cleaned up")
+        return TransitionCallbackReturn.SUCCESS
 
     def _gas_concentration_callback(self, msg: Float32) -> None:
-        """Handle gas concentration messages.
-
-        Updates particle weights based on the observation.
-        """
+        """Handle gas concentration messages."""
+        if self._filter is None:
+            return
         concentration = float(msg.data)
-
-        # Update filter with observation
         self._filter.update(self._robot_position, concentration)
 
-        # Check if resampling is needed
         effective_count = self._filter.effective_particle_count()
         threshold_count = self._filter.config.resample_threshold * len(self._filter.particles)
-
         if effective_count < threshold_count:
-            self.get_logger().debug(
-                f"Resampling: effective_count={effective_count:.1f}, threshold={threshold_count:.1f}"
-            )
             self._filter.resample()
 
     def _odom_callback(self, msg: Odometry) -> None:
-        """Handle odometry messages.
-
-        Updates robot position and triggers predict step.
-        """
+        """Handle odometry messages."""
+        if self._filter is None:
+            return
         x = float(msg.pose.pose.position.x)
         y = float(msg.pose.pose.position.y)
         self._robot_position = (x, y)
-
-        # Trigger predict step with small dt
-        # (motion model adds noise to particle positions)
         self._filter.predict(dt=1.0)
 
     def _timer_callback(self) -> None:
@@ -173,35 +161,32 @@ class ParticleFilterNode(Node):
 
     def _publish_estimate(self) -> None:
         """Publish source estimate with covariance."""
-        estimate = self._filter.estimate()
+        if self._filter is None or self._estimate_pub is None:
+            return
 
+        estimate = self._filter.estimate()
         msg = PoseWithCovarianceStamped()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = "map"
-
-        # Position
         msg.pose.pose.position.x = estimate.position[0]
         msg.pose.pose.position.y = estimate.position[1]
         msg.pose.pose.position.z = 0.0
-
-        # Orientation (identity - no orientation information)
         msg.pose.pose.orientation.w = 1.0
 
-        # Covariance (6x6 matrix stored as 36-element array)
-        # Position x, y covariance from filter estimate
         cov_2d = estimate.covariance
         cov_6d = np.zeros((6, 6))
         cov_6d[0, 0] = cov_2d[0, 0] if cov_2d.shape == (2, 2) else 1.0
         cov_6d[1, 1] = cov_2d[1, 1] if cov_2d.shape == (2, 2) else 1.0
         cov_6d[0, 1] = cov_2d[0, 1] if cov_2d.shape == (2, 2) else 0.0
         cov_6d[1, 0] = cov_2d[1, 0] if cov_2d.shape == (2, 2) else 0.0
-
         msg.pose.covariance = cov_6d.flatten().tolist()
-
         self._estimate_pub.publish(msg)
 
     def _publish_particle_cloud(self) -> None:
         """Publish particle positions for visualization."""
+        if self._filter is None or self._particle_pub is None:
+            return
+
         msg = PoseArray()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = "map"

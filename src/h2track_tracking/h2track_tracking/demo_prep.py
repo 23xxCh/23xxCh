@@ -24,7 +24,7 @@ from h2track_tracking.paths import (
     WAREHOUSE_WORLD_PATH,
 )
 CORE_REQUIRED_PACKAGES = (
-    "h2track_sim",
+    "h2track_bringup",
     "h2track_tracking",
 )
 GADEN_REQUIRED_PACKAGES = (
@@ -189,12 +189,12 @@ def default_scene_profile(scene_name: str) -> dict:
             "world": str(WAREHOUSE_WORLD_PATH),
             "use_gaden": True,
         }
-    raise PackageNotFoundError(f"scene '{scene_name}' requires an installed h2track_sim package")
+    raise PackageNotFoundError(f"scene '{scene_name}' requires an installed h2track_bringup package")
 
 
 def load_scene_profile(scene_name: str, package_share_resolver: Callable[[str], str] | None = None) -> dict:
     resolver = package_share_resolver or get_package_share_directory
-    package_share = Path(resolver("h2track_sim"))
+    package_share = Path(resolver("h2track_bringup"))
     scene_path = package_share / "scenes" / scene_name / "scene.yaml"
     return yaml.safe_load(scene_path.read_text(encoding="utf-8"))
 
@@ -298,11 +298,11 @@ def _candidate_world_markers(demo_world_path: Path) -> tuple[str, ...]:
     }
     with_sources = set(markers)
     for marker in markers:
-        if "/install/h2track_sim/share/h2track_sim/" in marker:
+        if "/install/h2track_bringup/share/h2track_bringup/" in marker:
             with_sources.add(
                 marker.replace(
-                    "/install/h2track_sim/share/h2track_sim/",
-                    "/src/h2track_sim/",
+                    "/install/h2track_bringup/share/h2track_bringup/",
+                    "/src/h2track_bringup/",
                 )
             )
     return tuple(sorted(with_sources))
@@ -352,7 +352,7 @@ def _extract_world_arg(command: str) -> str | None:
 
 
 def _h2track_world_suffix(path: str) -> str | None:
-    match = re.search(r"/share/h2track_sim/(?P<suffix>.+\.world)$", path)
+    match = re.search(r"/share/h2track_bringup/(?P<suffix>.+\.world)$", path)
     if not match:
         return None
     return match.group("suffix")
@@ -403,7 +403,7 @@ def _is_gaden_adapter_process(command: str) -> bool:
 
 
 def _is_mission_manager_process(command: str) -> bool:
-    return "mission_manager_node" in command and "__node:=mission_manager_node" in command
+    return "bt_node_runner" in command and "__node:=bt_node_runner" in command
 
 
 def _read_process_table() -> str:

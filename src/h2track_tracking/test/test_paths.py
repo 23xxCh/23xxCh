@@ -36,15 +36,15 @@ class TestPathEnvironmentOverrides:
 
         importlib.reload(paths)
 
-    def test_h2track_sim_share_from_env(self):
-        """H2TRACK_SIM_SHARE should override ament index resolution."""
+    def test_h2track_bringup_share_from_env(self):
+        """H2TRACK_BRINGUP_SHARE should override ament index resolution."""
         from h2track_tracking import paths
 
-        with mock.patch.dict(os.environ, {"H2TRACK_SIM_SHARE": "/custom/share"}):
+        with mock.patch.dict(os.environ, {"H2TRACK_BRINGUP_SHARE": "/custom/share"}):
             import importlib
 
             importlib.reload(paths)
-            result = paths.get_h2track_sim_share_path()
+            result = paths.get_h2track_bringup_share_path()
             assert result == Path("/custom/share")
 
         importlib.reload(paths)
@@ -70,11 +70,11 @@ class TestPathDefaults:
 class TestPathResolution:
     """Test path resolution functions."""
 
-    def test_get_h2track_sim_share_path_returns_path_or_none(self):
-        """get_h2track_sim_share_path should return Path or None."""
-        from h2track_tracking.paths import get_h2track_sim_share_path
+    def test_get_h2track_bringup_share_path_returns_path_or_none(self):
+        """get_h2track_bringup_share_path should return Path or None."""
+        from h2track_tracking.paths import get_h2track_bringup_share_path
 
-        result = get_h2track_sim_share_path()
+        result = get_h2track_bringup_share_path()
         assert result is None or isinstance(result, Path)
 
     def test_get_gaden_workspace_returns_path(self):
