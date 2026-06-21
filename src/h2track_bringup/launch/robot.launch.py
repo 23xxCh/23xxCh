@@ -180,6 +180,7 @@ def generate_launch_description():
 
         # -- particle filter --------------------------------------------------
         resolved_pf_bounds = _resolve("particle_filter_bounds", "[-6.0, -6.0, 6.0, 6.0]")
+        resolved_pf_source_strength = _resolve("particle_filter_source_strength", gas_field.get("source_strength", 120.0))
 
         # -- mission_manager --------------------------------------------------
         mm_initial = mission_mgr.get("initial_pose", {})
@@ -261,6 +262,7 @@ def generate_launch_description():
             SetLaunchConfiguration("publish_initial_pose", str(resolved_publish_initial).lower()),
             SetLaunchConfiguration("use_gaden", str(use_gaden_enabled).lower()),
             SetLaunchConfiguration("particle_filter_bounds", resolved_pf_bounds),
+            SetLaunchConfiguration("particle_filter_source_strength", resolved_pf_source_strength),
         ]
         for key, val in {**resolved_gf, **resolved_mm, **resolved_gaden}.items():
             actions.append(SetLaunchConfiguration(key, val))

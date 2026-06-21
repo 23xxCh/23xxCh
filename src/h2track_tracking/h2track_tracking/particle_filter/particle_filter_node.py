@@ -207,8 +207,8 @@ def main(args: list[str] | None = None) -> None:
     node = ParticleFilterNode()
     # Auto-transition for standalone usage (no lifecycle_manager)
     from rclpy.lifecycle import LifecycleState
-    node.on_configure(LifecycleState(label="unconfigured"))
-    node.on_activate(LifecycleState(label="inactive"))
+    node.on_configure(LifecycleState(state_id=0, label="unconfigured"))
+    node.on_activate(LifecycleState(state_id=1, label="inactive"))
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()

@@ -21,16 +21,14 @@ from h2track_tracking.particle_filter.particle_filter_node import ParticleFilter
 def _configure_and_activate(node):
     """Trigger lifecycle transitions for testing."""
     from rclpy.lifecycle import LifecycleState
-    dummy_state = type("FakeState", (), {"label": "unconfigured"})()
-    node.on_configure(dummy_state)
-    node.on_activate(dummy_state)
+    node.on_configure(LifecycleState(state_id=0, label="unconfigured"))
+    node.on_activate(LifecycleState(state_id=1, label="inactive"))
 
 
 def _configure_only(node):
     """Trigger only configure transition (no publishers/timers)."""
     from rclpy.lifecycle import LifecycleState
-    dummy_state = type("FakeState", (), {"label": "unconfigured"})()
-    node.on_configure(dummy_state)
+    node.on_configure(LifecycleState(state_id=0, label="unconfigured"))
 
 
 class TestParticleFilterNodeInit:

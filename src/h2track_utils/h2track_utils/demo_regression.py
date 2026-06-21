@@ -43,8 +43,8 @@ def extract_round_metrics(log_text: str) -> dict[str, int | bool]:
     failed_to_make_progress = len(re.findall(r"Failed to make progress", log_text))
     patrol_timeouts = len(re.findall(r"Patrol goal timed out", log_text))
     goal_succeeded = len(re.findall(r"Goal succeeded", log_text))
-    seek_track_seen = bool(re.search(r"Mode transition:\s+\w+\s+->\s+SEEK_TRACK", log_text))
-    source_found_seen = bool(re.search(r"Mode transition:\s+\w+\s+->\s+SOURCE_FOUND", log_text))
+    seek_track_seen = bool(re.search(r"Mode (?:transition|change):\s+\S+\s+->\s+\S*SEEK_TRACK", log_text))
+    source_found_seen = bool(re.search(r"Mode (?:transition|change):\s+\S+\s+->\s+\S*SOURCE_FOUND", log_text))
     return {
         "failed_to_make_progress": failed_to_make_progress,
         "patrol_timeouts": patrol_timeouts,
@@ -65,7 +65,7 @@ def evaluate_round_success(
 ) -> bool:
     if failed_to_make_progress > 0:
         return False
-    if goal_succeeded <= 0:
+    if goal_succeeded <= 0 and not source_found:
         return False
     if require_seek_track and not seek_track_seen:
         return False
