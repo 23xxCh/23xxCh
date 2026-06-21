@@ -1,0 +1,148 @@
+<?xml version="1.0"?>
+<sdf version="1.6">
+  <world name="maze">
+    <gravity>0 0 -9.8</gravity>
+    <physics type="ode">
+      <max_step_size>0.001</max_step_size>
+      <real_time_update_rate>1000</real_time_update_rate>
+    </physics>
+    <scene>
+      <ambient>0.4 0.4 0.4 1.0</ambient>
+      <background>0.9 0.9 0.95 1.0</background>
+      <shadows>true</shadows>
+    </scene>
+    <light name="sun" type="directional">
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <direction>-0.5 0.5 -1</direction>
+    </light>
+
+    <!-- Ground plane -->
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry><plane><normal>0 0 1</normal></plane></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><plane><normal>0 0 1</normal><size>12 8</size></plane></geometry>
+          <material><ambient>0.92 0.92 0.92 1</ambient><diffuse>0.92 0.92 0.92 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Room walls (from GADEN 10x6_walls.stl) -->
+    <model name="maze_walls">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry><mesh><uri>file:///home/user/gaden_ws/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_walls.stl</uri></mesh></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><mesh><uri>file:///home/user/gaden_ws/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_walls.stl</uri></mesh></geometry>
+          <material><ambient>0.7 0.7 0.75 1</ambient><diffuse>0.7 0.7 0.75 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Floor/ceiling (from GADEN 10x6_inner.stl) -->
+    <model name="maze_floor">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry><mesh><uri>file:///home/user/gaden_ws/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_inner.stl</uri></mesh></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><mesh><uri>file:///home/user/gaden_ws/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_inner.stl</uri></mesh></geometry>
+          <material><ambient>0.85 0.85 0.85 1</ambient><diffuse>0.85 0.85 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Maze obstacle 1 (from GADEN 10x6_maze_obj_1.stl) -->
+    <model name="maze_obstacle_1">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry><mesh><uri>file:///home/user/gaden_ws/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_maze_obj_1.stl</uri></mesh></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><mesh><uri>file:///home/user/gaden_ws/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_maze_obj_1.stl</uri></mesh></geometry>
+          <material><ambient>0.5 0.5 0.55 1</ambient><diffuse>0.5 0.5 0.55 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Maze obstacle 2 (from GADEN 10x6_maze_obj_2.stl) -->
+    <model name="maze_obstacle_2">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry><mesh><uri>file:///home/user/gaden_ws/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_maze_obj_2.stl</uri></mesh></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><mesh><uri>file:///home/user/gaden_ws/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_maze_obj_2.stl</uri></mesh></geometry>
+          <material><ambient>0.5 0.5 0.55 1</ambient><diffuse>0.5 0.5 0.55 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Left door/outlet (from GADEN 10x6_door_left.stl) -->
+    <model name="door_left">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry><mesh><uri>file:///home/user/gaden_ws/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_door_left.stl</uri></mesh></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><mesh><uri>file:///home/user/gaden_ws/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_door_left.stl</uri></mesh></geometry>
+          <material><ambient>0.88 0.19 0.19 1</ambient><diffuse>0.88 0.19 0.19 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Right door/outlet (from GADEN 10x6_door_right.stl) -->
+    <model name="door_right">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry><mesh><uri>file:///home/user/gaden_ws/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_door_right.stl</uri></mesh></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><mesh><uri>file:///home/user/gaden_ws/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_door_right.stl</uri></mesh></geometry>
+          <material><ambient>0.88 0.19 0.19 1</ambient><diffuse>0.88 0.19 0.19 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Hydrogen gas source marker -->
+    <model name="h2_gas_source_marker">
+      <static>true</static>
+      <pose>0.5 2.9 0.8 0 0 0</pose>
+      <link name="marker_link">
+        <visual name="marker_visual">
+          <geometry><cylinder><radius>0.08</radius><length>1.6</length></cylinder></geometry>
+          <material>
+            <ambient>0.95 0.08 0.08 1.0</ambient>
+            <diffuse>0.95 0.08 0.08 1.0</diffuse>
+            <emissive>0.95 0.05 0.05 1.0</emissive>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Ceiling light -->
+    <light name="maze_light" type="point">
+      <pose>5 3 4 0 0 0</pose>
+      <diffuse>0.6 0.6 0.6 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <attenuation>
+        <range>20</range>
+        <constant>0.5</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+    </light>
+  </world>
+</sdf>

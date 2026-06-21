@@ -1,10 +1,13 @@
-"""Run repeated warehouse demo simulations and report navigation robustness."""
+"""Run repeated demo simulations and report navigation robustness.
+
+Supports single-scene mode (--scene) and multi-scene mode (--scenes).
+"""
 
 from __future__ import annotations
 
 import argparse
 import csv
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from collections import defaultdict
 import json
 from pathlib import Path
@@ -32,6 +35,13 @@ class RegressionRound:
     patrol_timeouts: int
     goal_succeeded: int
     notes: str
+
+
+@dataclass
+class SceneResult:
+    scene_name: str
+    rounds: list[RegressionRound] = field(default_factory=list)
+    summary: dict[str, float | int | None] = field(default_factory=dict)
 
 
 def parse_source_found_output(output: str) -> bool:
@@ -326,41 +336,67 @@ def _wait_for_source_found(timeout_sec: float) -> tuple[bool, float | None]:
             rclpy.shutdown()
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run repeated warehouse+GADEN demo regression rounds.")
-    parser.add_argument("--scene", default="warehouse")
-    parser.add_argument("--use-gaden", choices=("true", "false"), default="true")
-    parser.add_argument("--use-slam", choices=("auto", "true", "false"), default="auto")
-    parser.add_argument("--rounds", type=int, default=20)
-    parser.add_argument("--run-timeout-sec", type=float, default=240.0)
-    parser.add_argument("--warmup-sec", type=float, default=4.0)
-    parser.add_argument("--require-seek-track", action="store_true")
-    parser.add_argument("--require-source-found", action="store_true")
-    parser.add_argument("--log-dir", default="/tmp/h2track_regression_logs")
-    args = parser.parse_args(argv)
+def _resolve_use_gaden(scene: str) -> str:
+    """Read use_gaden from scene.yaml; default 'true' if not found."""
+    try:
+        from ament_index_python.packages import get_package_share_directory
+        pkg = get_package_share_directory("h2track_bringup")
+        scene_yaml = Path(pkg) / "scenes" / scene / "scene.yaml"
+        if scene_yaml.exists():
+            import yaml
+            with scene_yaml.open(encoding="utf-8") as f:
+                profile = yaml.safe_load(f)
+            return "true" if profile.get("use_gaden", True) else "false"
+    except Exception:
+        pass
+    return "true"
 
-    if args.rounds <= 0:
-        raise SystemExit("--rounds must be > 0")
 
-    log_dir = Path(args.log_dir)
+def _load_scene_config(config_path: str | None) -> dict[str, dict[str, Any]]:
+    """Load per-scene configuration from a YAML file."""
+    if config_path is None:
+        return {}
+    import yaml
+    with open(config_path, encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
+
+
+def _run_scene_rounds(
+    *,
+    scene: str,
+    use_gaden: str,
+    use_slam: str,
+    rounds: int,
+    run_timeout_sec: float,
+    warmup_sec: float,
+    require_seek_track: bool,
+    require_source_found: bool,
+    log_dir: Path,
+) -> SceneResult:
+    """Run all rounds for a single scene and return SceneResult."""
+    scene_log_dir = log_dir / scene
     results: list[RegressionRound] = []
 
-    for i in range(1, args.rounds + 1):
+    print(f"\n{'='*60}")
+    print(f"Scene: {scene}  ({rounds} rounds, timeout={run_timeout_sec}s)")
+    print(f"{'='*60}")
+
+    for i in range(1, rounds + 1):
         result = _run_single_round(
             index=i,
-            scene=args.scene,
-            use_gaden=args.use_gaden,
-            use_slam=args.use_slam,
-            require_seek_track=bool(args.require_seek_track),
-            require_source_found=bool(args.require_source_found),
-            run_timeout_sec=float(args.run_timeout_sec),
-            warmup_sec=float(args.warmup_sec),
-            log_dir=log_dir,
+            scene=scene,
+            use_gaden=use_gaden,
+            use_slam=use_slam,
+            require_seek_track=require_seek_track,
+            require_source_found=require_source_found,
+            run_timeout_sec=run_timeout_sec,
+            warmup_sec=warmup_sec,
+            log_dir=scene_log_dir,
         )
         results.append(result)
         if result.success:
             print(
-                f"round {i}: OK"
+                f"  [{scene}] round {i}: OK"
                 f" source_found={int(result.source_found)}"
                 f" seek_track={int(result.seek_track_seen)}"
                 f" progress_fail={result.failed_to_make_progress}"
@@ -369,7 +405,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             note = f" ({result.notes})" if result.notes else ""
             print(
-                f"round {i}: FAIL"
+                f"  [{scene}] round {i}: FAIL"
                 f" source_found={int(result.source_found)}"
                 f" seek_track={int(result.seek_track_seen)}"
                 f" progress_fail={result.failed_to_make_progress}"
@@ -377,9 +413,11 @@ def main(argv: list[str] | None = None) -> int:
             )
 
     summary = summarize_rounds(results)
+
+    # Extract hotspots
     hotspot_counts: dict[tuple[float, float], int] = defaultdict(int)
-    for i in range(1, args.rounds + 1):
-        round_log = log_dir / f"round_{i}.log"
+    for i in range(1, rounds + 1):
+        round_log = scene_log_dir / f"round_{i}.log"
         if not round_log.exists():
             continue
         for spot in extract_failure_hotspots(round_log.read_text(encoding="utf-8", errors="replace"), top_k=20):
@@ -389,29 +427,138 @@ def main(argv: list[str] | None = None) -> int:
         {"x": xy[0], "y": xy[1], "count": count}
         for xy, count in sorted(hotspot_counts.items(), key=lambda item: (-item[1], item[0][0], item[0][1]))[:5]
     ]
-    rounds_csv = log_dir / "rounds.csv"
-    summary_json = log_dir / "summary.json"
+
+    # Write per-scene results
+    rounds_csv = scene_log_dir / "rounds.csv"
+    summary_json = scene_log_dir / "summary.json"
     write_rounds_csv(results, rounds_csv)
     summary_json.write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
-    print("---")
-    print(f"rounds: {summary['rounds']}")
-    print(f"successes: {summary['successes']}")
-    print(f"success_rate: {summary['success_rate']:.3f}")
-    print(f"seek_track_rounds: {summary['seek_track_rounds']}")
-    print(f"source_found_rounds: {summary['source_found_rounds']}")
-    print(f"total_failed_to_make_progress: {summary['total_failed_to_make_progress']}")
-    print(f"total_patrol_timeouts: {summary['total_patrol_timeouts']}")
-    print(f"mean_goal_succeeded: {summary['mean_goal_succeeded']:.2f}")
-    if summary["mean_source_found_time"] is None:
-        print("mean_source_found_time: NA")
-    else:
-        print(f"mean_source_found_time: {summary['mean_source_found_time']:.2f}s")
-    print(f"logs: {log_dir}")
-    print(f"rounds_csv: {rounds_csv}")
-    print(f"summary_json: {summary_json}")
+    # Print per-scene summary
+    print(f"\n--- {scene} summary ---")
+    print(f"  rounds: {summary['rounds']}")
+    print(f"  successes: {summary['successes']}")
+    print(f"  success_rate: {summary['success_rate']:.3f}")
+    print(f"  seek_track_rounds: {summary['seek_track_rounds']}")
+    print(f"  source_found_rounds: {summary['source_found_rounds']}")
+    print(f"  total_failed_to_make_progress: {summary['total_failed_to_make_progress']}")
+    print(f"  logs: {scene_log_dir}")
+    print(f"  rounds_csv: {rounds_csv}")
+    print(f"  summary_json: {summary_json}")
 
-    return 0 if int(summary["successes"]) == int(summary["rounds"]) else 1
+    return SceneResult(scene_name=scene, rounds=results, summary=summary)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Run repeated demo simulations and report navigation robustness. "
+        "Supports single-scene (--scene) and multi-scene (--scenes) modes."
+    )
+    parser.add_argument("--scene", default="warehouse", help="Single scene (default: warehouse)")
+    parser.add_argument("--scenes", default=None, help="Comma-separated list of scenes (e.g., warehouse,maze,snake)")
+    parser.add_argument("--use-gaden", choices=("true", "false"), default="true")
+    parser.add_argument("--use-slam", choices=("auto", "true", "false"), default="auto")
+    parser.add_argument("--rounds", type=int, default=20, help="Rounds per scene (default: 20)")
+    parser.add_argument("--run-timeout-sec", type=float, default=240.0, help="Timeout per round (default: 240)")
+    parser.add_argument("--warmup-sec", type=float, default=4.0)
+    parser.add_argument("--require-seek-track", action="store_true")
+    parser.add_argument("--require-source-found", action="store_true")
+    parser.add_argument("--log-dir", default="/tmp/h2track_regression_logs")
+    parser.add_argument(
+        "--scene-config",
+        default=None,
+        help="YAML file with per-scene overrides (rounds, run_timeout_sec, warmup_sec)",
+    )
+    args = parser.parse_args(argv)
+
+    if args.rounds <= 0:
+        raise SystemExit("--rounds must be > 0")
+
+    # Determine scene list
+    if args.scenes:
+        scene_list = [s.strip() for s in args.scenes.split(",") if s.strip()]
+    else:
+        scene_list = [args.scene]
+
+    if not scene_list:
+        raise SystemExit("No scenes specified")
+
+    # Load per-scene config overrides
+    scene_config = _load_scene_config(args.scene_config)
+
+    log_dir = Path(args.log_dir)
+    scene_results: list[SceneResult] = []
+
+    for scene in scene_list:
+        sc = scene_config.get(scene, {})
+
+        # Resolve use_gaden from scene.yaml if not explicitly set
+        use_gaden = args.use_gaden
+        if use_gaden == "true":
+            # Auto-detect: read scene.yaml for actual default
+            resolved_gaden = _resolve_use_gaden(scene)
+            use_gaden = resolved_gaden
+
+        rounds = int(sc.get("rounds", args.rounds))
+        run_timeout_sec = float(sc.get("run_timeout_sec", args.run_timeout_sec))
+        warmup_sec = float(sc.get("warmup_sec", args.warmup_sec))
+
+        result = _run_scene_rounds(
+            scene=scene,
+            use_gaden=use_gaden,
+            use_slam=args.use_slam,
+            rounds=rounds,
+            run_timeout_sec=run_timeout_sec,
+            warmup_sec=warmup_sec,
+            require_seek_track=bool(args.require_seek_track),
+            require_source_found=bool(args.require_source_found),
+            log_dir=log_dir,
+        )
+        scene_results.append(result)
+
+    # Write overall summary
+    overall = {
+        "scenes": [
+            {
+                "scene": sr.scene_name,
+                "rounds": sr.summary.get("rounds", 0),
+                "successes": sr.summary.get("successes", 0),
+                "success_rate": sr.summary.get("success_rate", 0.0),
+            }
+            for sr in scene_results
+        ],
+        "overall_success_rate": (
+            sum(sr.summary.get("successes", 0) for sr in scene_results)
+            / sum(sr.summary.get("rounds", 0) for sr in scene_results)
+            if any(sr.summary.get("rounds", 0) for sr in scene_results)
+            else 0.0
+        ),
+        "scenes_passed": sum(
+            1 for sr in scene_results
+            if int(sr.summary.get("successes", 0)) == int(sr.summary.get("rounds", 0))
+        ),
+        "scenes_total": len(scene_results),
+    }
+    overall_json = log_dir / "overall_summary.json"
+    overall_json.parent.mkdir(parents=True, exist_ok=True)
+    overall_json.write_text(json.dumps(overall, indent=2), encoding="utf-8")
+
+    # Print overall summary
+    print(f"\n{'='*60}")
+    print("OVERALL SUMMARY")
+    print(f"{'='*60}")
+    for entry in overall["scenes"]:
+        status = "PASS" if entry["success_rate"] >= 1.0 else "PARTIAL" if entry["success_rate"] > 0 else "FAIL"
+        print(f"  {entry['scene']}: {entry['successes']}/{entry['rounds']} ({entry['success_rate']:.1%}) [{status}]")
+    print(f"  overall: {overall['overall_success_rate']:.1%}")
+    print(f"  scenes passed: {overall['scenes_passed']}/{overall['scenes_total']}")
+    print(f"  overall_summary: {overall_json}")
+
+    all_passed = all(
+        int(sr.summary.get("successes", 0)) == int(sr.summary.get("rounds", 0))
+        for sr in scene_results
+    )
+    return 0 if all_passed else 1
 
 
 if __name__ == "__main__":

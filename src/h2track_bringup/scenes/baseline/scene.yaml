@@ -1,6 +1,6 @@
 world: scenes/baseline/h2track_lab.world
-map: maps/h2track_map.yaml
-nav2_params: config/nav2_demo_params.yaml
+map: scenes/baseline/maps/baseline_map.yaml
+nav2_params: scenes/baseline/nav2_params.yaml
 scene_name: baseline
 use_gaden: true
 use_slam: false

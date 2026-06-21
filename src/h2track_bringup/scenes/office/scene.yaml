@@ -3,7 +3,7 @@ description: 办公室环境，包含多个隔间和会议室，适合测试复�
 world: scenes/office/office.world
 map: scenes/office/maps/office_map.yaml
 nav2_params: scenes/office/nav2_params.yaml
-use_gaden: true
+use_gaden: false
 use_slam: false
 nav2_autostart: true
 localizer_node: amcl
@@ -36,20 +36,9 @@ mission_manager:
 gas_source:
   x: 2.5
   y: 2.5
-gaden:
-  enabled: true
-  project_path: /home/user/gaden_ws/install/test_env/share/test_env/scenarios/Exp_C/environment_configurations/config1
-  playback_id: scene1
-  player_freq: 1.0
-  sensor_topic: /gaden/sensor_reading
-  sensor_frame: base_link
-  fixed_frame: gaden_map
-  map_offset_x: 0.0
-  map_offset_y: 0.0
-  map_offset_z: 0.0
-  map_roll: 0.0
-  map_pitch: 0.0
-  map_yaw: 0.0
+# GADEN disabled: the Exp_C scenario geometry (multi-room with outlets) does not
+# match the office world (single room with cubicles). A proper GADEN scenario
+# would require generating matching STL CAD models and running CFD preprocessing.
 gas_field:
   source_strength: 100.0
   decay_rate: 0.45
@@ -57,4 +46,5 @@ gas_field:
   wind_x: 0.3
   wind_y: 0.1
   noise_stddev: 0.04
+  gas_type: "H2"
   publish_rate_hz: 5.0

@@ -340,6 +340,212 @@
       </link>
     </model>
 
+    <!-- Interior divider wall - splits office into two zones with 1.2m doorway -->
+    <model name="divider_wall_left">
+      <static>true</static>
+      <pose>-3.2 0 0.6 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>3.6 0.15 1.2</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>3.6 0.15 1.2</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.6 0.6 0.65 1</ambient>
+            <diffuse>0.6 0.6 0.65 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="divider_wall_right">
+      <static>true</static>
+      <pose>1.8 0 0.6 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>2.4 0.15 1.2</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>2.4 0.15 1.2</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.6 0.6 0.65 1</ambient>
+            <diffuse>0.6 0.6 0.65 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Storage room in bottom-left corner -->
+    <model name="storage_wall_1">
+      <static>true</static>
+      <pose>-3.5 -3.5 0.6 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>0.15 3.0 1.2</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>0.15 3.0 1.2</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.55 0.55 0.6 1</ambient>
+            <diffuse>0.55 0.55 0.6 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="storage_wall_2">
+      <static>true</static>
+      <pose>-2.0 -5.0 0.6 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>3.0 0.15 1.2</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>3.0 0.15 1.2</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.55 0.55 0.6 1</ambient>
+            <diffuse>0.55 0.55 0.6 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Filing cabinet -->
+    <model name="cabinet_1">
+      <static>true</static>
+      <pose>4.2 4.2 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>0.5 1.0 1.0</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>0.5 1.0 1.0</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.35 0.3 0.25 1</ambient>
+            <diffuse>0.35 0.3 0.25 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Bookshelf -->
+    <model name="cabinet_2">
+      <static>true</static>
+      <pose>-4.2 1.0 0.6 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>0.4 1.5 1.2</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>0.4 1.5 1.2</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.35 0.3 0.25 1</ambient>
+            <diffuse>0.35 0.3 0.25 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Supply shelf -->
+    <model name="cabinet_3">
+      <static>true</static>
+      <pose>4.2 -4.0 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>0.6 1.2 1.0</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>0.6 1.2 1.0</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.35 0.3 0.25 1</ambient>
+            <diffuse>0.35 0.3 0.25 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Water cooler -->
+    <model name="water_cooler">
+      <static>true</static>
+      <pose>4.3 -1.0 0.3 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>0.4 0.4 0.6</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>0.4 0.4 0.6</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.2 0.4 0.7 1</ambient>
+            <diffuse>0.2 0.4 0.7 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
     <!-- Hydrogen gas source marker -->
     <model name="h2_gas_source_marker">
       <static>true</static>

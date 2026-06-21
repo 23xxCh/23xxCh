@@ -1,4 +1,8 @@
 scene_name: warehouse
+# NOTE: The h2track_warehouse GADEN scenario currently uses placeholder wind data
+# borrowed from the 10x6_empty_room scenario. Gas dispersion patterns may not
+# accurately reflect the warehouse geometry. A proper CFD simulation with the
+# warehouse STL models would be needed for physically accurate wind fields.
 world: scenes/warehouse/warehouse.world
 map: scenes/warehouse/maps/warehouse_map.yaml
 nav2_params: scenes/warehouse/nav2_params.yaml
