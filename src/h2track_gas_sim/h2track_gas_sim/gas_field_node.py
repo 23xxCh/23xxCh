@@ -120,8 +120,10 @@ class GasFieldNode(LifecycleNode):
 def main(args: list[str] | None = None) -> None:
     rclpy.init(args=args)
     node = GasFieldNode()
-    # Lifecycle nodes need a lifecycle manager to transition them,
-    # but for standalone usage, auto-configure and activate
+    # Auto-transition for standalone usage (no lifecycle_manager)
+    from rclpy.lifecycle import LifecycleState
+    node.on_configure(LifecycleState(label="unconfigured"))
+    node.on_activate(LifecycleState(label="inactive"))
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()

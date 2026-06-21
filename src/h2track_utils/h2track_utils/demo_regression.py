@@ -185,7 +185,7 @@ def build_demo_launch_command(*, scene: str, use_gaden: str, use_slam: str) -> l
     cmd = [
         "ros2",
         "launch",
-        "h2track_sim",
+        "h2track_bringup",
         "demo.launch.py",
         f"scene:={scene}",
         f"use_gaden:={use_gaden}",
@@ -221,7 +221,7 @@ def _terminate_launch_process(proc: subprocess.Popen[bytes]) -> None:
 
 def _run_demo_prep(scene: str, use_gaden: str) -> None:
     _run_command(
-        ["ros2", "run", "h2track_tracking", "demo_prep", "--scene", scene, "--use-gaden", use_gaden],
+        ["ros2", "run", "h2track_utils", "demo_prep", "--scene", scene, "--use-gaden", use_gaden],
         check=True,
     )
 
@@ -262,7 +262,7 @@ def _run_single_round(
     finally:
         _terminate_launch_process(launch_proc)
         _run_command(
-            ["ros2", "run", "h2track_tracking", "demo_prep", "--scene", scene, "--use-gaden", use_gaden],
+            ["ros2", "run", "h2track_utils", "demo_prep", "--scene", scene, "--use-gaden", use_gaden],
             check=False,
         )
     metrics = extract_round_metrics(round_log.read_text(encoding="utf-8", errors="replace"))

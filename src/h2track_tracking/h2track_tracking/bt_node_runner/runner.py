@@ -353,6 +353,10 @@ def _make_pose_stamped(node, pose: Pose2D, yaw: float = 0.0) -> PoseStamped:
 def main(args=None):
     rclpy.init(args=args)
     node = BTNodeRunner()
+    # Auto-transition for standalone usage (no lifecycle_manager)
+    from rclpy.lifecycle import LifecycleState
+    node.on_configure(LifecycleState(label="unconfigured"))
+    node.on_activate(LifecycleState(label="inactive"))
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
