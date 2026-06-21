@@ -14,6 +14,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/RobotState.msg"
   "msg/SourceEstimate.msg"
   "msg/RoleAssignment.msg"
+  "msg/WindEstimate.msg"
+  "msg/FusionState.msg"
   DEPENDENCIES builtin_interfaces std_msgs
 )
 

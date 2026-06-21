@@ -10,10 +10,13 @@ from __future__ import annotations
 import math
 
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
+from h2track_interfaces.msg import WindEstimate as WindEstimateMsg
+from h2track_interfaces.msg import FusionState as FusionStateMsg
 from nav2_msgs.msg import Costmap
 import numpy as np
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from std_msgs.msg import Bool, Float32, String
 from tf2_ros import Buffer, TransformException, TransformListener
 
@@ -166,17 +169,20 @@ class BTNodeRunner(Node):
         self._estimated_wind: tuple[float, float] | None = None
         self._wind_confidence: float = 0.5
 
-        # subscriptions
-        self.create_subscription(PoseWithCovarianceStamped, "/amcl_pose", self._on_amcl, 10)
+        # subscriptions (QoS: sensor data = best_effort, state = reliable)
+        sensor_qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
+        state_qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE,
+                               durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.create_subscription(PoseWithCovarianceStamped, "/amcl_pose", self._on_amcl, state_qos)
         self.create_subscription(PoseWithCovarianceStamped, "/estimated_source", self._on_pf, 10)
-        self.create_subscription(Float32, "/gas_concentration", self._on_concentration, 10)
+        self.create_subscription(Float32, "/gas_concentration", self._on_concentration, sensor_qos)
         self.create_subscription(Costmap, "/global_costmap/costmap", self._on_costmap, 10)
 
-        # publishers
-        self._mode_pub = self.create_publisher(String, "/robot_mode", 10)
-        self._source_pub = self.create_publisher(Bool, "/source_found", 10)
+        # publishers (QoS: state topics use TRANSIENT_LOCAL for late-joiners)
+        self._mode_pub = self.create_publisher(String, "/robot_mode", state_qos)
+        self._source_pub = self.create_publisher(Bool, "/source_found", state_qos)
         self._estimate_pub = self.create_publisher(PoseStamped, "/estimated_source_pose", 10)
-        self._wind_pub = self.create_publisher(String, "/estimated_wind", 10)
+        self._wind_pub = self.create_publisher(WindEstimateMsg, "/estimated_wind", sensor_qos)
 
         self._last_mode: MissionMode | None = None
         self._source_announced = False
@@ -303,7 +309,9 @@ class BTNodeRunner(Node):
 
         if self._estimated_wind is not None:
             wx, wy = self._estimated_wind
-            self._wind_pub.publish(String(data=f"{wx:.3f},{wy:.3f},{self._wind_confidence:.2f}"))
+            self._wind_pub.publish(WindEstimateMsg(
+                wind_x=wx, wind_y=wy, confidence=self._wind_confidence
+            ))
 
     # ------------------------------------------------------------------
     # ROS callbacks
