@@ -478,7 +478,7 @@ ros2 run h2track_tracking demo_regression --scene warehouse --use-gaden true --r
 
 ### Issue tracker
 
-Issues are tracked in GitHub Issues. See `docs/agents/issue-tracker.md`.
+Issues are tracked in Gitee Issues. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
