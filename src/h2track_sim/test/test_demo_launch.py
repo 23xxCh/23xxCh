@@ -255,7 +255,7 @@ def test_demo_launch_resolves_scene_specific_nav2_params():
 def test_bringup_uses_slow_enough_gaden_playback_for_live_demo_margin():
     text = _launch_text("bringup.launch.py")
     assert 'gaden_player_freq' in text
-    assert '{"player_freq": gaden_player_freq}' in text or '"player_freq": gaden_player_freq' in text
+    assert '"player_freq": lc["gaden_player_freq"]' in text or "player_freq" in text
 
 
 

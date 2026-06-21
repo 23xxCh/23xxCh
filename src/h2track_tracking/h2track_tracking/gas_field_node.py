@@ -23,6 +23,7 @@ class GasFieldNode(Node):
         self.declare_parameter("wind_x", 0.4)
         self.declare_parameter("wind_y", 0.0)
         self.declare_parameter("noise_stddev", 0.05)
+        self.declare_parameter("gas_type", "H2")
         self.declare_parameter("publish_rate_hz", 5.0)
 
         self._pose = Pose2D(0.0, 0.0)
@@ -36,6 +37,7 @@ class GasFieldNode(Node):
             wind_y=float(self.get_parameter("wind_y").value),
             noise_stddev=float(self.get_parameter("noise_stddev").value),
             min_concentration=0.0,
+            gas_type=str(self.get_parameter("gas_type").value),
         )
         self._model = GasFieldModel(params)
 

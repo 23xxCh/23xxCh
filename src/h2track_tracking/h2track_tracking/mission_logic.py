@@ -25,11 +25,16 @@ class MissionConfig:
     source_radius: float = 0.6            # Meters from source for SOURCE_FOUND
     source_hold_steps: int = 3            # Consecutive source detections needed
     track_exit_samples: int | None = None
+    track_timeout_sec: float = 60.0       # Seconds stuck in SEEK_TRACK before fallback
+    adaptive_source_ratio: float = 0.0    # 0=disabled; >0 triggers SOURCE_FOUND
+                                          # when conc >= max_observed * ratio
     actual_source: tuple[float, float] | None = None
 
 
 class MissionStateMachine:
     def __init__(self, config: MissionConfig) -> None:
+        if not config.patrol_points:
+            raise ValueError("patrol_points must not be empty")
         self.config = config
         self.mode = MissionMode.PATROL
         self._track_exit_samples = max(1, int(config.track_exit_samples or config.confirm_samples))
@@ -38,6 +43,9 @@ class MissionStateMachine:
         self._source_hits = 0
         self._current_patrol_index = 0
         self.source_estimate: tuple[float, float] | None = None
+        self._seek_track_ticks = 0
+        self._track_timeout_ticks = int(config.track_timeout_sec * 10)  # 10 Hz
+        self._max_observed_concentration = 0.0
 
     @property
     def current_patrol_goal(self) -> tuple[float, float]:
@@ -63,6 +71,8 @@ class MissionStateMachine:
         goal_reached: bool,
     ) -> MissionMode:
         self._recent_observations.append((robot_position, concentration))
+        if concentration > self._max_observed_concentration:
+            self._max_observed_concentration = concentration
 
         recent_count = len(self._recent_observations)
         confirm_window = list(self._recent_observations)[-self.config.confirm_samples :]
@@ -88,15 +98,27 @@ class MissionStateMachine:
                 self._recent_observations.clear()
             elif concentration >= self.config.enter_threshold:
                 self.mode = MissionMode.SEEK_TRACK
+                self._seek_track_ticks = 0
 
         elif self.mode is MissionMode.SEEK_TRACK:
+            self._seek_track_ticks += 1
             if (
+                self._seek_track_ticks >= self._track_timeout_ticks
+                and self.config.track_timeout_sec > 0
+            ):
+                self.mode = MissionMode.PATROL
+                self._source_hits = 0
+                self.source_estimate = None
+                self._seek_track_ticks = 0
+                self._recent_observations.clear()
+            elif (
                 recent_count >= self._track_exit_samples
                 and max(track_exit_concentrations) < self.config.exit_threshold
             ):
                 self.mode = MissionMode.PATROL
                 self._source_hits = 0
                 self.source_estimate = None
+                self._seek_track_ticks = 0
                 self._recent_observations.clear()
             # Fast-path: if robot is physically near actual source with high
             # concentration, trigger SOURCE_FOUND immediately.  This handles
@@ -105,6 +127,17 @@ class MissionStateMachine:
             elif (
                 concentration >= self.config.source_threshold
                 and self._is_near_actual_source(robot_position)
+            ):
+                self.source_estimate = robot_position
+                self.mode = MissionMode.SOURCE_FOUND
+            # Adaptive threshold: trigger SOURCE_FOUND when concentration
+            # reaches a fraction of the observed maximum.
+            elif (
+                self.config.adaptive_source_ratio > 0
+                and self._max_observed_concentration > 0
+                and concentration
+                >= self._max_observed_concentration * self.config.adaptive_source_ratio
+                and self._seek_track_ticks >= self.config.confirm_samples
             ):
                 self.source_estimate = robot_position
                 self.mode = MissionMode.SOURCE_FOUND

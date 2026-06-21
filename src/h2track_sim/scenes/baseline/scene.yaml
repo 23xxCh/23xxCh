@@ -54,4 +54,5 @@ gas_field:
   wind_x: 0.4
   wind_y: 0.0
   noise_stddev: 0.05
+  gas_type: "H2"
   publish_rate_hz: 5.0

@@ -56,6 +56,7 @@ _BB_DEFS: dict[str, list[str]] = {
         "task_complete",
         "goal_reached_count",
         "nav_ready",
+        "path_deviation",
     ],
     "tracker": [
         "target",

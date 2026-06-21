@@ -840,3 +840,66 @@ class TestSurgeCastTrackerEdgeCases:
             TrackingState.SURGE,
             TrackingState.CAST,
         ]
+
+
+def test_cast_direction_alternates_on_plume_loss():
+    """Regression: cast direction must alternate between +1 and -1."""
+    config = SurgeCastConfig(
+        wind_x=1.0,
+        wind_y=0.0,
+        plume_found_threshold=3.0,
+        plume_lost_threshold=1.5,
+    )
+    tracker = SurgeCastTracker(config)
+
+    # Enter SURGE
+    for _ in range(5):
+        tracker.update(5.0, Pose2D(0.0, 0.0), 0.0)
+    assert tracker.state == TrackingState.SURGE
+
+    # Lose plume → CAST with direction toggle
+    tracker.update(0.5, Pose2D(1.0, 0.0), 0.0)
+    assert tracker.state == TrackingState.CAST
+    dir1 = tracker._cast_direction
+
+    # Re-enter SURGE
+    for _ in range(5):
+        tracker.update(5.0, Pose2D(1.0, 0.0), 0.0)
+    assert tracker.state == TrackingState.SURGE
+
+    # Lose plume again → CAST with opposite direction
+    tracker.update(0.5, Pose2D(2.0, 0.0), 0.0)
+    assert tracker.state == TrackingState.CAST
+    dir2 = tracker._cast_direction
+
+    assert dir1 == -dir2, f"Cast directions should alternate: {dir1} vs {dir2}"
+
+
+def test_cast_heading_blending_handles_angle_wraparound():
+    """Regression: angle blending must use unit vectors, not scalar addition."""
+    config = SurgeCastConfig(
+        wind_x=1.0,
+        wind_y=0.0,
+        plume_found_threshold=3.0,
+        plume_lost_threshold=1.5,
+        cast_step=0.5,
+    )
+    tracker = SurgeCastTracker(config)
+
+    # Enter SURGE then CAST
+    for _ in range(5):
+        tracker.update(5.0, Pose2D(0.0, 0.0), 0.0)
+    tracker.update(0.5, Pose2D(0.0, 0.0), 0.0)
+    assert tracker.state == TrackingState.CAST
+
+    # Add a best position that causes near-180° wraparound
+    # Best position is behind the robot (opposite to cast direction)
+    tracker._history.add(Pose2D(-5.0, 0.0), 10.0)
+
+    action = tracker._generate_action(
+        Pose2D(0.0, 0.0), 0.0, 1.0, 0.0
+    )
+
+    # Heading should be well-defined (not NaN or wildly wrong)
+    assert not math.isnan(action.heading)
+    assert -math.pi <= action.heading <= math.pi

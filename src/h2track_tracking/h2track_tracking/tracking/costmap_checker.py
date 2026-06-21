@@ -176,8 +176,9 @@ class CostmapChecker:
         # 254 is LETHAL_OBSTACLE.  OccupancyGrid uses -1 for unknown.
         if cost == 255 or cost == self.config.unknown_cost_value:
             return True
-        # Free (0) or low cost are valid
-        return cost < self.config.free_threshold
+        # Allow all navigable cells (inflation layer assigns 1-252,
+        # which are traversable). Only reject lethal obstacles (254+).
+        return cost < self.config.lethal_cost_threshold
 
     def get_cost_at(self, target: Pose2D) -> int:
         """Get cost value at target position.

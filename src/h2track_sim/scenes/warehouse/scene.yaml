@@ -55,12 +55,13 @@ gaden:
   map_pitch: 0.0
   map_yaw: 0.0
 gas_field:
-  source_strength: 160.0
-  decay_rate: 0.32
-  plume_stddev: 1.85
+  source_strength: 200.0
+  decay_rate: 0.65
+  plume_stddev: 1.5
   wind_x: 0.18
   wind_y: -0.06
   noise_stddev: 0.03
+  gas_type: "H2"
   publish_rate_hz: 5.0
 fusion:
   use_fusion: true

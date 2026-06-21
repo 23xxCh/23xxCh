@@ -124,7 +124,7 @@ class SurgeCastTracker:
         self._process_transitions(concentration, robot_pose)
 
         # Generate action based on current state
-        return self._generate_action(robot_pose, robot_yaw, wind_x, wind_y)
+        return self._generate_action(robot_pose, robot_yaw, wind_x, wind_y, concentration)
 
     def _process_transitions(
         self,
@@ -165,7 +165,7 @@ class SurgeCastTracker:
                 wind_norm = math.hypot(self.config.wind_x, self.config.wind_y)
                 if wind_norm > 0.1:
                     # Cast perpendicular to wind
-                    self._cast_direction = 1 if self._cast_direction == -1 else 1
+                    self._cast_direction *= -1
 
         elif self.state == TrackingState.CAST:
             # Check for plume found
@@ -192,6 +192,7 @@ class SurgeCastTracker:
         robot_yaw: float,
         wind_x: float,
         wind_y: float,
+        concentration: float = 0.0,
     ) -> TrackingAction:
         """Generate tracking action based on current state."""
         if self.state == TrackingState.PATROL:
@@ -239,16 +240,17 @@ class SurgeCastTracker:
             else:
                 upwind_heading = robot_yaw
 
+            step = self._adaptive_step_size(concentration)
             target = Pose2D(
-                robot_pose.x + self.config.surge_step * math.cos(upwind_heading),
-                robot_pose.y + self.config.surge_step * math.sin(upwind_heading),
+                robot_pose.x + step * math.cos(upwind_heading),
+                robot_pose.y + step * math.sin(upwind_heading),
             )
 
             return TrackingAction(
                 target=target,
                 state=self.state,
                 heading=upwind_heading,
-                step_size=self.config.surge_step,
+                step_size=step,
                 use_particle_filter=self.config.use_particle_filter,
             )
 
@@ -273,7 +275,10 @@ class SurgeCastTracker:
                 if dist > 0.5:  # Only bias if significantly far
                     best_heading = math.atan2(dy, dx)
                     # Blend cast heading with direction to best position
-                    cast_heading = 0.6 * cast_heading + 0.4 * best_heading
+                    # using unit vectors to handle angle wraparound correctly
+                    bx = 0.6 * math.cos(cast_heading) + 0.4 * math.cos(best_heading)
+                    by = 0.6 * math.sin(cast_heading) + 0.4 * math.sin(best_heading)
+                    cast_heading = math.atan2(by, bx)
 
             target = Pose2D(
                 robot_pose.x + self.config.cast_step * math.cos(cast_heading),

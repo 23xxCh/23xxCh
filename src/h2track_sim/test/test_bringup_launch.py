@@ -11,39 +11,53 @@ def _launch_text(name: str) -> str:
     return launch_path.read_text(encoding="utf-8")
 
 
+def _param_in_schema(text: str, param_name: str) -> bool:
+    """Check if param_name is declared in the _PARAMS schema."""
+    return f'("{param_name}",' in text or f"('{param_name}'," in text
+
+
+def _default_value_from_schema(text: str, param_name: str) -> str:
+    """Extract default value from _PARAMS schema entry."""
+    import re
+    pattern = rf'\("{param_name}",\s*"([^"]*)"\)'
+    match = re.search(pattern, text)
+    assert match is not None, f"{param_name} not found in _PARAMS"
+    return match.group(1)
+
+
 def test_bringup_declares_use_particle_filter_argument():
     """Verify use_particle_filter launch argument is declared."""
     text = _launch_text("bringup.launch.py")
-    assert 'DeclareLaunchArgument("use_particle_filter"' in text or "DeclareLaunchArgument('use_particle_filter'" in text
-    assert 'default_value="true"' in text or "default_value='true'" in text
+    assert _param_in_schema(text, "use_particle_filter")
+    assert _default_value_from_schema(text, "use_particle_filter") == "true"
 
 
 def test_bringup_declares_particle_filter_num_particles_argument():
     """Verify particle_filter_num_particles launch argument is declared."""
     text = _launch_text("bringup.launch.py")
-    assert 'DeclareLaunchArgument("particle_filter_num_particles"' in text or "DeclareLaunchArgument('particle_filter_num_particles'" in text
-    assert 'default_value="500"' in text or "default_value='500'" in text
+    assert _param_in_schema(text, "particle_filter_num_particles")
+    assert _default_value_from_schema(text, "particle_filter_num_particles") == "500"
 
 
 def test_bringup_declares_particle_filter_motion_sigma_argument():
     """Verify particle_filter_motion_sigma launch argument is declared."""
     text = _launch_text("bringup.launch.py")
-    assert 'DeclareLaunchArgument("particle_filter_motion_sigma"' in text or "DeclareLaunchArgument('particle_filter_motion_sigma'" in text
-    assert 'default_value="0.3"' in text or "default_value='0.3'" in text
+    assert _param_in_schema(text, "particle_filter_motion_sigma")
+    assert _default_value_from_schema(text, "particle_filter_motion_sigma") == "0.3"
 
 
 def test_bringup_declares_particle_filter_observation_sigma_argument():
     """Verify particle_filter_observation_sigma launch argument is declared."""
     text = _launch_text("bringup.launch.py")
-    assert 'DeclareLaunchArgument("particle_filter_observation_sigma"' in text or "DeclareLaunchArgument('particle_filter_observation_sigma'" in text
-    assert 'default_value="0.5"' in text or "default_value='0.5'" in text
+    assert _param_in_schema(text, "particle_filter_observation_sigma")
+    assert _default_value_from_schema(text, "particle_filter_observation_sigma") == "0.5"
 
 
 def test_bringup_declares_particle_filter_plume_sigma_argument():
     """Verify particle_filter_plume_sigma launch argument is declared."""
     text = _launch_text("bringup.launch.py")
-    assert 'DeclareLaunchArgument("particle_filter_plume_sigma"' in text or "DeclareLaunchArgument('particle_filter_plume_sigma'" in text
-    assert 'default_value="2.0"' in text or "default_value='2.0'" in text
+    assert _param_in_schema(text, "particle_filter_plume_sigma")
+    assert _default_value_from_schema(text, "particle_filter_plume_sigma") == "2.0"
 
 
 def test_bringup_includes_particle_filter_node():
@@ -57,24 +71,22 @@ def test_bringup_includes_particle_filter_node():
 def test_bringup_particle_filter_has_condition():
     """Verify particle filter node has IfCondition on use_particle_filter."""
     text = _launch_text("bringup.launch.py")
-    assert "IfCondition(use_particle_filter)" in text
+    assert 'IfCondition(lc["use_particle_filter"])' in text
 
 
 def test_bringup_particle_filter_passes_parameters():
-    """Verify particle filter node receives required parameters."""
+    """Verify particle filter node receives required parameters via lc[] dict."""
     text = _launch_text("bringup.launch.py")
-    assert '"num_particles": particle_filter_num_particles' in text or "'num_particles': particle_filter_num_particles" in text
-    assert '"motion_sigma": particle_filter_motion_sigma' in text or "'motion_sigma': particle_filter_motion_sigma" in text
-    assert '"observation_sigma": particle_filter_observation_sigma' in text or "'observation_sigma': particle_filter_observation_sigma" in text
-    assert '"plume_sigma": particle_filter_plume_sigma' in text or "'plume_sigma': particle_filter_plume_sigma" in text
+    assert '"num_particles": lc["particle_filter_num_particles"]' in text
+    assert '"motion_sigma": lc["particle_filter_motion_sigma"]' in text
+    assert '"observation_sigma": lc["particle_filter_observation_sigma"]' in text
+    assert '"plume_sigma": lc["particle_filter_plume_sigma"]' in text
 
 
 def test_bringup_particle_filter_uses_sim_time():
     """Verify particle filter node uses simulation time."""
     text = _launch_text("bringup.launch.py")
-    # Find the particle_filter node definition section
     assert "particle_filter_node" in text
-    # Check for use_sim_time parameter in the node
     lines = text.split("\n")
     in_particle_filter_section = False
     found_use_sim_time = False
@@ -92,6 +104,6 @@ def test_bringup_particle_filter_uses_sim_time():
 def test_bringup_particle_filter_declared_in_launch_description():
     """Verify particle_filter node is added to LaunchDescription actions."""
     text = _launch_text("bringup.launch.py")
-    # Check that declare_use_particle_filter is in the LaunchDescription
-    assert "declare_use_particle_filter" in text
-    assert "particle_filter," in text or "particle_filter" in text.split("return LaunchDescription")[1]
+    # In data-driven approach, declares come from _PARAMS loop
+    assert _param_in_schema(text, "use_particle_filter")
+    assert "particle_filter," in text

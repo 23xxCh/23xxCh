@@ -113,7 +113,7 @@ class TrackingFusion:
             )
         elif self.config.blending_mode == "switching":
             return self._switching_fusion(
-                surge_action, pf_position, pf_confidence, concentration
+                surge_action, pf_position, pf_confidence, concentration, robot_pose
             )
         else:  # cascade
             return self._cascade_fusion(
@@ -174,6 +174,7 @@ class TrackingFusion:
         pf_position: Pose | None,
         pf_confidence: float,
         concentration: float,
+        robot_pose: Pose,
     ) -> TrackingAction:
         """Switch between algorithms based on conditions.
 
@@ -194,10 +195,15 @@ class TrackingFusion:
             self._state.current_mode = "particle_filter"
             self._state.last_fused_target = pf_position
 
+            # Compute heading from robot to PF target
+            dx = pf_position.x - robot_pose.x
+            dy = pf_position.y - robot_pose.y
+            pf_heading = math.atan2(dy, dx) if (dx or dy) else 0.0
+
             return TrackingAction(
                 target=pf_position,
                 state=surge_action.state,  # Keep state from surge
-                heading=0.0,  # Will be computed
+                heading=pf_heading,
                 step_size=surge_action.step_size,
                 use_particle_filter=True,
             )

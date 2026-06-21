@@ -27,7 +27,6 @@ from h2track_tracking.tracking.wind_estimator import WindEstimator, WindEstimato
 from h2track_tracking.navigation_executor import (
     coerce_patrol_points,
     map_pose_from_amcl,
-    should_skip_patrol_goal,
 )
 from h2track_tracking.mission_logic import MissionConfig, MissionMode, MissionStateMachine
 from h2track_tracking.nav2_lifecycle import Nav2Lifecycle
@@ -59,8 +58,8 @@ class BTNodeRunner(Node):
         self.declare_parameter("track_exit_samples", _mc.track_exit_samples or _mc.confirm_samples)
         self.declare_parameter("source_radius", _mc.source_radius)
         self.declare_parameter("source_hold_steps", _mc.source_hold_steps)
-        self.declare_parameter("track_step", 0.7)
-        self.declare_parameter("sweep_angle_deg", 30.0)
+        self.declare_parameter("track_timeout_sec", _mc.track_timeout_sec)
+        self.declare_parameter("adaptive_source_ratio", _mc.adaptive_source_ratio)
         self.declare_parameter("source_x", -3.5)
         self.declare_parameter("source_y", -3.5)
         self.declare_parameter("patrol_goal_timeout_sec", 45.0)
@@ -94,6 +93,8 @@ class BTNodeRunner(Node):
             track_exit_samples=self._pi("track_exit_samples"),
             source_radius=self._pf("source_radius"),
             source_hold_steps=self._pi("source_hold_steps"),
+            track_timeout_sec=self._pf("track_timeout_sec"),
+            adaptive_source_ratio=self._pf("adaptive_source_ratio"),
             actual_source=(self._pf("source_x"), self._pf("source_y")),
         )
 
@@ -116,7 +117,7 @@ class BTNodeRunner(Node):
         fusion = TrackingFusion(FusionConfig(
             blending_mode=str(self.get_parameter("fusion_mode").value),
             pf_weight_base=self._pf("fusion_pf_weight"),
-            surge_weight_base=self._pf("fusion_surge_weight"),
+            surge_weight=self._pf("fusion_surge_weight"),
             pf_confidence_threshold=self._pf("particle_filter_min_confidence"),
         ))
         self._costmap_checker = CostmapChecker()
@@ -163,6 +164,7 @@ class BTNodeRunner(Node):
             min_samples_for_estimate=self._pi("wind_estimation_min_samples"),
         ))
         self._estimated_wind: tuple[float, float] | None = None
+        self._wind_confidence: float = 0.5
 
         # subscriptions
         self.create_subscription(PoseWithCovarianceStamped, "/amcl_pose", self._on_amcl, 10)
@@ -199,27 +201,30 @@ class BTNodeRunner(Node):
     # ------------------------------------------------------------------
 
     def _tick(self) -> None:
-        # ensure Nav2 is ready
-        if not self._nav2.ready:
-            if not self._nav2.check_ready():
-                return
-            self.get_logger().info("Nav2 ready, starting main loop")
+        try:
+            # ensure Nav2 is ready
+            if not self._nav2.ready:
+                if not self._nav2.check_ready():
+                    return
+                self.get_logger().info("Nav2 ready, starting main loop")
 
-        self._tick_count += 1
-        self._log_diagnostics()
+            self._tick_count += 1
+            self._log_diagnostics()
 
-        # push sensor data to blackboard
-        self._sync_sensor_to_blackboard()
+            # push sensor data to blackboard
+            self._sync_sensor_to_blackboard()
 
-        # update mission state machine
-        self._update_state_machine()
+            # update mission state machine
+            self._update_state_machine()
 
-        # tick the behavior tree and route targets
-        self._tree.tick()
-        self._sync_targets_to_blackboard()
+            # tick the behavior tree and route targets
+            self._tree.tick()
+            self._sync_targets_to_blackboard()
 
-        # publish results to ROS topics
-        self._publish_state()
+            # publish results to ROS topics
+            self._publish_state()
+        except Exception:
+            self.get_logger().error("Unhandled exception in _tick()", exc_info=True)
 
     def _log_diagnostics(self) -> None:
         if self._tick_count % 50 == 1:
@@ -298,7 +303,7 @@ class BTNodeRunner(Node):
 
         if self._estimated_wind is not None:
             wx, wy = self._estimated_wind
-            self._wind_pub.publish(String(data=f"{wx:.3f},{wy:.3f},{0.5:.2f}"))
+            self._wind_pub.publish(String(data=f"{wx:.3f},{wy:.3f},{self._wind_confidence:.2f}"))
 
     # ------------------------------------------------------------------
     # ROS callbacks
@@ -317,6 +322,7 @@ class BTNodeRunner(Node):
             )
             if wind_est is not None and wind_est.confidence > 0.3:
                 self._estimated_wind = (wind_est.wind_x, wind_est.wind_y)
+                self._wind_confidence = wind_est.confidence
 
     def _on_pf(self, msg: PoseWithCovarianceStamped) -> None:
         p = msg.pose.pose.position

@@ -48,7 +48,7 @@ def test_warehouse_patrol_reaches_detectable_source_approach_route():
     assert third == [3.0, 1.0]
     assert fourth == [3.4, -2.2]
     assert fifth == [3.5, -2.8]
-    assert scene['mission_manager']['enter_threshold'] == 1.0
+    assert scene['mission_manager']['enter_threshold'] == 0.6
     assert second[1] == first[1]
     assert third[0] > second[0]
     assert third[1] < second[1]

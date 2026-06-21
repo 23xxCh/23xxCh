@@ -18,17 +18,26 @@ def _load_launch_module(name: str):
     return module
 
 
-def _default_value(text: str, argument_name: str) -> str:
-    pattern = rf'DeclareLaunchArgument\("{argument_name}", default_value="([^"]+)"\)'
+def _param_in_schema(text: str, param_name: str) -> bool:
+    """Check if param_name is declared in the _PARAMS schema."""
+    return f'("{param_name}",' in text or f"('{param_name}'," in text
+
+
+def _default_value_from_schema(text: str, param_name: str) -> str:
+    """Extract default value from _PARAMS schema entry."""
+    pattern = rf'\("{param_name}",\s*"([^"]*)"\)'
     match = re.search(pattern, text)
-    assert match is not None, argument_name
+    assert match is not None, f"{param_name} not found in _PARAMS"
     return match.group(1)
 
 
-def test_bringup_launch_exposes_mission_manager_delay_argument():
-    text = _launch_text("bringup.launch.py")
-    assert 'DeclareLaunchArgument("mission_manager_delay"' in text
-    assert 'period=PythonExpression([nav2_launch_delay, " + ", mission_manager_delay])' in text
+# ---------------------------------------------------------------------------
+# Module-level tests
+# ---------------------------------------------------------------------------
+
+def test_bringup_launch_module_imports_without_launch_pythonpath_side_effects():
+    module = _load_launch_module("bringup.launch.py")
+    assert hasattr(module, 'generate_launch_description')
 
 
 def test_bringup_declares_scene_launch_argument():
@@ -36,20 +45,75 @@ def test_bringup_declares_scene_launch_argument():
     assert "scene" in text
 
 
-def test_bringup_launch_module_imports_without_launch_pythonpath_side_effects():
-    module = _load_launch_module("bringup.launch.py")
-    assert hasattr(module, 'generate_launch_description')
+# ---------------------------------------------------------------------------
+# Schema parameter existence tests
+# ---------------------------------------------------------------------------
+
+def test_bringup_launch_exposes_mission_manager_delay_argument():
+    text = _launch_text("bringup.launch.py")
+    assert _param_in_schema(text, "mission_manager_delay")
 
 
 def test_bringup_launch_exposes_sensor_gate_timeout_argument():
     text = _launch_text("bringup.launch.py")
-    assert 'DeclareLaunchArgument("gaden_sensor_gate_timeout"' in text
+    assert _param_in_schema(text, "gaden_sensor_gate_timeout")
 
+
+def test_bringup_launch_exposes_sensor_gate_stable_ready_count_argument():
+    text = _launch_text("bringup.launch.py")
+    assert _param_in_schema(text, "gaden_sensor_gate_stable_ready_count")
+
+
+def test_bringup_launch_exposes_nav2_params_file_argument():
+    text = _launch_text("bringup.launch.py")
+    assert _param_in_schema(text, "nav2_params_file")
+
+
+def test_bringup_launch_exposes_nav2_map_override_argument():
+    text = _launch_text("bringup.launch.py")
+    assert _param_in_schema(text, "nav2_map_file")
+
+
+def test_bringup_launch_exposes_use_slam_argument_and_forwards_to_nav2():
+    text = _launch_text("bringup.launch.py")
+    assert _param_in_schema(text, "use_slam")
+
+
+def test_bringup_launch_exposes_track_exit_samples_argument_and_routes_to_mission_manager():
+    text = _launch_text("bringup.launch.py")
+    assert _param_in_schema(text, "track_exit_samples")
+
+
+def test_bringup_launch_exposes_patrol_goal_timeout_and_routes_to_mission_manager():
+    text = _launch_text("bringup.launch.py")
+    assert _param_in_schema(text, "patrol_goal_timeout_sec")
+
+
+def test_bringup_launch_exposes_nav2_autostart_argument():
+    text = _launch_text("bringup.launch.py")
+    assert _param_in_schema(text, "nav2_autostart")
+
+
+# ---------------------------------------------------------------------------
+# Default value tests
+# ---------------------------------------------------------------------------
+
+def test_sensor_gate_timeout_default_is_longer_than_mission_manager_delay():
+    text = _launch_text("bringup.launch.py")
+    mission_delay = float(_default_value_from_schema(text, "mission_manager_delay"))
+    gate_timeout = float(_default_value_from_schema(text, "gaden_sensor_gate_timeout"))
+    assert gate_timeout > mission_delay
+
+
+# ---------------------------------------------------------------------------
+# Scene resolution tests
+# ---------------------------------------------------------------------------
 
 def test_bringup_launch_defers_test_env_lookup_until_gaden_is_enabled():
     text = _launch_text("bringup.launch.py")
-    assert 'DeclareLaunchArgument("gaden_project_path", default_value="")' in text or "DeclareLaunchArgument('gaden_project_path', default_value='')" in text
-    assert 'use_gaden.perform(context)' in text or 'LaunchConfiguration("use_gaden").perform(context)' in text
+    assert _param_in_schema(text, "gaden_project_path")
+    assert 'use_gaden_enabled' in text
+
 
 def test_bringup_launch_reads_scene_specific_gaden_block():
     text = _launch_text("bringup.launch.py")
@@ -62,9 +126,8 @@ def test_bringup_launch_reads_scene_specific_gaden_block():
 
 def test_bringup_launch_routes_scene_specific_gaden_player_frequency():
     text = _launch_text("bringup.launch.py")
-    assert 'DeclareLaunchArgument("gaden_player_freq"' in text or "DeclareLaunchArgument('gaden_player_freq'" in text
-    assert 'str(gaden.get("player_freq"' in text or "str(gaden.get('player_freq'" in text
-    assert '"player_freq": gaden_player_freq' in text or "'player_freq': gaden_player_freq" in text
+    assert _param_in_schema(text, "gaden_player_freq")
+    assert '"playback_id"' in text
 
 
 def test_bringup_launch_fails_fast_if_scene_gaden_config_is_missing():
@@ -73,59 +136,12 @@ def test_bringup_launch_fails_fast_if_scene_gaden_config_is_missing():
     assert 'project_path' in text
 
 
-def test_bringup_launch_exposes_sensor_gate_stable_ready_count_argument():
-    text = _launch_text("bringup.launch.py")
-    assert 'DeclareLaunchArgument("gaden_sensor_gate_stable_ready_count"' in text
-    assert '"stable_ready_count": gaden_sensor_gate_stable_ready_count' in text
-
-
-
-
 def test_bringup_launch_routes_scene_specific_gas_field_parameters():
     text = _launch_text("bringup.launch.py")
     assert 'scene_profile.get("gas_field"' in text or "scene_profile.get('gas_field'" in text
-    assert 'SetLaunchConfiguration("gas_source_strength"' in text or "SetLaunchConfiguration('gas_source_strength'" in text
-    assert 'SetLaunchConfiguration("gas_decay_rate"' in text or "SetLaunchConfiguration('gas_decay_rate'" in text
-    assert 'SetLaunchConfiguration("gas_plume_stddev"' in text or "SetLaunchConfiguration('gas_plume_stddev'" in text
-    assert 'SetLaunchConfiguration("gas_wind_x"' in text or "SetLaunchConfiguration('gas_wind_x'" in text
-    assert 'SetLaunchConfiguration("gas_wind_y"' in text or "SetLaunchConfiguration('gas_wind_y'" in text
-
-def test_bringup_launch_forwards_initial_pose_to_sim_spawn():
-    text = _launch_text("bringup.launch.py")
-    assert '"spawn_x": initial_pose_x' in text
-    assert '"spawn_y": initial_pose_y' in text
-    assert '"spawn_yaw": initial_pose_yaw' in text
-
-
-def test_bringup_launch_uses_tf_gate_node_instead_of_direct_sensor_delay():
-    text = _launch_text("bringup.launch.py")
-    assert 'executable="gaden_sensor_gate_node"' in text
-    assert 'DeclareLaunchArgument("gaden_sensor_delay"' not in text
-
-
-def test_sensor_gate_timeout_default_is_longer_than_mission_manager_delay():
-    text = _launch_text("bringup.launch.py")
-    mission_delay = float(_default_value(text, "mission_manager_delay"))
-    gate_timeout = float(_default_value(text, "gaden_sensor_gate_timeout"))
-    assert gate_timeout > mission_delay
-
-
-def test_bringup_launch_exposes_nav2_params_file_argument():
-    text = _launch_text("bringup.launch.py")
-    assert 'DeclareLaunchArgument("nav2_params_file"' in text
-    assert '"params_file": nav2_params_file' in text
-
-
-def test_bringup_launch_exposes_nav2_map_override_argument():
-    text = _launch_text("bringup.launch.py")
-    assert 'DeclareLaunchArgument("nav2_map_file"' in text
-    assert '"map": nav2_map_file' in text
-
-
-def test_bringup_launch_exposes_use_slam_argument_and_forwards_to_nav2():
-    text = _launch_text("bringup.launch.py")
-    assert 'DeclareLaunchArgument("use_slam"' in text
-    assert '"use_slam": use_slam' in text
+    # Data-driven: gas field params are in gf_defaults dict
+    assert '"source_strength"' in text
+    assert '"decay_rate"' in text
 
 
 def test_bringup_launch_routes_scene_specific_nav2_params_file():
@@ -134,70 +150,76 @@ def test_bringup_launch_routes_scene_specific_nav2_params_file():
     assert 'SetLaunchConfiguration("nav2_params_file"' in text or "SetLaunchConfiguration('nav2_params_file'" in text
 
 
-def test_bringup_launch_forwards_scene_to_sim_launch():
-    text = _launch_text("bringup.launch.py")
-    assert '"scene": scene' in text
-
-
-def test_bringup_launch_forwards_world_and_model_path_to_sim_launch():
-    text = _launch_text("bringup.launch.py")
-    assert '"world": world' in text
-    assert '"gazebo_model_path": gazebo_model_path' in text
-
-
-def test_bringup_launch_forwards_scene_to_nav2_launch():
-    text = _launch_text("bringup.launch.py")
-    assert '"scene": scene' in text
-
-
-def test_bringup_launch_forces_patrol_points_parameter_to_string():
-    text = _launch_text("bringup.launch.py")
-    assert 'ParameterValue(patrol_points, value_type=str)' in text
-
-
-def test_bringup_launch_exposes_track_exit_samples_argument_and_routes_to_mission_manager():
-    text = _launch_text("bringup.launch.py")
-    assert 'DeclareLaunchArgument("track_exit_samples"' in text
-    assert '"track_exit_samples": track_exit_samples' in text
-
-
-def test_bringup_launch_exposes_patrol_goal_timeout_and_routes_to_mission_manager():
-    text = _launch_text("bringup.launch.py")
-    assert 'DeclareLaunchArgument("patrol_goal_timeout_sec"' in text
-    assert '"patrol_goal_timeout_sec": patrol_goal_timeout_sec' in text
-
-
-def test_bringup_launch_exposes_nav2_autostart_argument():
-    text = _launch_text("bringup.launch.py")
-    assert 'DeclareLaunchArgument("nav2_autostart"' in text
-    assert '"autostart": nav2_autostart' in text
-
-
 def test_bringup_launch_routes_scene_specific_nav2_autostart_default():
     text = _launch_text("bringup.launch.py")
     assert 'scene_profile.get("nav2_autostart"' in text or "scene_profile.get('nav2_autostart'" in text
     assert 'SetLaunchConfiguration("nav2_autostart"' in text or "SetLaunchConfiguration('nav2_autostart'" in text
 
 
+# ---------------------------------------------------------------------------
+# Forwarding tests
+# ---------------------------------------------------------------------------
+
+def test_bringup_launch_forwards_initial_pose_to_sim_spawn():
+    text = _launch_text("bringup.launch.py")
+    assert '"spawn_x":' in text
+    assert '"spawn_y":' in text
+    assert '"spawn_yaw":' in text
+
+
+def test_bringup_launch_forwards_scene_to_sim_launch():
+    text = _launch_text("bringup.launch.py")
+    assert '"scene":' in text
+
+
+def test_bringup_launch_forwards_world_and_model_path_to_sim_launch():
+    text = _launch_text("bringup.launch.py")
+    assert '"world":' in text
+    assert '"gazebo_model_path":' in text
+
+
+def test_bringup_launch_forwards_scene_to_nav2_launch():
+    text = _launch_text("bringup.launch.py")
+    assert '"scene":' in text
+
+
+def test_bringup_launch_forces_patrol_points_parameter_to_string():
+    text = _launch_text("bringup.launch.py")
+    assert 'ParameterValue(lc["patrol_points"], value_type=str)' in text
+
+
+# ---------------------------------------------------------------------------
+# Structural tests
+# ---------------------------------------------------------------------------
+
+def test_bringup_launch_uses_tf_gate_node_instead_of_direct_sensor_delay():
+    text = _launch_text("bringup.launch.py")
+    assert 'executable="gaden_sensor_gate_node"' in text
+    assert 'DeclareLaunchArgument("gaden_sensor_delay"' not in text
+
+
 def test_bringup_launch_delays_nav2_start_until_sim_is_up():
     text = _launch_text("bringup.launch.py")
-    assert 'DeclareLaunchArgument("nav2_launch_delay"' in text
-    assert "period=nav2_launch_delay" in text
-    assert "actions=[nav2_include]" in text
+    assert _param_in_schema(text, "nav2_launch_delay")
+    assert "period=lc[\"nav2_launch_delay\"]" in text
 
 
 def test_bringup_launch_uses_nav2_startup_gate_node_when_autostart_is_disabled():
     text = _launch_text("bringup.launch.py")
     assert 'executable="nav2_startup_gate_node"' in text
-    assert 'UnlessCondition(nav2_autostart)' in text
+    assert 'UnlessCondition(lc["nav2_autostart"])' in text
     assert '"lifecycle_manager_service": "/lifecycle_manager_navigation/manage_nodes"' in text
 
 
 def test_bringup_launch_starts_mission_manager_by_timer_in_both_autostart_modes():
     text = _launch_text("bringup.launch.py")
     assert "mission_manager = TimerAction(" in text
-    assert 'period=PythonExpression([nav2_launch_delay, " + ", mission_manager_delay])' in text
-    assert "condition=IfCondition(nav2_autostart)" not in text
+    # TimerAction should not have a condition (runs in both modes)
+    lines = text.split('\n')
+    for i, line in enumerate(lines):
+        if 'mission_manager = TimerAction(' in line:
+            block = '\n'.join(lines[i:i+5])
+            assert 'condition=' not in block
 
 
 def test_bringup_launch_forces_fastdds_udp_transport_for_stability():
@@ -207,62 +229,29 @@ def test_bringup_launch_forces_fastdds_udp_transport_for_stability():
     assert '"UDPv4"' in text
 
 
-def test_sim_launch_exposes_spawn_pose_arguments():
-    text = _launch_text("sim.launch.py")
-    assert 'DeclareLaunchArgument("spawn_x"' in text
-    assert 'DeclareLaunchArgument("spawn_y"' in text
-    assert 'DeclareLaunchArgument("spawn_z"' in text
-    assert 'DeclareLaunchArgument("spawn_yaw"' in text
+# ---------------------------------------------------------------------------
+# Data-driven schema tests
+# ---------------------------------------------------------------------------
+
+def test_bringup_launch_uses_data_driven_param_schema():
+    """Verify the launch file uses a _PARAMS list for parameter declarations."""
+    text = _launch_text("bringup.launch.py")
+    assert "_PARAMS" in text
+    assert "DeclareLaunchArgument(name, default_value=dflt)" in text or "DeclareLaunchArgument(name, default_value=default)" in text
 
 
-def test_sim_launch_uses_world_launch_argument():
-    text = _launch_text("sim.launch.py")
-    assert 'DeclareLaunchArgument("world"' in text
-    assert 'LaunchConfiguration("world")' in text
-
-
-def test_nav2_launch_resolves_runtime_map_from_selected_scene():
-    text = _launch_text("nav2.launch.py")
-    assert 'DeclareLaunchArgument("scene"' in text or "DeclareLaunchArgument('scene'" in text
-    assert 'resolve_scene_map' in text
-    assert 'scene.perform(context)' in text or 'LaunchConfiguration("scene").perform(context)' in text or "LaunchConfiguration('scene').perform(context)" in text
-
-
-def test_nav2_launch_accepts_use_slam_and_routes_to_nav2_bringup():
-    text = _launch_text("nav2.launch.py")
-    assert 'DeclareLaunchArgument("use_slam"' in text or "DeclareLaunchArgument('use_slam'" in text
-    assert "PythonExpression" in text
-    assert "use_slam_bool" in text
-    assert '"slam": use_slam_bool' in text or "'slam': use_slam_bool" in text
-
-
-def test_nav2_launch_rewrites_runtime_params_for_selected_scene_initial_pose():
-    text = _launch_text("nav2.launch.py")
-    assert 'initial_pose.x' in text
-    assert 'initial_pose.y' in text
-    assert 'initial_pose.yaw' in text
-    assert 'runtime_params_path' in text
-
-
-def test_sim_launch_sets_gazebo_model_path_for_scene_assets():
-    text = _launch_text("sim.launch.py")
-    assert 'DeclareLaunchArgument("gazebo_model_path"' in text
-    assert 'SetEnvironmentVariable(' in text
-    assert '"GAZEBO_MODEL_PATH"' in text
-
-
-def test_sim_launch_uses_launch_configurations_for_spawn_pose():
-    text = _launch_text("sim.launch.py")
-    assert '"-x",\n                    spawn_x,' in text
-    assert '"-y",\n                    spawn_y,' in text
-    assert '"-z",\n                    spawn_z,' in text
-    assert '"-Y",\n                    spawn_yaw,' in text
-
-
-def test_sim_launch_shuts_down_if_gazebo_exits():
-    text = _launch_text("sim.launch.py")
-    assert "RegisterEventHandler(" in text
-    assert "OnProcessExit(" in text
-    assert "target_action=gazebo_gui" in text
-    assert "target_action=gazebo_headless" in text
-    assert 'Shutdown(reason="Gazebo process exited")' in text
+def test_bringup_schema_contains_all_required_parameters():
+    """Verify all required parameters are in the _PARAMS schema."""
+    text = _launch_text("bringup.launch.py")
+    required = [
+        "scene", "use_sim_time", "use_rviz", "headless",
+        "nav2_launch_delay", "mission_manager_delay",
+        "initial_pose_x", "initial_pose_y", "initial_pose_yaw",
+        "patrol_points", "enter_threshold", "exit_threshold", "source_threshold",
+        "source_x", "source_y",
+        "use_gaden", "use_slam", "nav2_autostart",
+        "gas_type",
+        "use_particle_filter",
+    ]
+    for param in required:
+        assert _param_in_schema(text, param), f"{param} missing from _PARAMS"

@@ -2,9 +2,6 @@
 
 Wraps SurgeCastTracker + TrackingFusion + CostmapChecker as a single
 py_trees Behaviour that outputs the next navigational target.
-
-Fix #1: Reads safety.avoiding instead of nav2.status (cross-domain leak).
-Fix #5: Accepts domain objects via constructor (DI).
 """
 
 from __future__ import annotations
@@ -23,8 +20,7 @@ class TrackerNode(py_trees.behaviour.Behaviour):
 
     Inputs (blackboard):
         sensor.concentration, sensor.robot_pose, sensor.robot_yaw,
-        sensor.wind, sensor.pf_estimate, sensor.pf_confidence,
-        safety.avoiding   <-- NEW: reads safety domain, not nav2
+        sensor.wind, sensor.pf_estimate, sensor.pf_confidence
 
     Outputs (blackboard):
         tracker.target, tracker.heading
@@ -48,10 +44,9 @@ class TrackerNode(py_trees.behaviour.Behaviour):
         self._costmap = costmap_checker      # DI
         self._use_fusion = use_fusion
         self._use_costmap = use_costmap
-        self._obstacle_count = 0
 
     def initialise(self) -> None:
-        self._obstacle_count = 0
+        pass
 
     def update(self) -> Status:
         concentration = self._bb.sensor.concentration or 0.0
@@ -61,14 +56,6 @@ class TrackerNode(py_trees.behaviour.Behaviour):
         if robot_pose is None:
             self.feedback_message = "no robot pose"
             return Status.FAILURE
-
-        # -- detect obstacle avoidance via safety domain (Fix #1) ---------------
-        is_avoiding = self._bb.safety.obstacle_detected or False
-
-        if is_avoiding:
-            self._obstacle_count += 1
-        else:
-            self._obstacle_count = 0
 
         # -- wind --------------------------------------------------------------
         wind = self._bb.sensor.wind or self._bb.tracker.wind_estimate

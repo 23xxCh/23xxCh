@@ -330,3 +330,159 @@ def test_patrol_advances_one_point_per_goal_reached():
     mode = machine.update(0.1, (0.0, 0.0), goal_reached=False)
     assert mode is MissionMode.PATROL
     assert machine.current_patrol_goal == (1.0, 1.0)
+
+
+def test_seek_track_timeout_returns_to_patrol():
+    """Robot stuck in SEEK_TRACK for too long should fall back to PATROL."""
+    machine = MissionStateMachine(
+        MissionConfig(
+            patrol_points=[(1.0, 1.0)],
+            enter_threshold=3.0,
+            exit_threshold=1.5,
+            source_threshold=8.0,
+            confirm_samples=1,
+            source_radius=0.5,
+            source_hold_steps=2,
+            track_timeout_sec=5.0,  # 5 seconds = 50 ticks at 10Hz
+        )
+    )
+
+    # Enter SEEK_TRACK
+    machine.update(3.5, (0.0, 0.0), False)
+    assert machine.mode is MissionMode.SEEK_CONFIRM
+    machine.update(4.0, (0.5, 0.5), False)
+    assert machine.mode is MissionMode.SEEK_TRACK
+
+    # Stay in SEEK_TRACK with intermediate concentration (below source_threshold)
+    for _ in range(49):
+        machine.update(5.0, (1.0, 1.0), False)
+        assert machine.mode is MissionMode.SEEK_TRACK
+
+    # 50th tick (5.0 seconds) should trigger timeout → PATROL
+    machine.update(5.0, (1.0, 1.0), False)
+    assert machine.mode is MissionMode.PATROL
+
+
+def test_seek_track_timeout_resets_on_reentry():
+    """Timeout counter should reset when re-entering SEEK_TRACK."""
+    machine = MissionStateMachine(
+        MissionConfig(
+            patrol_points=[(1.0, 1.0)],
+            enter_threshold=3.0,
+            exit_threshold=1.5,
+            source_threshold=8.0,
+            confirm_samples=1,
+            source_radius=0.5,
+            source_hold_steps=2,
+            track_timeout_sec=5.0,
+        )
+    )
+
+    # Enter SEEK_TRACK
+    machine.update(3.5, (0.0, 0.0), False)
+    machine.update(4.0, (0.5, 0.5), False)
+    assert machine.mode is MissionMode.SEEK_TRACK
+
+    # Stay for 30 ticks (3 seconds, not yet timed out)
+    for _ in range(30):
+        machine.update(5.0, (1.0, 1.0), False)
+
+    # Drop below exit_threshold → PATROL
+    machine.update(1.0, (1.0, 1.0), False)
+    machine.update(1.0, (1.0, 1.0), False)
+    assert machine.mode is MissionMode.PATROL
+
+    # Re-enter SEEK_TRACK — timeout counter should be reset
+    machine.update(3.5, (0.0, 0.0), False)
+    machine.update(4.0, (0.5, 0.5), False)
+    assert machine.mode is MissionMode.SEEK_TRACK
+
+    # Should have full 50 ticks again, not 20 remaining
+    for _ in range(49):
+        machine.update(5.0, (1.0, 1.0), False)
+        assert machine.mode is MissionMode.SEEK_TRACK
+
+    machine.update(5.0, (1.0, 1.0), False)
+    assert machine.mode is MissionMode.PATROL
+
+
+def test_seek_track_no_timeout_when_disabled():
+    """track_timeout_sec=0 disables the timeout."""
+    machine = MissionStateMachine(
+        MissionConfig(
+            patrol_points=[(1.0, 1.0)],
+            enter_threshold=3.0,
+            exit_threshold=1.5,
+            source_threshold=8.0,
+            confirm_samples=1,
+            source_radius=0.5,
+            source_hold_steps=2,
+            track_timeout_sec=0.0,  # disabled
+        )
+    )
+
+    machine.update(3.5, (0.0, 0.0), False)
+    machine.update(4.0, (0.5, 0.5), False)
+    assert machine.mode is MissionMode.SEEK_TRACK
+
+    # Run for 200 ticks (20 seconds) — should stay in SEEK_TRACK
+    for _ in range(200):
+        machine.update(5.0, (1.0, 1.0), False)
+        assert machine.mode is MissionMode.SEEK_TRACK
+
+
+def test_adaptive_source_threshold_triggers_near_peak():
+    """Robot should trigger SOURCE_FOUND when concentration is near observed peak."""
+    machine = MissionStateMachine(
+        MissionConfig(
+            patrol_points=[(1.0, 1.0)],
+            enter_threshold=3.0,
+            exit_threshold=1.5,
+            source_threshold=100.0,  # Very high fixed threshold — won't trigger
+            confirm_samples=2,
+            source_radius=0.5,
+            source_hold_steps=2,
+            adaptive_source_ratio=0.8,  # Trigger at 80% of max
+        )
+    )
+
+    # Enter SEEK_TRACK (PATROL → SEEK_CONFIRM → SEEK_TRACK)
+    machine.update(3.5, (0.0, 0.0), False)
+    machine.update(4.0, (0.5, 0.5), False)
+    machine.update(4.0, (0.5, 0.5), False)
+    assert machine.mode is MissionMode.SEEK_TRACK
+
+    # Build up a peak of 20.0
+    machine.update(10.0, (1.0, 1.0), False)
+    machine.update(15.0, (1.2, 1.2), False)
+    machine.update(20.0, (1.5, 1.5), False)
+
+    # Drop slightly to 17.0 (85% of 20.0) — should trigger SOURCE_FOUND
+    machine.update(17.0, (1.5, 1.5), False)
+    assert machine.mode is MissionMode.SOURCE_FOUND
+
+
+def test_adaptive_threshold_disabled_by_default():
+    """adaptive_source_ratio=0 disables the feature."""
+    machine = MissionStateMachine(
+        MissionConfig(
+            patrol_points=[(1.0, 1.0)],
+            enter_threshold=3.0,
+            exit_threshold=1.5,
+            source_threshold=100.0,  # Very high — won't trigger
+            confirm_samples=1,
+            source_radius=0.5,
+            source_hold_steps=2,
+            adaptive_source_ratio=0.0,  # disabled
+        )
+    )
+
+    machine.update(3.5, (0.0, 0.0), False)
+    machine.update(4.0, (0.5, 0.5), False)
+    machine.update(4.0, (0.5, 0.5), False)
+    assert machine.mode is MissionMode.SEEK_TRACK
+
+    # Even with high concentration, should NOT trigger SOURCE_FOUND
+    for _ in range(50):
+        machine.update(20.0, (1.5, 1.5), False)
+        assert machine.mode is MissionMode.SEEK_TRACK

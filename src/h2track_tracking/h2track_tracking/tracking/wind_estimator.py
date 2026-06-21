@@ -201,7 +201,9 @@ class WindEstimator:
             # Add bias term
             X = np.column_stack([positions, np.ones(len(positions))])
             # Weighted by concentration (higher concentration = more reliable)
-            weights = concentrations / (concentrations.max() + 1e-6)
+            # Clamp to non-negative to avoid indefiniteness from sensor noise
+            clamped = np.maximum(concentrations, 0.0)
+            weights = clamped / (clamped.max() + 1e-6)
 
             # Simple least squares with weights
             W = np.diag(weights)
@@ -209,7 +211,11 @@ class WindEstimator:
             XtWy = X.T @ W @ concentrations
 
             coeffs = np.linalg.solve(XtWX, XtWy)
-            grad_x, grad_y = coeffs[0], coeffs[1]
+            grad_x, grad_y = float(coeffs[0]), float(coeffs[1])
+
+            # Guard against NaN/Inf from ill-conditioned systems
+            if not (math.isfinite(grad_x) and math.isfinite(grad_y)):
+                return None
 
             grad_mag = math.hypot(grad_x, grad_y)
 
@@ -227,7 +233,7 @@ class WindEstimator:
 
             return (wind_x, wind_y, confidence)
 
-        except np.linalg.LinAlgError:
+        except (np.linalg.LinAlgError, ValueError):
             return None
 
     def _estimate_from_plume_shape(self) -> tuple[float, float, float] | None:

@@ -41,7 +41,6 @@ class CostmapGuardNode(py_trees.behaviour.Behaviour):
         self._bb = bb
         self._checker = costmap_checker
         self._max_dev = max_deviation
-        self._stuck_count = 0
 
     def update(self) -> Status:
         target: Pose2D | None = self._bb.nav2.target_pose
@@ -57,11 +56,6 @@ class CostmapGuardNode(py_trees.behaviour.Behaviour):
             path_deviation=self._bb.nav2.path_deviation or 0.0,
             max_deviation=self._max_dev,
         )
-
-        if assessment.obstacle_detected:
-            self._stuck_count += 1
-        else:
-            self._stuck_count = 0
 
         self._bb.safety.obstacle_detected = assessment.obstacle_detected
 

@@ -97,6 +97,11 @@ class Nav2ClientNode(py_trees.behaviour.Behaviour):
                     - self._start_time_s
                 )
                 if elapsed > self._timeout:
+                    # Cancel the in-flight goal to prevent concurrent goals
+                    if self._goal_handle is not None:
+                        self._goal_handle.cancel_goal_async()
+                    self._goal_handle = None
+                    self._result_future = None
                     self._nav_status = "failed"
                     self._bb.nav2.status = "failed"
                     self.feedback_message = "timeout"
@@ -119,7 +124,8 @@ class Nav2ClientNode(py_trees.behaviour.Behaviour):
     def terminate(self, new_status: Status) -> None:
         # Write terminal status to blackboard
         self._bb.nav2.status = self._nav_status
-        if new_status == Status.INVALID and self._goal_handle is not None:
+        # Always cancel in-flight goal to prevent goal leak
+        if self._goal_handle is not None:
             self._goal_handle.cancel_goal_async()
             self._nav_status = "cancelled"
         self._goal_handle = None
@@ -128,7 +134,13 @@ class Nav2ClientNode(py_trees.behaviour.Behaviour):
     # -- action callbacks -----------------------------------------------------
 
     def _on_goal_response(self, future: Future) -> None:
-        self._goal_handle = future.result()
+        try:
+            self._goal_handle = future.result()
+        except Exception:
+            self._nav_status = "failed"
+            self._bb.nav2.status = "failed"
+            self.feedback_message = "goal response future raised"
+            return
         if self._goal_handle is None or not self._goal_handle.accepted:
             self._nav_status = "failed"
             self._bb.nav2.status = "failed"
@@ -139,7 +151,13 @@ class Nav2ClientNode(py_trees.behaviour.Behaviour):
         self._result_future.add_done_callback(self._on_result)
 
     def _on_result(self, future: Future) -> None:
-        result = future.result()
+        try:
+            result = future.result()
+        except Exception:
+            self._nav_status = "failed"
+            self._bb.nav2.status = "failed"
+            self.feedback_message = "result future raised"
+            return
         if result is not None and result.status == 4:  # SUCCEEDED
             self._nav_status = "succeeded"
             self._bb.nav2.status = "succeeded"

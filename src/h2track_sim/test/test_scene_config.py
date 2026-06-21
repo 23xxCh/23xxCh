@@ -96,6 +96,7 @@ def test_scene_profiles_declare_scene_specific_gas_field_parameters():
         assert 'plume_stddev:' in scene_text
         assert 'wind_x:' in scene_text
         assert 'wind_y:' in scene_text
+        assert 'gas_type:' in scene_text
 
 
 def test_warehouse_scene_gas_field_differs_from_baseline_defaults():
