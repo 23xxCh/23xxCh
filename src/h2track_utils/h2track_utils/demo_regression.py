@@ -358,7 +358,23 @@ def _load_scene_config(config_path: str | None) -> dict[str, dict[str, Any]]:
         return {}
     import yaml
     with open(config_path, encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
+        data = yaml.safe_load(f) or {}
+    # Validate schema: top-level keys are scene names, values are dicts
+    _VALID_SCENE_KEYS = {"rounds", "run_timeout_sec", "warmup_sec",
+                         "require_seek_track", "require_source_found",
+                         "use_gaden", "use_slam"}
+    for scene_name, overrides in data.items():
+        if not isinstance(overrides, dict):
+            raise ValueError(
+                f"Scene config: '{scene_name}' must be a dict, got {type(overrides).__name__}"
+            )
+        invalid = set(overrides.keys()) - _VALID_SCENE_KEYS
+        if invalid:
+            raise ValueError(
+                f"Scene config: '{scene_name}' has unknown keys: {sorted(invalid)}. "
+                f"Valid keys: {sorted(_VALID_SCENE_KEYS)}"
+            )
+    return data
 
 
 def _run_scene_rounds(

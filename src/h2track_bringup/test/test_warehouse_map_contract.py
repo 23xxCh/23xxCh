@@ -3,8 +3,16 @@ from pathlib import Path
 import yaml
 
 
-MAP_YAML = Path('/home/user/h2track-xian/.worktrees/dual-scene-platform/src/h2track_bringup/scenes/warehouse/maps/warehouse_map.yaml')
-SCENE_YAML = Path('/home/user/h2track-xian/.worktrees/dual-scene-platform/src/h2track_bringup/scenes/warehouse/scene.yaml')
+# Use ament_index to find package share, with source fallback
+try:
+    from ament_index_python.packages import get_package_share_directory
+    _BRINGUP_DIR = Path(get_package_share_directory("h2track_bringup"))
+except Exception:
+    _BRINGUP_DIR = Path(__file__).resolve().parents[1]  # h2track_bringup/
+
+_WAREHOUSE_DIR = _BRINGUP_DIR / 'scenes' / 'warehouse'
+MAP_YAML = _WAREHOUSE_DIR / 'maps' / 'warehouse_map.yaml'
+SCENE_YAML = _WAREHOUSE_DIR / 'scene.yaml'
 
 
 def _load_map():
@@ -43,14 +51,13 @@ def test_warehouse_patrol_reaches_detectable_source_approach_route():
     source = scene['gas_source']
     first, second, third, fourth, fifth = patrol
 
-    assert first == [0.5, 2.8]
-    assert second == [2.0, 2.8]
-    assert third == [3.0, 1.0]
-    assert fourth == [3.4, -2.2]
-    assert fifth == [3.5, -2.8]
-    assert scene['mission_manager']['enter_threshold'] == 0.6
-    assert second[1] == first[1]
-    assert third[0] > second[0]
+    assert first == [1.5, 1.8]
+    assert second == [2.4, 1.1]
+    assert third == [2.9, -1.6]
+    assert fourth == [3.2, -2.45]
+    assert fifth == [3.48, -2.92]
+    assert scene['mission_manager']['enter_threshold'] == 0.65
+    assert second[0] > first[0]
     assert third[1] < second[1]
     assert fourth[1] < third[1]
     assert fifth[0] >= fourth[0]

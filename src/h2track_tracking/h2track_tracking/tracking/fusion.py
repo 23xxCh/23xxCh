@@ -198,7 +198,7 @@ class TrackingFusion:
             # Compute heading from robot to PF target
             dx = pf_position.x - robot_pose.x
             dy = pf_position.y - robot_pose.y
-            pf_heading = math.atan2(dy, dx) if (dx or dy) else 0.0
+            pf_heading = math.atan2(dy, dx) if dx != 0.0 or dy != 0.0 else 0.0
 
             return TrackingAction(
                 target=pf_position,

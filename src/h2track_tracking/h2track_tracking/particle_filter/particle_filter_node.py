@@ -93,7 +93,8 @@ class ParticleFilterNode(LifecycleNode):
         self._filter.initialize(self._bounds)
 
         # Create subscriptions (data flows even when inactive)
-        self.create_subscription(Float32, "/gas_concentration", self._gas_concentration_callback, 10)
+        sensor_qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
+        self.create_subscription(Float32, "/gas_concentration", self._gas_concentration_callback, sensor_qos)
         self.create_subscription(Odometry, "/odom", self._odom_callback, 10)
 
         self.get_logger().info(

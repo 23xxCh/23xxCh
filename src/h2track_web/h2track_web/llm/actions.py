@@ -430,9 +430,9 @@ def execute_code_evolve(
     verify_commands = payload.get("verify_commands")
     if verify_commands is None:
         verify_commands = [
-            "source /opt/ros/humble/setup.bash && source /home/user/gaden_ws/install/setup.bash && "
+            "source /opt/ros/humble/setup.bash && source ${GADEN_WS:-/home/user/gaden_ws}/install/setup.bash && "
             "PYTHONPATH=$PWD/src/h2track_tracking:$PYTHONPATH python3 -m pytest -q src/h2track_tracking/test src/h2track_sim/test",
-            "source /opt/ros/humble/setup.bash && source /home/user/gaden_ws/install/setup.bash && "
+            "source /opt/ros/humble/setup.bash && source ${GADEN_WS:-/home/user/gaden_ws}/install/setup.bash && "
             "colcon build --packages-select h2track_tracking h2track_sim",
         ]
     if not isinstance(verify_commands, list):

@@ -160,6 +160,16 @@ def generate_launch_description():
 
         # -- world / nav2 paths ----------------------------------------------
         resolved_world = _resolve("world", resolve_scene_world(pkg_share, scene_name))
+        # Render @GADEN_WS@ placeholders in world files
+        if "@GADEN_WS@" in resolved_world or (Path(resolved_world).exists() and "@GADEN_WS@" in Path(resolved_world).read_text(encoding="utf-8")):
+            import tempfile
+            gaden_ws = os.environ.get("GADEN_WS", "/home/user/gaden_ws")
+            world_text = Path(resolved_world).read_text(encoding="utf-8")
+            rendered = world_text.replace("@GADEN_WS@", gaden_ws)
+            tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".world", delete=False, prefix=f"h2track_{scene_name}_")
+            tmp.write(rendered)
+            tmp.close()
+            resolved_world = tmp.name
         resolved_model_path = _resolve("gazebo_model_path", resolve_scene_model_path(pkg_share, scene_name))
         resolved_nav2_params = _resolve("nav2_params_file", resolve_scene_nav2_params(pkg_share, scene_name))
 
@@ -199,7 +209,7 @@ def generate_launch_description():
             "track_timeout_sec": _resolve("track_timeout_sec", mission_mgr.get("track_timeout_sec", 60.0)),
             "adaptive_source_ratio": _resolve("adaptive_source_ratio", mission_mgr.get("adaptive_source_ratio", 0.0)),
             "track_step": _resolve("track_step", mission_mgr.get("track_step", 0.7)),
-            "surge_step": _resolve("surge_step", mission_mgr.get("track_step", 0.5)),
+            "surge_step": _resolve("surge_step", mission_mgr.get("surge_step", 0.5)),
             "cast_step": _resolve("cast_step", mission_mgr.get("cast_step", 0.3)),
             "sweep_angle_deg": _resolve("sweep_angle_deg", mission_mgr.get("sweep_angle_deg", 30.0)),
         }
@@ -228,6 +238,10 @@ def generate_launch_description():
             scene_gaden_path = str(gaden.get("project_path", "")).strip()
             if not scene_gaden_path:
                 raise RuntimeError(f"Scene '{scene_name}' GADEN config is missing project_path")
+            # Resolve relative paths against GADEN_WS
+            gaden_ws = os.environ.get("GADEN_WS", "/home/user/gaden_ws")
+            if not os.path.isabs(scene_gaden_path):
+                scene_gaden_path = str(Path(gaden_ws) / scene_gaden_path)
             gp = _resolve("gaden_project_path", scene_gaden_path)
             if not Path(gp).exists():
                 raise RuntimeError(f"Scene '{scene_name}' GADEN project_path does not exist: {gp}")
@@ -236,7 +250,7 @@ def generate_launch_description():
                 "gaden_playback_id": ("playback_id", "scene1"),
                 "gaden_player_freq": ("player_freq", 1.0),
                 "gaden_sensor_topic": ("sensor_topic", "/gaden/sensor_reading"),
-                "gaden_sensor_frame": ("sensor_frame", "base_link"),
+                "gaden_sensor_frame": ("sensor_frame", "gas_sensor_link"),
                 "gaden_fixed_frame": ("fixed_frame", "gaden_map"),
                 "gaden_map_offset_x": ("map_offset_x", 0.0),
                 "gaden_map_offset_y": ("map_offset_y", 0.0),

@@ -46,7 +46,7 @@ def generate_launch_description():
         DeclareLaunchArgument("gaden_playback_id", default_value="scene1"),
         DeclareLaunchArgument("gaden_player_freq", default_value="1.0"),
         DeclareLaunchArgument("gaden_sensor_topic", default_value="/gaden/sensor_reading"),
-        DeclareLaunchArgument("gaden_sensor_frame", default_value="base_link"),
+        DeclareLaunchArgument("gaden_sensor_frame", default_value="gas_sensor_link"),
         DeclareLaunchArgument("gaden_fixed_frame", default_value="gaden_map"),
         DeclareLaunchArgument("gaden_map_offset_x", default_value="0.0"),
         DeclareLaunchArgument("gaden_map_offset_y", default_value="0.0"),

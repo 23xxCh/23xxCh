@@ -117,7 +117,7 @@ class Nav2Lifecycle:
         self.check_ready()
 
 
-def _make_pose_stamped(node: Node, pose: Pose2D, yaw: float) -> PoseStamped:
+def _make_pose_stamped(node: Node, pose: Pose2D, yaw: float = 0.0) -> PoseStamped:
     """Create a PoseStamped message from a Pose2D."""
     import math
 

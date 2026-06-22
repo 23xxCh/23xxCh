@@ -221,7 +221,7 @@ def main(
 
     share_resolver = package_share_resolver or get_package_share_directory
     try:
-        package_share = Path(share_resolver("h2track_sim"))
+        package_share = Path(share_resolver("h2track_bringup"))
     except PackageNotFoundError:
         package_share = Path("/")
 

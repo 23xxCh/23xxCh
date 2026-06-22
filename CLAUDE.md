@@ -29,13 +29,18 @@ pytest src/h2track_tracking/test/ --cov=src/h2track_tracking/h2track_tracking --
 
 ## Package Structure
 
-Three ROS 2 packages:
+Eight ROS 2 packages:
 
 | Package | Build Type | Purpose |
 |---------|------------|---------|
-| `h2track_sim` | ament_cmake | Launch files, scene configs, Gazebo worlds, URDF |
-| `h2track_tracking` | ament_python | Tracking logic, gas model, mission state machine |
+| `h2track_bringup` | ament_cmake | Launch files, scene configs, Gazebo worlds |
+| `h2track_tracking` | ament_python | Tracking logic, gas model, mission state machine, BT pipeline |
 | `h2track_interfaces` | ament_cmake | Custom message types (RobotState, SourceEstimate, RoleAssignment) |
+| `h2track_description` | ament_cmake | URDF/xacro robot description |
+| `h2track_gas_sim` | ament_python | Gas simulation (gas_field_node, GADEN adapter) |
+| `h2track_web` | ament_python | FastAPI web console, REST/WebSocket API |
+| `h2track_utils` | ament_python | Shared utilities (Nav2Lifecycle, Pose2D, demo tools) |
+| `h2track_sim` | ament_cmake | Metapackage (depends on bringup + description) |
 
 ## Core Architecture
 
@@ -277,31 +282,44 @@ mission_manager:
   source_radius: 1.0       # Meters from source for SOURCE_FOUND
 gas_source: {x, y}
 gaden:
-  project_path: /path/to/gaden/scenario
+  project_path: install/test_env/share/test_env/scenarios/<scenario>/environment_configurations/config1
   playback_id: scene1
 ```
 
-Available scenes: `baseline`, `warehouse`
+Available scenes: `baseline`, `warehouse`, `maze`, `snake`, `office`, `benchmark`
 
 ## Console Scripts (Entry Points)
 
-Available executables from `h2track_tracking`:
+### h2track_tracking
 
-| Command | Module | Purpose |
-|---------|--------|---------|
-| `mission_manager_node` | `mission_manager_node.py` | (DEPRECATED) Legacy state machine |
-| `bt_node_runner` | `bt_node_runner.py` | **Primary** BT-based orchestrator |
-| `particle_filter_node` | `particle_filter/particle_filter_node.py` | Source localization |
-| `gas_field_node` | `gas_field_node.py` | Simplified gas simulation |
-| `gaden_adapter_node` | `gaden_adapter_node.py` | GADEN integration |
-| `gaden_sensor_gate_node` | `gaden_sensor_gate_node.py` | TF-gated sensor launch |
-| `nav2_startup_gate_node` | `nav2_startup_gate_node.py` | Nav2 lifecycle monitor |
-| `gas_sensor_node` | `gas_sensor/gas_sensor_node.py` | Hardware sensor interface |
-| `demo_prep` | `demo_prep.py` | Clear stale processes |
-| `demo_selfcheck` | `demo_selfcheck.py` | Stack verification |
-| `demo_regression` | `demo_regression.py` | Multi-round stability testing |
-| `demo_web_server` | `demo_web_server.py` | FastAPI web console |
-| `slam_save_map` | `slam_save_map.py` | Save SLAM map |
+| Command | Purpose |
+|---------|---------|
+| `bt_node_runner` | **Primary** BT-based orchestrator (LifecycleNode) |
+| `particle_filter_node` | Probabilistic source localization (LifecycleNode) |
+
+### h2track_gas_sim
+
+| Command | Purpose |
+|---------|---------|
+| `gas_field_node` | Simplified gas simulation (LifecycleNode) |
+| `gaden_adapter_node` | GADEN integration |
+| `gaden_sensor_gate_node` | TF-gated sensor launch |
+
+### h2track_utils
+
+| Command | Purpose |
+|---------|---------|
+| `demo_prep` | Clear stale processes |
+| `demo_selfcheck` | Stack verification |
+| `demo_regression` | Multi-scene regression testing |
+| `slam_save_map` | Save SLAM map |
+| `activate_localization` | AMCL activation |
+
+### h2track_web
+
+| Command | Purpose |
+|---------|---------|
+| `demo_web_server` | FastAPI web console |
 | `activate_localization` | `activate_localization.py` | AMCL activation |
 
 ## Launch Files
@@ -324,13 +342,13 @@ source /home/user/gaden_ws/install/setup.bash
 source install/setup.bash
 
 # 1. Clear stale processes
-ros2 run h2track_tracking demo_prep --scene warehouse
+ros2 run h2track_utils demo_prep --scene warehouse
 
 # 2. Launch demo
-ros2 launch h2track_sim demo.launch.py use_rviz:=true
+ros2 launch h2track_bringup demo.launch.py use_rviz:=true
 
 # 3. Verify stack (separate terminal)
-ros2 run h2track_tracking demo_selfcheck --timeout 5.0
+ros2 run h2track_utils demo_selfcheck --timeout 5.0
 ```
 
 ## Key Topics
@@ -368,7 +386,7 @@ ros2 run h2track_tracking demo_selfcheck --timeout 5.0
 - Scene configs use YAML; launch files load via `scene_loader.py`
 - State machine in `MissionStateMachine` class uses dataclass config
 - `MissionConfig` and `GasFieldParams` are frozen dataclasses for immutability
-- **Canonical Pose2D**: `tracking/types.py` defines the single source-of-truth `Pose2D`; `gas_model.py` re-exports it
+- **Canonical Pose2D**: `h2track_utils/types.py` defines the single source-of-truth `Pose2D`; other packages import from there
 - **Config defaults**: `MissionConfig` and `SurgeCastConfig` dataclass defaults are the single source of truth for ROS parameter defaults
 - **Factory functions**: `navigation_executor.py` houses `_gradient_search_target` (pure gradient nav) and `select_tracking_target` (high-level target selector)
 - **Recovery**: Detection functions use public `controller.metrics_snapshot()` — never `controller._metrics`
@@ -387,11 +405,15 @@ h2track_tracking/
 │   ├── blackboard.py     # 5-namespace shared state
 │   ├── tree_factory.py   # BT assembly with DI
 │   └── nodes/            # py_trees Behaviour implementations
+├── bt_node_runner/       # BT-based lifecycle node
+│   ├── runner.py         # Primary BTNodeRunner (LifecycleNode)
+│   └── param_bridge.py   # Launch param → dataclass bridge
 ├── tracking/             # Gas tracking algorithms
-│   ├── types.py          # Canonical Pose2D, TrackingState, SurgeCastConfig
+│   ├── types.py          # TrackingState, SurgeCastConfig (Pose2D from h2track_utils)
 │   ├── surge_cast.py     # Surge-Cast source localization
 │   ├── plume_detector.py # Plume boundary detection
 │   ├── wind_estimator.py # Wind direction from concentration gradients
+│   ├── costmap_checker.py # Nav2 costmap monitoring
 │   └── fusion.py         # Algorithm fusion (surge-cast + PF)
 ├── heatmap/              # Concentration visualization
 │   ├── grid.py           # 3D concentration grid
@@ -405,20 +427,12 @@ h2track_tracking/
 │   ├── controller.py     # Chat and action execution
 │   ├── actions.py        # LLM-triggered actions
 │   └── profile_store.py  # Profile management
-├── web/                  # FastAPI web console
-│   ├── app.py            # Application factory
-│   ├── routes.py         # REST and WebSocket endpoints
-│   ├── websocket.py      # Connection manager, heatmap streaming
-│   ├── auth.py           # API key authentication
-│   └── simulation_controller.py  # Simulation lifecycle
 ├── multi_robot/          # Multi-robot coordination
 │   └── coordinator_node.py  # Role assignment, information fusion
 ├── evaluation/           # Performance metrics
 │   └── metrics.py        # TrackingMetrics, BenchmarkResult dataclasses
-├── benchmark/            # Algorithm benchmarking
-│   └── performance_benchmark.py  # Timing benchmarks for algorithms
-└── gas_sensor/           # Hardware sensor integration
-    └── gas_sensor_node.py  # MQ-series sensors, simulation mode
+└── benchmark/            # Algorithm benchmarking
+    └── performance_benchmark.py  # Timing benchmarks for algorithms
 ```
 
 ### Custom Messages (h2track_interfaces)

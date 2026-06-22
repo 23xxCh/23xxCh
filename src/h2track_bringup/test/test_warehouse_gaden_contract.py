@@ -1,12 +1,18 @@
+import os
 from pathlib import Path
 
 import pytest
 import yaml
 
 
-SCENARIO_ROOT = Path('/home/user/gaden_ws/src/gaden/test_env/scenarios/h2track_warehouse')
-WORKTREE_ROOT = Path('/home/user/h2track-xian/.worktrees/dual-scene-platform')
-WAREHOUSE_SCENE = WORKTREE_ROOT / 'src' / 'h2track_bringup' / 'scenes' / 'warehouse' / 'scene.yaml'
+_GADEN_WS = Path(os.environ.get("GADEN_WS", "/home/user/gaden_ws"))
+SCENARIO_ROOT = _GADEN_WS / 'src' / 'gaden' / 'test_env' / 'scenarios' / 'h2track_warehouse'
+try:
+    from ament_index_python.packages import get_package_share_directory
+    _BRINGUP_DIR = Path(get_package_share_directory("h2track_bringup"))
+except Exception:
+    _BRINGUP_DIR = Path(__file__).resolve().parents[1]  # h2track_bringup/
+WAREHOUSE_SCENE = _BRINGUP_DIR / 'scenes' / 'warehouse' / 'scene.yaml'
 
 
 def _load_yaml(path: Path):
@@ -48,8 +54,8 @@ def _aligned_occupancy_bounds() -> tuple[float, float, float, float]:
 
 def _warehouse_map_bounds() -> tuple[float, float, float, float]:
     scene = _warehouse_scene()
-    map_yaml = _load_yaml(WORKTREE_ROOT / 'src' / 'h2track_bringup' / scene['map'])
-    width, height = _pgm_size((WORKTREE_ROOT / 'src' / 'h2track_bringup' / scene['map']).with_name(map_yaml['image']))
+    map_yaml = _load_yaml(_BRINGUP_DIR / scene['map'])
+    width, height = _pgm_size((_BRINGUP_DIR / scene['map']).with_name(map_yaml['image']))
     origin_x, origin_y, _ = map_yaml['origin']
     resolution = map_yaml['resolution']
     return (origin_x, origin_y, origin_x + width * resolution, origin_y + height * resolution)

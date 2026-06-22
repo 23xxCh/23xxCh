@@ -35,7 +35,7 @@ gas_source:
   y: 1.95
 gaden:
   enabled: true
-  project_path: /home/user/gaden_ws/install/test_env/share/test_env/scenarios/Exp_C/environment_configurations/config1
+  project_path: install/test_env/share/test_env/scenarios/Exp_C/environment_configurations/config1
   playback_id: scene1
   player_freq: 1.0
   sensor_topic: /gaden/sensor_reading

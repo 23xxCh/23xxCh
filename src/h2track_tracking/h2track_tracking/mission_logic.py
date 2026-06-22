@@ -32,6 +32,18 @@ class MissionConfig:
 
 
 class MissionStateMachine:
+    """Mission state machine — mutable by design.
+
+    Unlike the frozen dataclass pattern used elsewhere, this class
+    intentionally mutates internal state on each update() call:
+    mode, source_estimate, _current_patrol_index, etc.
+
+    Rationale: The state machine tracks real-time sensor observations
+    and transitions mode on every tick. Making it immutable would
+    require returning a new instance per tick, which is impractical
+    for a 10 Hz loop that needs to maintain deque history and
+    source-hit counters across calls.
+    """
     def __init__(self, config: MissionConfig) -> None:
         if not config.patrol_points:
             raise ValueError("patrol_points must not be empty")

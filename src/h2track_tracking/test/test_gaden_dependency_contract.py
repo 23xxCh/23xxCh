@@ -1,7 +1,9 @@
+import os
 from pathlib import Path
 
 
-GAS_SENSOR_SOURCE = Path("/home/user/gaden_ws/src/gaden/simulated_gas_sensor/src/fake_gas_sensor.cpp")
+_GADEN_WS = Path(os.environ.get("GADEN_WS", "/home/user/gaden_ws"))
+GAS_SENSOR_SOURCE = _GADEN_WS / "src" / "gaden" / "simulated_gas_sensor" / "src" / "fake_gas_sensor.cpp"
 
 
 def test_simulated_gas_sensor_spins_callbacks_before_tf_lookup():

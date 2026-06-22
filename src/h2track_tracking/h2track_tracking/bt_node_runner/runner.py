@@ -35,7 +35,7 @@ from h2track_tracking.tracking.costmap_checker import CostmapChecker
 from h2track_tracking.tracking.wind_estimator import WindEstimator, WindEstimatorConfig
 from h2track_utils.navigation_executor import map_pose_from_amcl
 from h2track_tracking.mission_logic import MissionMode, MissionStateMachine
-from h2track_utils.nav2_lifecycle import Nav2Lifecycle
+from h2track_utils.nav2_lifecycle import Nav2Lifecycle, _make_pose_stamped
 
 from .param_bridge import (
     declare_parameters,
@@ -140,7 +140,7 @@ class BTNodeRunner(LifecycleNode):
                                durability=DurabilityPolicy.TRANSIENT_LOCAL)
 
         self.create_subscription(PoseWithCovarianceStamped, "/amcl_pose", self._on_amcl, state_qos)
-        self.create_subscription(PoseWithCovarianceStamped, "/estimated_source", self._on_pf, 10)
+        self.create_subscription(PoseWithCovarianceStamped, "/estimated_source", self._on_pf, state_qos)
         self.create_subscription(Float32, "/gas_concentration", self._on_concentration, sensor_qos)
         self.create_subscription(Costmap, "/global_costmap/costmap", self._on_costmap, 10)
 
@@ -337,17 +337,6 @@ class BTNodeRunner(LifecycleNode):
     def _on_costmap(self, msg: Costmap) -> None:
         if self._costmap_checker is not None:
             self._costmap_checker.update_costmap(msg)
-
-
-def _make_pose_stamped(node, pose: Pose2D, yaw: float = 0.0) -> PoseStamped:
-    goal = PoseStamped()
-    goal.header.frame_id = "map"
-    goal.header.stamp = node.get_clock().now().to_msg()
-    goal.pose.position.x = pose.x
-    goal.pose.position.y = pose.y
-    goal.pose.orientation.z = math.sin(yaw / 2.0)
-    goal.pose.orientation.w = math.cos(yaw / 2.0)
-    return goal
 
 
 def main(args=None):

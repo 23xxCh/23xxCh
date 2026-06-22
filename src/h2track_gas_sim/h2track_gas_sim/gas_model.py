@@ -6,14 +6,8 @@ from dataclasses import dataclass
 import math
 import random
 
+from h2track_utils.types import Pose2D  # canonical definition
 from .gas_types import GasType, get_gas_properties
-
-
-@dataclass(frozen=True)
-class Pose2D:
-    """2D pose for gas simulation domain."""
-    x: float = 0.0
-    y: float = 0.0
 
 
 @dataclass(frozen=True)

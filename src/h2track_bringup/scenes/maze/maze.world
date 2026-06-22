@@ -37,10 +37,10 @@
       <static>true</static>
       <link name="link">
         <collision name="collision">
-          <geometry><mesh><uri>file:///home/user/gaden_ws/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_walls.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>file://@GADEN_WS@/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_walls.stl</uri></mesh></geometry>
         </collision>
         <visual name="visual">
-          <geometry><mesh><uri>file:///home/user/gaden_ws/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_walls.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>file://@GADEN_WS@/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_walls.stl</uri></mesh></geometry>
           <material><ambient>0.7 0.7 0.75 1</ambient><diffuse>0.7 0.7 0.75 1</diffuse></material>
         </visual>
       </link>
@@ -51,10 +51,10 @@
       <static>true</static>
       <link name="link">
         <collision name="collision">
-          <geometry><mesh><uri>file:///home/user/gaden_ws/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_inner.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>file://@GADEN_WS@/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_inner.stl</uri></mesh></geometry>
         </collision>
         <visual name="visual">
-          <geometry><mesh><uri>file:///home/user/gaden_ws/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_inner.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>file://@GADEN_WS@/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_inner.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.85 0.85 1</ambient><diffuse>0.85 0.85 0.85 1</diffuse></material>
         </visual>
       </link>
@@ -65,10 +65,10 @@
       <static>true</static>
       <link name="link">
         <collision name="collision">
-          <geometry><mesh><uri>file:///home/user/gaden_ws/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_maze_obj_1.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>file://@GADEN_WS@/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_maze_obj_1.stl</uri></mesh></geometry>
         </collision>
         <visual name="visual">
-          <geometry><mesh><uri>file:///home/user/gaden_ws/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_maze_obj_1.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>file://@GADEN_WS@/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_maze_obj_1.stl</uri></mesh></geometry>
           <material><ambient>0.5 0.5 0.55 1</ambient><diffuse>0.5 0.5 0.55 1</diffuse></material>
         </visual>
       </link>
@@ -79,10 +79,10 @@
       <static>true</static>
       <link name="link">
         <collision name="collision">
-          <geometry><mesh><uri>file:///home/user/gaden_ws/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_maze_obj_2.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>file://@GADEN_WS@/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_maze_obj_2.stl</uri></mesh></geometry>
         </collision>
         <visual name="visual">
-          <geometry><mesh><uri>file:///home/user/gaden_ws/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_maze_obj_2.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>file://@GADEN_WS@/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_maze_obj_2.stl</uri></mesh></geometry>
           <material><ambient>0.5 0.5 0.55 1</ambient><diffuse>0.5 0.5 0.55 1</diffuse></material>
         </visual>
       </link>
@@ -93,10 +93,10 @@
       <static>true</static>
       <link name="link">
         <collision name="collision">
-          <geometry><mesh><uri>file:///home/user/gaden_ws/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_door_left.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>file://@GADEN_WS@/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_door_left.stl</uri></mesh></geometry>
         </collision>
         <visual name="visual">
-          <geometry><mesh><uri>file:///home/user/gaden_ws/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_door_left.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>file://@GADEN_WS@/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_door_left.stl</uri></mesh></geometry>
           <material><ambient>0.88 0.19 0.19 1</ambient><diffuse>0.88 0.19 0.19 1</diffuse></material>
         </visual>
       </link>
@@ -107,10 +107,10 @@
       <static>true</static>
       <link name="link">
         <collision name="collision">
-          <geometry><mesh><uri>file:///home/user/gaden_ws/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_door_right.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>file://@GADEN_WS@/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_door_right.stl</uri></mesh></geometry>
         </collision>
         <visual name="visual">
-          <geometry><mesh><uri>file:///home/user/gaden_ws/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_door_right.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>file://@GADEN_WS@/install/test_env/share/test_env/scenarios/10x6_maze/cad_models/10x6_door_right.stl</uri></mesh></geometry>
           <material><ambient>0.88 0.19 0.19 1</ambient><diffuse>0.88 0.19 0.19 1</diffuse></material>
         </visual>
       </link>

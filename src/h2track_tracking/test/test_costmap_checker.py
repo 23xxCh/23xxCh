@@ -361,3 +361,91 @@ class TestCostmapChecker:
         x, y = checker._grid_to_world(50, 50)
         assert x == pytest.approx(0.05)
         assert y == pytest.approx(0.05)
+
+
+class TestUpdateCostmapWithOccupancyGrid:
+    """Test update_costmap with nav_msgs/OccupancyGrid messages."""
+
+    @pytest.fixture
+    def checker(self) -> CostmapChecker:
+        return CostmapChecker(CostmapConfig())
+
+    @pytest.fixture
+    def mock_occupancy_grid(self):
+        """Create a mock nav_msgs/OccupancyGrid with an obstacle."""
+        from nav_msgs.msg import OccupancyGrid
+        from geometry_msgs.msg import Pose
+        from std_msgs.msg import Header
+
+        msg = OccupancyGrid()
+        msg.header = Header()
+        msg.header.frame_id = "map"
+
+        msg.info.resolution = 0.1
+        msg.info.width = 100
+        msg.info.height = 100
+        msg.info.origin = Pose()
+        msg.info.origin.position.x = -5.0
+        msg.info.origin.position.y = -5.0
+
+        # Create occupancy grid: 0 = free, 100 = occupied, -1 = unknown
+        data = np.zeros((100, 100), dtype=np.int8)
+        # Obstacle in center (rows 40-60, cols 40-60) = 2m x 2m at world (0,0)
+        data[40:60, 40:60] = 100
+        msg.data = data.flatten().tolist()
+        return msg
+
+    def test_update_from_occupancy_grid(self, checker, mock_occupancy_grid):
+        """Test that OccupancyGrid is parsed correctly."""
+        checker.update_costmap(mock_occupancy_grid)
+        assert checker.has_costmap is True
+        assert checker._resolution == 0.1
+        assert checker._width == 100
+        assert checker._height == 100
+        assert checker.frame_id == "map"
+
+    def test_occupancy_grid_obstacle_detected(self, checker, mock_occupancy_grid):
+        """Test obstacle detection from OccupancyGrid."""
+        checker.update_costmap(mock_occupancy_grid)
+        # (0, 0) is inside the obstacle
+        target = Pose2D(0.0, 0.0)
+        assert checker.is_valid_target(target) is False
+
+    def test_occupancy_grid_free_space(self, checker, mock_occupancy_grid):
+        """Test free space detection from OccupancyGrid."""
+        checker.update_costmap(mock_occupancy_grid)
+        # (3, 3) is free
+        target = Pose2D(3.0, 3.0)
+        assert checker.is_valid_target(target) is True
+
+    def test_occupancy_grid_unknown_cells_are_valid(self, checker):
+        """Test that unknown cells (-1) in OccupancyGrid are treated as valid."""
+        from nav_msgs.msg import OccupancyGrid
+        from geometry_msgs.msg import Pose
+        from std_msgs.msg import Header
+
+        msg = OccupancyGrid()
+        msg.header = Header()
+        msg.header.frame_id = "map"
+        msg.info.resolution = 0.1
+        msg.info.width = 20
+        msg.info.height = 20
+        msg.info.origin = Pose()
+        msg.info.origin.position.x = -1.0
+        msg.info.origin.position.y = -1.0
+
+        # All cells are unknown (-1)
+        data = np.full((20, 20), -1, dtype=np.int8)
+        msg.data = data.flatten().tolist()
+
+        checker.update_costmap(msg)
+        target = Pose2D(0.0, 0.0)
+        assert checker.is_valid_target(target) is True
+
+    def test_occupancy_grid_cost_at_obstacle(self, checker, mock_occupancy_grid):
+        """Test cost value at obstacle position from OccupancyGrid."""
+        checker.update_costmap(mock_occupancy_grid)
+        target = Pose2D(0.0, 0.0)
+        # OccupancyGrid uses 0-100 scale, not 0-255
+        cost = checker.get_cost_at(target)
+        assert cost == 100

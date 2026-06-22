@@ -108,7 +108,7 @@ def build_demo_prep_command(profile: dict[str, Any] | None = None) -> list[str]:
     return [
         "ros2",
         "run",
-        "h2track_tracking",
+        "h2track_utils",
         "demo_prep",
         "--scene",
         p["scene"],
@@ -123,7 +123,7 @@ def build_demo_launch_command(profile: dict[str, Any] | None = None) -> list[str
     return [
         "ros2",
         "launch",
-        "h2track_sim",
+        "h2track_bringup",
         "demo.launch.py",
         f"scene:={p['scene']}",
         f"use_gaden:={p['use_gaden']}",

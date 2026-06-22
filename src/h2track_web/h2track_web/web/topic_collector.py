@@ -16,6 +16,8 @@ from __future__ import annotations
 import threading
 from typing import Any
 
+from rclpy.qos import QoSProfile, ReliabilityPolicy
+
 from .metrics_store import MetricsStore
 
 
@@ -92,9 +94,12 @@ class TopicMetricsCollector:
                 super().__init__("demo_web_metrics_collector")
                 self._metrics = metrics
 
+                # gas_concentration is published with BEST_EFFORT QoS
+                sensor_qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
+
                 # Subscribe to core topics
                 self.create_subscription(String, "/robot_mode", self._on_mode, 10)
-                self.create_subscription(Float32, "/gas_concentration", self._on_gas, 10)
+                self.create_subscription(Float32, "/gas_concentration", self._on_gas, sensor_qos)
                 self.create_subscription(Bool, "/source_found", self._on_source_found, 10)
                 self.create_subscription(Odometry, "/odom", self._on_odom, 10)
 
