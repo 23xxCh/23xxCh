@@ -68,6 +68,8 @@ PATROL → SEEK_CONFIRM → SEEK_TRACK → SOURCE_FOUND
 | `gaden_sensor_gate_node` | `gaden_sensor_gate.py` | Waits for TF before launching simulated_gas_sensor |
 | `nav2_startup_gate_node` | `nav2_startup_gate.py` | Waits for Nav2 lifecycle readiness |
 | `particle_filter_node` | `particle_filter/particle_filter_node.py` | Probabilistic gas source localization |
+| `anemometer_adapter_node` | `anemometer_adapter_node.py` | Bridges GADEN `Anemometer` → `/estimated_wind` (WindEstimate) — ground-truth wind |
+| `ground_truth_sampler` | `evaluation/ground_truth_sampler.py` | Samples GADEN `/odor_value` (GasPosition) for RMSE evaluation |
 
 ### Gas Simulation
 
@@ -75,6 +77,44 @@ Two modes:
 
 1. **Simplified** (`use_gaden:=false`): `gas_field_node` publishes synthetic plume data based on `GasFieldModel` in `gas_model.py`
 2. **GADEN** (`use_gaden:=true`): Uses external GADEN workspace for realistic filament-based gas dispersion
+
+### MOX Sensor Model
+
+Complete port of GADEN's `fake_gas_sensor` Figaro TGS sensor model in `h2track_gas_sim/mox_sensor_model.py`:
+
+- **5 sensors × 7 gases**: TGS2620/TGS2600/TGS2611/TGS2610/TGS2612 × ethanol/methane/hydrogen/propanol/chlorine/fluorine/acetone
+- **Static conversion**: `Rs/R0 = A * conc^B` (line in loglog scale)
+- **Dynamic response**: tau-based low-pass filter with rise/decay time constants per sensor
+- **PID correction factors**: H2 = 0.0 (PID insensitive to hydrogen)
+
+```python
+from h2track_gas_sim.mox_sensor_model import (
+    MoxSensorModel, MoxSensorConfig, MoxSensorType, MoxGasType, mox_raw_from_ppm
+)
+
+model = MoxSensorModel(MoxSensorConfig(
+    sensor_model=MoxSensorType.TGS2600,
+    gas_type=MoxGasType.HYDROGEN,
+    use_dynamics=True,
+    node_rate_hz=10.0,
+))
+rs_ohms = model.update(concentration_ppm=100.0)
+```
+
+**GADEN upstream bug fixed**: tau_value selection now uses `[gas_type]` instead of hardcoded `[0]` (ethanol). This means H2 now uses the correct tau for its gas type.
+
+### Ground Truth Evaluation
+
+Real-vs-estimated concentration/source comparison using `h2track_tracking/evaluation/`:
+
+- **`ground_truth_report.py`**: Pure logic — `GroundTruthSample`, `GroundTruthMetrics`, `compute_ground_truth_metrics()`, `format_report_json()`. Computes `source_rmse`, `concentration_rmse`, `time_to_source_sec`, `path_length_m`, `success_rate`.
+- **`ground_truth_sampler.py`**: ROS Node — subscribes `/amcl_pose`, `/estimated_source`, `/gas_concentration`; calls GADEN `/odor_value` (GasPosition srv) to sample truth concentration at the robot cell. Exposes `dump_to_json(path)`, `get_metrics()`, `samples` property.
+
+Launch with `--sample-ground-truth` (writes report JSON at end of run).
+
+### TDLAS (Deferred)
+
+TDLAS (Tunable Diode Laser Absorption Spectroscopy) integration is **deferred** — see `docs/adr/0001-tdlas-integration.md` for the decision and trigger conditions. Current H2 use cases are covered by anemometer + MOX + GasPosition; TDLAS will be re-evaluated when hardware includes a TDLAS sensor or when 10m+ remote detection is required.
 
 ### Multi-Gas Support
 
@@ -148,8 +188,13 @@ Estimates wind direction from gas concentration gradients using `tracking/wind_e
   - Outputs: wind_x, wind_y, confidence
 
 Key parameters:
-- `estimate_wind`: Enable wind estimation (default: true)
-- `wind_estimation_min_samples`: Minimum samples before estimating (default: 10)
+- `estimate_wind`: Wind estimation mode (default: `"gradient"`)
+  - `"off"` — disable wind estimation
+  - `"gradient"` — infer wind from concentration gradients (legacy default; backward-compat: `true`)
+  - `"anemometer"` — use GADEN `simulated_anemometer` ground truth (requires `use_gaden:=true` and `use_anemometer_ground_truth:=true`)
+- `wind_estimation_min_samples`: Minimum samples before estimating (default: 10, gradient mode only)
+
+**Anemometer ground-truth mode** (Phase 1): When `estimate_wind: anemometer`, the `bt_node_runner` subscribes to `/estimated_wind` (WindEstimate message) published by `anemometer_adapter_node`. The node converts GADEN's `Anemometer` msg (wind_speed, wind_direction) into a map-frame downwind vector with EMA smoothing. Backward-compat: bool `true` → `"gradient"`, `false` → `"off"`.
 
 ### Behavior Tree Pipeline
 
@@ -296,6 +341,7 @@ Available scenes: `baseline`, `warehouse`, `maze`, `snake`, `office`, `benchmark
 |---------|---------|
 | `bt_node_runner` | **Primary** BT-based orchestrator (LifecycleNode) |
 | `particle_filter_node` | Probabilistic source localization (LifecycleNode) |
+| `ground_truth_sampler` | GADEN GasPosition ground-truth RMSE evaluation |
 
 ### h2track_gas_sim
 
@@ -304,6 +350,8 @@ Available scenes: `baseline`, `warehouse`, `maze`, `snake`, `office`, `benchmark
 | `gas_field_node` | Simplified gas simulation (LifecycleNode) |
 | `gaden_adapter_node` | GADEN integration |
 | `gaden_sensor_gate_node` | TF-gated sensor launch |
+| `anemometer_adapter_node` | GADEN `Anemometer` → `/estimated_wind` (WindEstimate) |
+| `gas_sensor_node` | MOX gas sensor (uses `mox_sensor_model.py`) |
 
 ### h2track_utils
 
@@ -362,7 +410,7 @@ ros2 run h2track_utils demo_selfcheck --timeout 5.0
 | `/estimated_source_pose` | `PoseStamped` | Estimated source position |
 | `/estimated_source` | `PoseWithCovarianceStamped` | Particle filter source estimate with covariance |
 | `/particle_cloud` | `PoseArray` | Particle positions for visualization |
-| `/estimated_wind` | `String` | Estimated wind vector: "wind_x,wind_y,confidence" |
+| `/estimated_wind` | `String` (gradient mode) / `WindEstimate` (anemometer mode) | Estimated wind vector. Gradient mode publishes CSV string "wind_x,wind_y,confidence"; anemometer mode publishes typed `WindEstimate` msg from `anemometer_adapter_node` |
 | `/fusion_state` | `String` | Fusion state: "mode,pf_contrib,surge_contrib,target_x,target_y" |
 
 ## External Dependencies
@@ -429,10 +477,26 @@ h2track_tracking/
 │   └── profile_store.py  # Profile management
 ├── multi_robot/          # Multi-robot coordination
 │   └── coordinator_node.py  # Role assignment, information fusion
-├── evaluation/           # Performance metrics
-│   └── metrics.py        # TrackingMetrics, BenchmarkResult dataclasses
+├── evaluation/           # Performance metrics + ground-truth comparison
+│   ├── metrics.py        # TrackingMetrics, BenchmarkResult dataclasses
+│   ├── ground_truth_report.py  # Pure RMSE/report logic (Phase 3)
+│   └── ground_truth_sampler.py # ROS node — samples GADEN /odor_value
 └── benchmark/            # Algorithm benchmarking
     └── performance_benchmark.py  # Timing benchmarks for algorithms
+```
+
+```
+h2track_gas_sim/
+├── gas_model.py          # Simplified GasFieldModel
+├── gas_field_node.py     # Simplified plume sim (LifecycleNode)
+├── gaden_adapter.py      # GADEN sensor → /gas_concentration
+├── gaden_adapter_node.py
+├── gaden_sensor_gate.py  # TF-gated sensor launch
+├── anemometer_adapter.py # Anemometer → WindEstimate (Phase 1, pure logic)
+├── anemometer_adapter_node.py
+├── mox_sensor_model.py   # Complete GADEN MOX port (Phase 2)
+├── gas_sensor/           # MOX gas_sensor_node wrapper
+└── wind_model.py
 ```
 
 ### Custom Messages (h2track_interfaces)
@@ -442,6 +506,8 @@ h2track_tracking/
 | `RobotState.msg` | robot_id, x, y, yaw, mode, concentration, timestamp | Robot state for multi-robot coordination |
 | `SourceEstimate.msg` | robot_id, x, y, confidence, covariance[4], timestamp | Source estimate with uncertainty |
 | `RoleAssignment.msg` | robot_id, role, target_x, target_y, timestamp | Role assignment for multi-robot |
+| `WindEstimate.msg` | header, wind_x, wind_y, confidence | Typed wind estimate (anemometer mode) |
+| `FusionState.msg` | header, mode, pf_contrib, surge_contrib, target_x, target_y | Fusion state for visualization |
 
 ## Web Console
 

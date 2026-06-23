@@ -25,6 +25,7 @@ setup(
             "gas_field_node = h2track_gas_sim.gas_field_node:main",
             "gaden_adapter_node = h2track_gas_sim.gaden_adapter_node:main",
             "gaden_sensor_gate_node = h2track_gas_sim.gaden_sensor_gate_node:main",
+            "anemometer_adapter_node = h2track_gas_sim.anemometer_adapter_node:main",
             "gas_sensor_node = h2track_gas_sim.gas_sensor.gas_sensor_node:main",
         ],
     },

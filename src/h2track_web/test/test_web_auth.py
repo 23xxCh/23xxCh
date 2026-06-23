@@ -44,7 +44,7 @@ class TestVerifyApiKey:
     def test_verify_passes_when_auth_disabled(self, monkeypatch):
         """When auth is disabled, verify should always pass."""
         monkeypatch.setattr(
-            "h2track_tracking.web.auth.settings",
+            "h2track_web.web.auth.settings",
             AuthSettings(API_KEY="", AUTH_ENABLED=False),
         )
         result = verify_api_key("any-key")
@@ -53,7 +53,7 @@ class TestVerifyApiKey:
     def test_verify_passes_with_correct_key(self, monkeypatch):
         """With correct API key, verify should pass."""
         monkeypatch.setattr(
-            "h2track_tracking.web.auth.settings",
+            "h2track_web.web.auth.settings",
             AuthSettings(API_KEY="correct-key", AUTH_ENABLED=True),
         )
         result = verify_api_key("correct-key")
@@ -62,7 +62,7 @@ class TestVerifyApiKey:
     def test_verify_raises_with_wrong_key(self, monkeypatch):
         """With wrong API key, verify should raise HTTPException."""
         monkeypatch.setattr(
-            "h2track_tracking.web.auth.settings",
+            "h2track_web.web.auth.settings",
             AuthSettings(API_KEY="correct-key", AUTH_ENABLED=True),
         )
         with pytest.raises(Exception) as exc_info:
@@ -90,7 +90,7 @@ class TestAuthDependency:
         from fastapi.testclient import TestClient
 
         monkeypatch.setattr(
-            "h2track_tracking.web.auth.settings",
+            "h2track_web.web.auth.settings",
             AuthSettings(API_KEY="test-key", AUTH_ENABLED=True),
         )
 
@@ -116,7 +116,7 @@ class TestAuthDependency:
         from fastapi.testclient import TestClient
 
         monkeypatch.setattr(
-            "h2track_tracking.web.auth.settings",
+            "h2track_web.web.auth.settings",
             AuthSettings(API_KEY="correct-key", AUTH_ENABLED=True),
         )
 
@@ -141,7 +141,7 @@ class TestAuthDependency:
         from fastapi.testclient import TestClient
 
         monkeypatch.setattr(
-            "h2track_tracking.web.auth.settings",
+            "h2track_web.web.auth.settings",
             AuthSettings(API_KEY="", AUTH_ENABLED=False),
         )
 

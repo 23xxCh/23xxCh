@@ -107,7 +107,7 @@ def test_source_found_requires_positions_to_stay_within_radius():
             source_threshold=8.0,
             confirm_samples=2,
             source_radius=0.5,
-            source_hold_steps=3,
+            source_hold_steps=2,
         )
     )
 
@@ -116,12 +116,11 @@ def test_source_found_requires_positions_to_stay_within_radius():
     machine.update(5.0, (0.3, 0.3), False)
 
     machine.update(9.5, (1.9, 2.1), False)
-    machine.update(9.3, (3.0, 3.0), False)
-    machine.update(9.2, (1.8, 2.0), False)
-    machine.update(9.4, (1.9, 2.2), False)
+    machine.update(9.3, (3.0, 3.0), False)  # Moves outside radius — resets hits
+    machine.update(9.2, (1.8, 2.0), False)  # Back near estimate — hit 1
+    machine.update(9.4, (1.9, 2.2), False)  # Still near — hit 1 (estimate updated)
+    machine.update(9.1, (1.9, 2.1), False)  # Still near — hit 2 → SOURCE_FOUND
 
-    # Fast-path triggers SOURCE_FOUND when no actual_source is set
-    # (concentration >= source_threshold and _is_near_actual_source returns True)
     assert machine.mode is MissionMode.SOURCE_FOUND
 
 

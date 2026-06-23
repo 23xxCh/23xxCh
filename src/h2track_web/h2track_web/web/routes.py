@@ -78,6 +78,7 @@ def register_routes(
     resolve_static_index_html: Any,
     html_page: str,
     ws_manager: Any = None,
+    heatmap_provider: Any = None,
 ) -> None:
     """Register all FastAPI routes on the given app.
 
@@ -90,6 +91,7 @@ def register_routes(
         resolve_static_index_html: Function to resolve static index.html path.
         html_page: HTML content for legacy inline mode.
         ws_manager: Optional ConnectionManager for WebSocket support.
+        heatmap_provider: Optional HeatmapDataProvider for heatmap WebSocket.
     """
     # Get auth dependency - None if auth disabled or FastAPI unavailable
     auth_dep = get_auth_dependency()
@@ -273,7 +275,7 @@ def register_routes(
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"profile check failed: {exc}") from exc
+            raise HTTPException(status_code=500, detail="Profile check failed") from exc
         return JSONResponse(content=result)
 
     @app.delete("/api/llm/profiles/{profile_id}")
@@ -284,7 +286,7 @@ def register_routes(
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"delete profile failed: {exc}") from exc
+            raise HTTPException(status_code=500, detail="Delete profile failed") from exc
         return JSONResponse(status_code=202, content=result)
 
     @app.post("/api/llm/chat")
@@ -296,7 +298,7 @@ def register_routes(
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"llm chat failed: {exc}") from exc
+            raise HTTPException(status_code=500, detail="LLM chat failed") from exc
         return JSONResponse(content=result)
 
     @app.post("/api/llm/action/execute")
@@ -309,7 +311,7 @@ def register_routes(
         try:
             result = llm.execute_action(action)
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"execute action failed: {exc}") from exc
+            raise HTTPException(status_code=500, detail="Execute action failed") from exc
         status_code = 202 if result.get("ok") else 409
         return JSONResponse(status_code=status_code, content=result)
 
@@ -322,7 +324,7 @@ def register_routes(
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"run-once failed: {exc}") from exc
+            raise HTTPException(status_code=500, detail="Run-once failed") from exc
         return JSONResponse(status_code=202, content=result)
 
     @app.get("/api/llm/history")
@@ -461,8 +463,9 @@ def register_routes(
         # Heatmap WebSocket endpoint for real-time visualization
         from .websocket import HeatmapDataProvider, heatmap_websocket_endpoint
 
-        # Create heatmap provider instance (to be populated by ROS callbacks)
-        heatmap_provider = HeatmapDataProvider()
+        # Use the provided heatmap_provider or create a standalone one
+        if heatmap_provider is None:
+            heatmap_provider = HeatmapDataProvider()
 
         @app.websocket("/ws/heatmap")
         async def ws_heatmap(websocket: WebSocket) -> None:
@@ -486,6 +489,3 @@ def register_routes(
                 heatmap_provider=heatmap_provider,
                 broadcast_interval_sec=0.5,  # 2 Hz
             )
-
-        # Expose heatmap_provider for ROS integration
-        app.state.heatmap_provider = heatmap_provider

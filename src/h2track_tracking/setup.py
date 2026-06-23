@@ -15,6 +15,8 @@ setup(
         f"{package_name}.multi_robot",
         f"{package_name}.benchmark",
         f"{package_name}.evaluation",
+        f"{package_name}.heatmap",
+        f"{package_name}.llm",
     ],
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
@@ -31,6 +33,7 @@ setup(
         "console_scripts": [
             "bt_node_runner = h2track_tracking.bt_node_runner:main",
             "particle_filter_node = h2track_tracking.particle_filter.particle_filter_node:main",
+            "ground_truth_sampler = h2track_tracking.evaluation.ground_truth_sampler:main",
         ],
     },
 )

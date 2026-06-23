@@ -343,9 +343,9 @@ class TestWebsocketEndpoint:
         mock_ws = AsyncMock()
         mock_ws.receive = AsyncMock(side_effect=Exception("stop loop"))
 
-        with patch("h2track_tracking.web.websocket.asyncio.create_task") as mock_task:
+        with patch("h2track_web.web.websocket.asyncio.create_task") as mock_task:
             mock_task.return_value = AsyncMock()
-            with patch("h2track_tracking.web.websocket.asyncio.sleep"):
+            with patch("h2track_web.web.websocket.asyncio.sleep"):
                 try:
                     await websocket_endpoint(
                         mock_ws,
@@ -378,9 +378,9 @@ class TestWebsocketEndpoint:
             ]
         )
 
-        with patch("h2track_tracking.web.websocket.asyncio.create_task") as mock_task:
+        with patch("h2track_web.web.websocket.asyncio.create_task") as mock_task:
             mock_task.return_value = AsyncMock(cancel=AsyncMock())
-            with patch("h2track_tracking.web.websocket.asyncio.sleep"):
+            with patch("h2track_web.web.websocket.asyncio.sleep"):
                 try:
                     await websocket_endpoint(
                         mock_ws,

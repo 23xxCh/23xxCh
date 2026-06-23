@@ -29,26 +29,24 @@ UI_MODE_LEGACY = "legacy_inline"
 def _resolve_static_console_dir() -> Path | None:
     """Resolve the static console bundle directory.
 
-    Checks package root directory (h2track_tracking), module directory (web),
+    Checks package root directory (h2track_web), module directory (web),
     and ROS package share directory.
 
     Returns:
         Path to static_console directory, or None if not found.
     """
-    # web module directory (this file's parent)
     web_module_dir = Path(__file__).resolve().parent
-    # Package root directory (h2track_tracking) - one level up from web
     package_root_dir = web_module_dir.parent
 
     candidates = [
-        package_root_dir / STATIC_CONSOLE_DIRNAME,  # h2track_tracking/static_console
-        web_module_dir / STATIC_CONSOLE_DIRNAME,    # h2track_tracking/web/static_console
+        package_root_dir / STATIC_CONSOLE_DIRNAME,
+        web_module_dir / STATIC_CONSOLE_DIRNAME,
     ]
     try:
         from ament_index_python.packages import get_package_share_directory
 
         candidates.append(
-            Path(get_package_share_directory("h2track_tracking")) / STATIC_CONSOLE_DIRNAME
+            Path(get_package_share_directory("h2track_web")) / STATIC_CONSOLE_DIRNAME
         )
     except Exception:
         pass
@@ -125,13 +123,20 @@ def create_app(
     from fastapi.staticfiles import StaticFiles
 
     from ..llm import LlmController
-    from .websocket import ConnectionManager
+    from .websocket import ConnectionManager, HeatmapDataProvider
 
     app = FastAPI(title="H2Track Web Console")
     sim = controller or SimulationController()
     llm = llm_controller or LlmController(sim=sim)
     ui_meta = _resolve_ui_meta()
-    collector = TopicMetricsCollector(sim._metrics) if start_topic_collector else None
+
+    # Create HeatmapDataProvider early so both collector and routes can share it
+    heatmap_provider = HeatmapDataProvider()
+
+    collector = TopicMetricsCollector(
+        sim._metrics,
+        heatmap_provider=heatmap_provider,
+    ) if start_topic_collector else None
 
     # Create WebSocket connection manager
     ws_manager = ConnectionManager() if WEBSOCKET_AVAILABLE else None
@@ -157,13 +162,16 @@ def create_app(
         resolve_static_index_html=_resolve_static_index_html,
         html_page=HTML_PAGE,
         ws_manager=ws_manager,
+        heatmap_provider=heatmap_provider,
     )
+
+    # Expose heatmap_provider on app.state for external access
+    app.state.heatmap_provider = heatmap_provider
 
     @app.on_event("startup")
     async def _on_startup() -> None:
-        """Start topic collector on app startup."""
-        if collector is not None:
-            collector.start()
+        """No-op — collector started eagerly above."""
+        pass
 
     @app.on_event("shutdown")
     async def _on_shutdown() -> None:

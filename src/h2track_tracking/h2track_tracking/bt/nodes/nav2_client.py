@@ -36,18 +36,21 @@ class Nav2ClientNode(py_trees.behaviour.Behaviour):
         *,
         action_server_name: str = "/navigate_to_pose",
         timeout: float = 60.0,
+        max_reject_retries: int = 3,
     ) -> None:
         super().__init__(name)
         self._bb = bb
         self._node = node
         self._action_server = action_server_name   # Fix #2: configurable
         self._timeout = timeout
+        self._max_reject_retries = max_reject_retries
 
         self._action_client: ActionClient | None = None
         self._goal_handle = None
         self._result_future: Future | None = None
         self._start_time_s: float | None = None
         self._nav_status = "idle"                    # Fix #4: internal state
+        self._reject_count = 0
 
     # -- py_trees lifecycle ---------------------------------------------------
 
@@ -56,14 +59,17 @@ class Nav2ClientNode(py_trees.behaviour.Behaviour):
             self._node, NavigateToPose, self._action_server
         )
 
-    def initialise(self) -> None:
+    def _send_goal(self) -> None:
+        """Send navigation goal to Nav2 action server."""
         target: Pose2D | None = self._bb.nav2.target_pose
         if target is None:
             self.feedback_message = "no target_pose on blackboard"
+            self._nav_status = "failed"
             return
 
         if self._action_client is None:
             self.feedback_message = "action client None"
+            self._nav_status = "failed"
             return
 
         yaw = self._bb.nav2.target_yaw or 0.0
@@ -85,10 +91,19 @@ class Nav2ClientNode(py_trees.behaviour.Behaviour):
         self._bb.nav2.status = "navigating"
         self.feedback_message = f"-> ({target.x:.2f}, {target.y:.2f})"
 
+    def initialise(self) -> None:
+        self._reject_count = 0
+        self._send_goal()
+
     def update(self) -> Status:
         # Fix #4: read internal status, not blackboard
         if self._nav_status == "idle":
             return Status.INVALID
+
+        if self._nav_status == "retry":
+            # Retry sending the goal
+            self._send_goal()
+            return Status.RUNNING
 
         if self._nav_status == "navigating":
             if self._start_time_s is not None:
@@ -142,9 +157,16 @@ class Nav2ClientNode(py_trees.behaviour.Behaviour):
             self.feedback_message = "goal response future raised"
             return
         if self._goal_handle is None or not self._goal_handle.accepted:
-            self._nav_status = "failed"
-            self._bb.nav2.status = "failed"
-            self.feedback_message = "goal rejected"
+            self._reject_count += 1
+            if self._reject_count < self._max_reject_retries:
+                self._nav_status = "retry"
+                self.feedback_message = (
+                    f"goal rejected (attempt {self._reject_count}/{self._max_reject_retries})"
+                )
+            else:
+                self._nav_status = "failed"
+                self._bb.nav2.status = "failed"
+                self.feedback_message = "goal rejected (max retries)"
             return
 
         self._result_future = self._goal_handle.get_result_async()

@@ -216,9 +216,9 @@ class TestHeatmapWebsocketEndpoint:
         mock_ws = AsyncMock()
         mock_ws.receive = AsyncMock(side_effect=Exception("stop loop"))
 
-        with patch("h2track_tracking.web.websocket.asyncio.create_task") as mock_task:
+        with patch("h2track_web.web.websocket.asyncio.create_task") as mock_task:
             mock_task.return_value = AsyncMock()
-            with patch("h2track_tracking.web.websocket.asyncio.sleep"):
+            with patch("h2track_web.web.websocket.asyncio.sleep"):
                 try:
                     await heatmap_websocket_endpoint(
                         mock_ws,
@@ -273,9 +273,9 @@ class TestHeatmapWebsocketEndpoint:
                 }
                 await mock_send_json(msg)
 
-        with patch("h2track_tracking.web.websocket.asyncio.create_task") as mock_task:
+        with patch("h2track_web.web.websocket.asyncio.create_task") as mock_task:
             mock_task.return_value = AsyncMock()
-            with patch("h2track_tracking.web.websocket.asyncio.sleep"):
+            with patch("h2track_web.web.websocket.asyncio.sleep"):
                 try:
                     await heatmap_websocket_endpoint(
                         mock_ws,
@@ -307,9 +307,9 @@ class TestHeatmapWebsocketEndpoint:
             ]
         )
 
-        with patch("h2track_tracking.web.websocket.asyncio.create_task") as mock_task:
+        with patch("h2track_web.web.websocket.asyncio.create_task") as mock_task:
             mock_task.return_value = AsyncMock(cancel=AsyncMock())
-            with patch("h2track_tracking.web.websocket.asyncio.sleep"):
+            with patch("h2track_web.web.websocket.asyncio.sleep"):
                 try:
                     await heatmap_websocket_endpoint(
                         mock_ws,
@@ -345,9 +345,9 @@ class TestHeatmapWebsocketEndpoint:
             ]
         )
 
-        with patch("h2track_tracking.web.websocket.asyncio.create_task") as mock_task:
+        with patch("h2track_web.web.websocket.asyncio.create_task") as mock_task:
             mock_task.return_value = AsyncMock(cancel=AsyncMock())
-            with patch("h2track_tracking.web.websocket.asyncio.sleep"):
+            with patch("h2track_web.web.websocket.asyncio.sleep"):
                 try:
                     await heatmap_websocket_endpoint(
                         mock_ws,
@@ -384,9 +384,9 @@ class TestHeatmapWebsocketEndpoint:
             ]
         )
 
-        with patch("h2track_tracking.web.websocket.asyncio.create_task") as mock_task:
+        with patch("h2track_web.web.websocket.asyncio.create_task") as mock_task:
             mock_task.return_value = AsyncMock(cancel=AsyncMock())
-            with patch("h2track_tracking.web.websocket.asyncio.sleep"):
+            with patch("h2track_web.web.websocket.asyncio.sleep"):
                 try:
                     await heatmap_websocket_endpoint(
                         mock_ws,

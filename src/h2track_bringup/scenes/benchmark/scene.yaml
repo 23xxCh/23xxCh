@@ -28,10 +28,13 @@ mission_manager:
   track_step: 0.4
   sweep_angle_deg: 30.0
 
-# 测试用气体源位置（多个测试case）
+# NOTE: gas_source must match the GADEN scenario's source position because
+# this scene reuses the h2track_warehouse GADEN project_path. Warehouse's
+# GADEN source is at (3.6, -3.038551). A mismatch would cause the tracker
+# to search at a location where no gas is actually present.
 gas_source:
-  x: 3.0
-  y: -2.0
+  x: 3.6
+  y: -3.038551
 
 gaden:
   enabled: true

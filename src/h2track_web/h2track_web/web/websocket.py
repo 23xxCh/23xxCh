@@ -475,6 +475,8 @@ async def websocket_endpoint(
             await broadcast_task
         except asyncio.CancelledError:
             pass
+        except Exception:
+            pass
         manager.disconnect(client_id)
 
 
@@ -756,6 +758,8 @@ async def heatmap_websocket_endpoint(
         try:
             await broadcast_task
         except asyncio.CancelledError:
+            pass
+        except Exception:
             pass
         manager.disconnect(client_id)
 

@@ -96,6 +96,13 @@ class TrackerNode(py_trees.behaviour.Behaviour):
         self.feedback_message = (
             f"{action.state.name} -> ({action.target.x:.2f}, {action.target.y:.2f})"
         )
+
+        # Return FAILURE when tracker is in PATROL (lost plume) — this lets
+        # the BT Selector fall back to the PATROL branch.  SURGE, CAST, and
+        # SOURCE_FOUND all indicate the tracker is actively tracking.
+        if action.state is TrackingState.PATROL:
+            return Status.FAILURE
+
         return Status.SUCCESS
 
     def terminate(self, new_status: Status) -> None:

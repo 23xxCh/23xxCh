@@ -38,6 +38,9 @@ class SurgeCastConfig:
     plume_lost_threshold: float = 2.0   # Concentration to enter CAST (exit_threshold)
     source_threshold: float = 20.0      # Concentration to confirm source
 
+    # Confirm samples for robust state transitions
+    plume_confirm_samples: int = 3      # Consecutive samples to confirm plume lost/found
+
     # Movement parameters
     surge_step: float = 0.5             # Step size during SURGE (meters)
     cast_step: float = 0.3              # Step size during CAST (meters)
@@ -53,7 +56,6 @@ class SurgeCastConfig:
 
     # History parameters
     history_size: int = 50              # Number of samples to keep
-    plume_confirm_samples: int = 3      # Samples to confirm plume state
 
     # Source confirmation
     source_radius: float = 1.0          # Distance to confirm source (meters)

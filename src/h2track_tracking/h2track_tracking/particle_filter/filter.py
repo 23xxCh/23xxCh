@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import time
 from dataclasses import dataclass
 from typing import Literal
@@ -29,6 +30,14 @@ class ParticleFilter:
         # Cached NumPy arrays for vectorized operations
         self._positions_array: np.ndarray | None = None
         self._weights_array: np.ndarray | None = None
+
+    def set_wind(self, wind_x: float, wind_y: float) -> None:
+        """Update wind components at runtime (delegates to observation model).
+
+        Allows the ROS node to subscribe to /estimated_wind and refresh
+        the filter's wind estimate without rebuilding the config.
+        """
+        self._observation_model.set_wind(wind_x, wind_y)
 
     def initialize(
         self,
@@ -174,15 +183,45 @@ class ParticleFilter:
         # Vectorized distance computation using broadcasting
         distances = np.linalg.norm(self._positions_array - robot_pos, axis=1)
 
-        # Vectorized expected concentration
+        # Vectorized expected concentration using exponential-decay plume model
+        # matching GasFieldModel: C = S * exp(-λ·d) * plume_bias
         plume_sigma = self._observation_model.plume_sigma
         source_strength = self._observation_model.source_strength
-        expected = source_strength * np.exp(-distances**2 / (2 * plume_sigma**2))
+        decay_rate = self._observation_model.decay_rate
+        wind_x = self._observation_model.wind_x
+        wind_y = self._observation_model.wind_y
 
-        # Vectorized likelihood computation
+        # Exponential decay component
+        expected = source_strength * np.exp(-decay_rate * distances)
+
+        # Plume bias: lateral Gaussian spread + upwind penalty
+        wind_norm = math.hypot(wind_x, wind_y)
+        if wind_norm > 1e-6:
+            wind_dir = np.array([wind_x / wind_norm, wind_y / wind_norm])
+            # projection of (robot - source) onto wind direction
+            diff = self._positions_array - robot_pos  # source - robot (reversed for plume direction)
+            # Actually: dx = robot_x - source_x, dy = robot_y - source_y
+            diff = robot_pos - self._positions_array  # (robot - source) per particle
+            projection = diff @ wind_dir  # dot product per particle
+            lateral_sq = np.maximum(0.0, distances**2 - projection**2)
+            plume_bias = np.exp(-lateral_sq / (2.0 * plume_sigma**2))
+            # Upwind penalty — same buoyancy formula as observation model
+            upwind_mask = projection < 0.0
+            if upwind_mask.any():
+                density_ratio = self._observation_model._get_density_ratio()
+                upwind_factor = 0.35 / (density_ratio + 0.3)
+                plume_bias[upwind_mask] *= min(upwind_factor, 0.95)
+            expected = expected * plume_bias
+
+        # Vectorized likelihood computation with scaled sigma
         observation_sigma = self._observation_model.observation_sigma
-        error = concentration - expected
-        likelihoods = np.exp(-error**2 / (2 * observation_sigma**2))
+        if concentration < 1e-6:
+            # No gas — mild preference for distant hypotheses
+            likelihoods = np.maximum(0.01, 1.0 - expected / (source_strength + 1.0))
+        else:
+            sigma = observation_sigma * (1.0 + expected)
+            error = concentration - expected
+            likelihoods = np.exp(-error**2 / (2.0 * sigma**2))
 
         # Get weights array
         if self._weights_array is None or self._weights_array.shape[0] != n:
@@ -193,15 +232,26 @@ class ParticleFilter:
 
         # Normalize
         total = self._weights_array.sum()
-        if total > 0:
+        if total > 1e-10:
             self._weights_array = self._weights_array / total
+        else:
+            # All weights collapsed to zero — reset to uniform to avoid
+            # ZeroDivisionError and allow the filter to recover from
+            # degenerate inputs (e.g. extreme concentration values).
+            self._weights_array = np.full(n, 1.0 / n)
 
         # Update particles in-place
         for i, p in enumerate(self.particles):
             p.weight = float(self._weights_array[i])
 
     def resample(self) -> None:
-        """Resample particles to combat degeneracy."""
+        """Resample particles to combat degeneracy.
+
+        Uses low-variance systematic resampling.  Jitter scale is
+        adaptive: when effective particle count is very low, jitter
+        increases to prevent particle deprivation; when effective
+        count is healthy, jitter stays small for precision.
+        """
         if not self.particles:
             return
 
@@ -213,20 +263,34 @@ class ParticleFilter:
         else:
             weights = self._weights_array
 
+        weight_sum = weights.sum()
+        if weight_sum < 1e-10:
+            # Degenerate case — uniform resampling
+            for p in self.particles:
+                p.weight = 1.0 / n
+            self._weights_array = np.full(n, 1.0 / n)
+            return
+
+        weights = weights / weight_sum
+
         # Cumulative sum
         cumsum = np.cumsum(weights)
         cumsum[-1] = 1.0  # Ensure sum is exactly 1
 
-        # Systematic resampling positions
+        # Low-variance systematic resampling
         positions = (np.arange(n) + np.random.uniform()) / n
-
-        # Resample indices
         indices = np.searchsorted(cumsum, positions)
 
-        # Create new particles
+        # Adaptive jitter: more diversity when effective count is low
+        effective_count = 1.0 / (weights ** 2).sum()
+        diversity_factor = max(0.1, 1.0 - effective_count / n)
+        jitter_sigma = self.config.motion_sigma * diversity_factor
+
+        # Create new particles with adaptive jitter
         new_particles = [
             Particle(
-                position=self.particles[i].position.copy(),
+                position=self.particles[i].position.copy()
+                + np.random.normal(0, jitter_sigma, 2),
                 weight=1.0 / n,
             )
             for i in indices
@@ -266,6 +330,25 @@ class ParticleFilter:
         else:
             weights = np.array([p.weight for p in self.particles])
             self._weights_array = weights
+
+        # Guard against all-zero weights (can happen with extreme inputs)
+        weight_sum = float(weights.sum())
+        if weight_sum < 1e-10:
+            # Return unweighted centroid as fallback
+            mean = positions.mean(axis=0)
+            cov = np.cov(positions.T) if positions.shape[0] > 1 else np.eye(2)
+            confidence = 0.0
+            sorted_indices = np.argsort(weights)[::-1]
+            candidates = [
+                (float(positions[i][0]), float(positions[i][1]), float(weights[i]))
+                for i in sorted_indices[:5]
+            ]
+            return SourceEstimate(
+                position=(float(mean[0]), float(mean[1])),
+                confidence=confidence,
+                covariance=cov if cov.shape == (2, 2) else np.eye(2),
+                candidate_sources=candidates,
+            )
 
         # Weighted mean
         mean = np.average(positions, axis=0, weights=weights)
@@ -372,8 +455,8 @@ class ParticleFilter:
 
 
 @dataclass
-class BenchmarkResult:
-    """Result from particle filter benchmark."""
+class PFBenchmarkResult:
+    """Result from particle filter performance benchmark."""
     num_particles: int
     predict_loop_ms: float
     predict_vectorized_ms: float
@@ -386,7 +469,7 @@ class BenchmarkResult:
 def run_benchmark(
     num_particles_list: list[int] | None = None,
     iterations: int = 100,
-) -> list[BenchmarkResult]:
+) -> list[PFBenchmarkResult]:
     """Run comprehensive benchmark across different particle counts.
 
     Args:
@@ -408,7 +491,7 @@ def run_benchmark(
 
         bench = pf.benchmark(iterations=iterations)
 
-        results.append(BenchmarkResult(
+        results.append(PFBenchmarkResult(
             num_particles=n,
             predict_loop_ms=bench['predict_loop_ms'],
             predict_vectorized_ms=bench['predict_vectorized_ms'],

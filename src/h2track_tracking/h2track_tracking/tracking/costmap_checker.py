@@ -36,13 +36,11 @@ class SafetyAssessment:
 class CostmapConfig:
     """Configuration for costmap validation.
 
-    Attributes:
-        inflation_radius: Robot inflation radius for safety margin
-        lethal_cost_threshold: Cost value considered lethal (Nav2 uses 254)
-        free_threshold: Cost values below this are considered free space
-        unknown_cost_value: Cost value for unknown cells (typically -1 for occupancy grid)
+    Note: inflation_radius is intentionally omitted because Nav2 already
+    inflates obstacles in its costmap layer.  The lethal_cost_threshold
+    check is sufficient — no redundant inflation is needed on our side.
     """
-    inflation_radius: float = 0.5
+
     lethal_cost_threshold: int = 254
     free_threshold: int = 1
     unknown_cost_value: int = -1

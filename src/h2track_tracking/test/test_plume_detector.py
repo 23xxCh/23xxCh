@@ -286,8 +286,8 @@ class TestPlumeDetector:
         ([1.0, 2.0, 2.5], False),
         # Majority above (2/3)
         ([5.0, 2.0, 6.0], True),
-        # Majority below (1/3)
-        ([5.0, 2.0, 2.5], False),
+        # Average below threshold and majority below → False
+        ([2.0, 2.0, 2.5], False),
     ])
     def test_various_concentration_patterns(self, concentrations, expected_in_plume):
         """Test various concentration patterns for plume detection."""

@@ -70,6 +70,9 @@ class SurgeCastTracker:
         self._cast_distance = 0.0
         self._source_hits = 0
         self._source_estimate: Pose2D | None = None
+        # Confirm-sample buffers for robust state transitions
+        self._plume_lost_count = 0  # consecutive low-concentration samples
+        self._plume_found_count = 0  # consecutive high-concentration samples
 
     def _adaptive_step_size(self, concentration: float) -> float:
         """Adjust step size based on concentration.
@@ -131,15 +134,27 @@ class SurgeCastTracker:
         concentration: float,
         robot_pose: Pose2D,
     ) -> None:
-        """Process state transitions based on concentration."""
+        """Process state transitions based on concentration.
+
+        Uses confirm-sample counting to avoid spurious transitions
+        from single-sample noise spikes.
+        """
         prev_state = self.state
+        n_confirm = self.config.plume_confirm_samples
 
         if self.state == TrackingState.PATROL:
             # Transition to SURGE when plume is detected
             if self._plume_detector.in_plume:
                 avg_conc = self._plume_detector.average_concentration
                 if avg_conc >= self.config.plume_found_threshold:
-                    self.state = TrackingState.SURGE
+                    self._plume_found_count += 1
+                    if self._plume_found_count >= n_confirm:
+                        self.state = TrackingState.SURGE
+                        self._plume_found_count = 0
+                else:
+                    self._plume_found_count = 0
+            else:
+                self._plume_found_count = 0
 
         elif self.state == TrackingState.SURGE:
             # Check for source found
@@ -156,22 +171,31 @@ class SurgeCastTracker:
                     else:
                         self._source_hits = 0
 
-            # Check for plume lost
+            # Check for plume lost (with confirm samples)
             elif concentration < self.config.plume_lost_threshold:
-                self.state = TrackingState.CAST
-                self._cast_start_pose = robot_pose
-                self._cast_distance = 0.0
-                # Choose cast direction perpendicular to upwind
-                wind_norm = math.hypot(self.config.wind_x, self.config.wind_y)
-                if wind_norm > 0.1:
-                    # Cast perpendicular to wind
-                    self._cast_direction *= -1
+                self._plume_lost_count += 1
+                if self._plume_lost_count >= n_confirm:
+                    self.state = TrackingState.CAST
+                    self._cast_start_pose = robot_pose
+                    self._cast_distance = 0.0
+                    self._plume_lost_count = 0
+                    # Choose cast direction perpendicular to upwind
+                    wind_norm = math.hypot(self.config.wind_x, self.config.wind_y)
+                    if wind_norm > 0.1:
+                        self._cast_direction *= -1
+            else:
+                self._plume_lost_count = 0
 
         elif self.state == TrackingState.CAST:
-            # Check for plume found
+            # Check for plume found (with confirm samples)
             if concentration >= self.config.plume_found_threshold:
-                self.state = TrackingState.SURGE
-                self._source_hits = 0
+                self._plume_found_count += 1
+                if self._plume_found_count >= n_confirm:
+                    self.state = TrackingState.SURGE
+                    self._source_hits = 0
+                    self._plume_found_count = 0
+            else:
+                self._plume_found_count = 0
 
             # Check if cast distance exceeded
             if self._cast_start_pose:
@@ -332,3 +356,5 @@ class SurgeCastTracker:
         self._cast_distance = 0.0
         self._source_hits = 0
         self._source_estimate = None
+        self._plume_lost_count = 0
+        self._plume_found_count = 0

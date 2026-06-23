@@ -132,9 +132,10 @@ class TestWindEstimator:
 
     def test_update_returns_estimate_after_min_samples(self, estimator: WindEstimator) -> None:
         """Test that update returns estimate after minimum samples."""
-        pose = Pose2D(0.0, 0.0)
+        # Use varying positions and concentrations so the estimator has
+        # spatial gradient information to work with.
         for i in range(10):
-            estimator.update(pose, float(i), float(i))
+            estimator.update(Pose2D(float(i), float(i)), float(i), float(i))
 
         # Now we should have an estimate
         assert estimator.has_estimate is True

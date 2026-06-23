@@ -34,9 +34,11 @@ def generate_launch_description():
         "use_particle_filter",
         "particle_filter_num_particles", "particle_filter_motion_sigma",
         "particle_filter_observation_sigma", "particle_filter_plume_sigma",
-        "particle_filter_source_strength", "particle_filter_bounds",
+        "particle_filter_source_strength", "particle_filter_decay_rate",
+        "particle_filter_wind_x", "particle_filter_wind_y",
+        "particle_filter_bounds",
         "particle_filter_publish_rate", "particle_filter_resample_threshold",
-        "gas_source_strength",
+        "gas_source_strength", "gas_type",
     ]}
 
     declares = [
@@ -77,11 +79,15 @@ def generate_launch_description():
         DeclareLaunchArgument("particle_filter_num_particles", default_value="500"),
         DeclareLaunchArgument("particle_filter_motion_sigma", default_value="0.3"),
         DeclareLaunchArgument("particle_filter_observation_sigma", default_value="0.5"),
-        DeclareLaunchArgument("particle_filter_plume_sigma", default_value="2.0"),
+        DeclareLaunchArgument("particle_filter_plume_sigma", default_value="1.2"),
         DeclareLaunchArgument("particle_filter_source_strength", default_value="120.0"),
+        DeclareLaunchArgument("particle_filter_decay_rate", default_value="0.55"),
+        DeclareLaunchArgument("particle_filter_wind_x", default_value="0.0"),
+        DeclareLaunchArgument("particle_filter_wind_y", default_value="0.0"),
         DeclareLaunchArgument("particle_filter_bounds", default_value="[-6.0, -6.0, 6.0, 6.0]"),
         DeclareLaunchArgument("particle_filter_publish_rate", default_value="2.0"),
         DeclareLaunchArgument("particle_filter_resample_threshold", default_value="0.5"),
+        DeclareLaunchArgument("gas_type", default_value="H2"),
     ]
 
     # -- Nav2 startup gate --------------------------------------------------
@@ -177,9 +183,13 @@ def generate_launch_description():
                 "observation_sigma": lc["particle_filter_observation_sigma"],
                 "plume_sigma": lc["particle_filter_plume_sigma"],
                 "source_strength": lc["particle_filter_source_strength"],
+                "decay_rate": lc["particle_filter_decay_rate"],
+                "wind_x": lc["particle_filter_wind_x"],
+                "wind_y": lc["particle_filter_wind_y"],
                 "bounds": lc["particle_filter_bounds"],
                 "publish_rate": lc["particle_filter_publish_rate"],
                 "resample_threshold": lc["particle_filter_resample_threshold"],
+                "gas_type": lc["gas_type"],
             },
         ],
     )

@@ -1,6 +1,7 @@
 from importlib.util import module_from_spec, spec_from_file_location
 import math
 from pathlib import Path
+import pytest
 import yaml
 
 
@@ -328,3 +329,25 @@ def test_office_scene_disables_gaden_due_to_geometry_mismatch():
     loader = _scene_loader_module()
     office = loader.load_scene_profile(pkg_share, 'office')
     assert office['use_gaden'] is False
+
+
+def test_benchmark_gas_source_matches_warehouse_gaden_source():
+    """benchmark scene reuses warehouse's GADEN project_path, so its
+    gas_source must match warehouse's (where GADEN simulates the source).
+    A mismatch would cause the tracker to search at a location with no gas.
+    """
+    pkg_share = str(Path(__file__).resolve().parents[1])
+    loader = _scene_loader_module()
+    warehouse = loader.load_scene_profile(pkg_share, 'warehouse')
+    benchmark = loader.load_scene_profile(pkg_share, 'benchmark')
+
+    # Both scenes must use the same GADEN project_path
+    assert warehouse['gaden']['project_path'] == benchmark['gaden']['project_path']
+
+    # gas_source must match (within 0.01m tolerance for floating point)
+    assert warehouse['gas_source']['x'] == pytest.approx(
+        benchmark['gas_source']['x'], abs=0.01
+    )
+    assert warehouse['gas_source']['y'] == pytest.approx(
+        benchmark['gas_source']['y'], abs=0.01
+    )

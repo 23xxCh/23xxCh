@@ -68,8 +68,13 @@ class MissionStateMachine:
         return self.current_patrol_goal
 
     def _is_near_actual_source(self, position: tuple[float, float]) -> bool:
+        """Check if the robot is near the known actual source.
+
+        Returns False when actual_source is not configured (i.e., in
+        simulation without a known ground-truth source position).
+        """
         if self.config.actual_source is None:
-            return True
+            return False
 
         return math.hypot(
             position[0] - self.config.actual_source[0],

@@ -849,6 +849,7 @@ def test_cast_direction_alternates_on_plume_loss():
         wind_y=0.0,
         plume_found_threshold=3.0,
         plume_lost_threshold=1.5,
+        plume_confirm_samples=1,
     )
     tracker = SurgeCastTracker(config)
 
@@ -857,14 +858,13 @@ def test_cast_direction_alternates_on_plume_loss():
         tracker.update(5.0, Pose2D(0.0, 0.0), 0.0)
     assert tracker.state == TrackingState.SURGE
 
-    # Lose plume → CAST with direction toggle
+    # Lose plume → CAST with direction toggle (1 confirm sample)
     tracker.update(0.5, Pose2D(1.0, 0.0), 0.0)
     assert tracker.state == TrackingState.CAST
     dir1 = tracker._cast_direction
 
-    # Re-enter SURGE
-    for _ in range(5):
-        tracker.update(5.0, Pose2D(1.0, 0.0), 0.0)
+    # Re-enter SURGE (1 confirm sample)
+    tracker.update(5.0, Pose2D(1.0, 0.0), 0.0)
     assert tracker.state == TrackingState.SURGE
 
     # Lose plume again → CAST with opposite direction
@@ -883,6 +883,7 @@ def test_cast_heading_blending_handles_angle_wraparound():
         plume_found_threshold=3.0,
         plume_lost_threshold=1.5,
         cast_step=0.5,
+        plume_confirm_samples=1,
     )
     tracker = SurgeCastTracker(config)
 

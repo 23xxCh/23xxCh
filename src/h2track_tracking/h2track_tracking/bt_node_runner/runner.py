@@ -17,7 +17,6 @@ import math
 
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 from h2track_interfaces.msg import WindEstimate as WindEstimateMsg
-from h2track_interfaces.msg import FusionState as FusionStateMsg
 from nav2_msgs.msg import Costmap
 import numpy as np
 import rclpy
@@ -74,7 +73,19 @@ class BTNodeRunner(LifecycleNode):
         self._particle_filter_confidence: float = 0.0
         self._estimated_wind: tuple[float, float] | None = None
         self._wind_confidence: float = 0.5
-        self._estimate_wind = bool(self.get_parameter("estimate_wind").value)
+        # estimate_wind: "gradient" (WindEstimator) | "anemometer" (GADEN truth)
+        # | "off" (no wind estimation, /estimated_wind not published by runner).
+        # "anemometer" mode expects anemometer_adapter_node to publish directly
+        # to /estimated_wind (avoids double-publish).
+        # Backward compat: True/"true" → "gradient", False/"false" → "off".
+        raw = self.get_parameter("estimate_wind").value
+        raw_str = str(raw).strip().lower()
+        if raw_str in ("gradient", "anemometer", "off"):
+            self._estimate_wind = raw_str
+        elif raw_str in ("true", "1", "yes"):
+            self._estimate_wind = "gradient"
+        else:
+            self._estimate_wind = "off"
 
         self._mode_pub = None
         self._source_pub = None
@@ -147,7 +158,18 @@ class BTNodeRunner(LifecycleNode):
         self._mode_pub = self.create_publisher(String, "/robot_mode", state_qos)
         self._source_pub = self.create_publisher(Bool, "/source_found", state_qos)
         self._estimate_pub = self.create_publisher(PoseStamped, "/estimated_source_pose", state_qos)
-        self._wind_pub = self.create_publisher(WindEstimateMsg, "/estimated_wind", sensor_qos)
+        # In anemometer mode, anemometer_adapter_node publishes /estimated_wind
+        # (CFD ground truth). We subscribe to update blackboard instead of
+        # publishing. In gradient/off mode, runner is the publisher.
+        if self._estimate_wind == "anemometer":
+            self.create_subscription(
+                WindEstimateMsg, "/estimated_wind", self._on_wind_estimate, sensor_qos
+            )
+            self._wind_pub = None
+        else:
+            self._wind_pub = self.create_publisher(
+                WindEstimateMsg, "/estimated_wind", sensor_qos
+            )
 
         self._timer = self.create_timer(0.1, self._tick)
 
@@ -276,10 +298,20 @@ class BTNodeRunner(LifecycleNode):
             return
         bb = self._bb
         mode = bb.mission.mode
-        if mode is not None and mode != self._last_mode:
-            self.get_logger().info(f"Mode change: {self._last_mode} -> {mode}")
-            if self._mode_pub is not None:
-                self._mode_pub.publish(String(data=mode.name))
+
+        # Publish mode on change OR periodically when in SOURCE_FOUND
+        # (SOURCE_FOUND is terminal — ensure subscribers see it even if
+        # they connect after the transition event)
+        should_publish = (
+            mode is not None and mode != self._last_mode
+        ) or (
+            mode is MissionMode.SOURCE_FOUND
+            and self._tick_count % 50 == 0
+        )
+        if should_publish and self._mode_pub is not None:
+            self._mode_pub.publish(String(data=mode.name))
+            if mode != self._last_mode:
+                self.get_logger().info(f"Mode change: {self._last_mode} -> {mode}")
             self._last_mode = mode
 
         if bb.mission.mode is not None and bb.mission.mode.name == "SOURCE_FOUND":
@@ -295,7 +327,14 @@ class BTNodeRunner(LifecycleNode):
         else:
             self._source_announced = False
 
-        if self._estimated_wind is not None and self._wind_pub is not None:
+        # Publish /estimated_wind only in gradient mode — anemometer mode
+        # has anemometer_adapter_node publishing directly (avoids conflicts),
+        # and "off" mode publishes nothing.
+        if (
+            self._estimate_wind == "gradient"
+            and self._estimated_wind is not None
+            and self._wind_pub is not None
+        ):
             wx, wy = self._estimated_wind
             wind_msg = WindEstimateMsg(
                 wind_x=wx, wind_y=wy, confidence=self._wind_confidence
@@ -315,13 +354,22 @@ class BTNodeRunner(LifecycleNode):
         self._current_concentration = float(msg.data)
         self._history.append((self._current_pose, self._current_concentration))
         self._history = self._history[-50:]
-        if self._estimate_wind and self._wind_estimator is not None:
+        # Only run gradient-based WindEstimator when estimate_wind == "gradient".
+        # "anemometer" mode: anemometer_adapter_node publishes /estimated_wind
+        # directly (CFD ground truth); runner subscribes via _on_wind_estimate.
+        # "off" mode: no wind estimation at all.
+        if self._estimate_wind == "gradient" and self._wind_estimator is not None:
             wind_est = self._wind_estimator.update(
                 self._current_pose, self._current_concentration
             )
             if wind_est is not None and wind_est.confidence > 0.3:
                 self._estimated_wind = (wind_est.wind_x, wind_est.wind_y)
                 self._wind_confidence = wind_est.confidence
+
+    def _on_wind_estimate(self, msg: WindEstimateMsg) -> None:
+        """Receive wind estimate from anemometer_adapter_node (anemometer mode)."""
+        self._estimated_wind = (float(msg.wind_x), float(msg.wind_y))
+        self._wind_confidence = float(msg.confidence)
 
     def _on_pf(self, msg: PoseWithCovarianceStamped) -> None:
         p = msg.pose.pose.position

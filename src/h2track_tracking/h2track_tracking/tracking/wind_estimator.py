@@ -195,6 +195,15 @@ class WindEstimator:
         if len(positions) < 3:
             return None
 
+        # Reject degenerate input: all concentrations equal or all zero
+        # → no gradient signal, regression would be ill-conditioned.
+        if concentrations.std() < 1e-9:
+            return None
+
+        # Reject degenerate input: all positions identical (no spatial info)
+        if positions.std() < 1e-9:
+            return None
+
         # Fit a linear regression: concentration = a*x + b*y + c
         # Gradient = (a, b)
         try:
@@ -210,7 +219,9 @@ class WindEstimator:
             XtWX = X.T @ W @ X
             XtWy = X.T @ W @ concentrations
 
-            coeffs = np.linalg.solve(XtWX, XtWy)
+            # Use lstsq for numerical stability instead of solve (handles
+            # singular matrices gracefully by returning least-norm solution)
+            coeffs, _, _, sv = np.linalg.lstsq(XtWX, XtWy, rcond=None)
             grad_x, grad_y = float(coeffs[0]), float(coeffs[1])
 
             # Guard against NaN/Inf from ill-conditioned systems
@@ -241,6 +252,9 @@ class WindEstimator:
 
         Plumes are elongated in the wind direction.
         We fit an ellipse to high-concentration observations.
+        The eigenvector direction is disambiguated using the
+        gradient-based estimate (wind blows from high to low
+        concentration), avoiding the 180° ambiguity.
 
         Returns:
             (wind_x, wind_y, confidence) or None if estimation fails.
@@ -265,18 +279,50 @@ class WindEstimator:
 
         try:
             cov = np.cov(high_conc_positions.T)
+            # Reject degenerate covariance (all positions identical, NaN input,
+            # or non-finite values) — eigh would return garbage eigenvectors.
+            if not np.all(np.isfinite(cov)) or cov.shape != (2, 2):
+                return None
+            if cov.std() < 1e-12:
+                return None
+
             eigenvalues, eigenvectors = np.linalg.eigh(cov)
+            # Reject NaN/Inf eigenvalues (can occur for singular covariance)
+            if not np.all(np.isfinite(eigenvalues)):
+                return None
+            # Reject if eigenvalues are non-positive (numerical issue)
+            if eigenvalues.min() < 0:
+                return None
 
             # Eigenvector with largest eigenvalue is the major axis
             major_idx = np.argmax(eigenvalues)
             major_axis = eigenvectors[:, major_idx]
 
-            # Plume elongation indicates wind direction
+            # Disambiguate direction: wind blows from high-concentration
+            # centroid toward low-concentration centroid.
+            low_conc_positions = positions[~high_conc_mask]
+            if len(low_conc_positions) > 0:
+                high_centroid = high_conc_positions.mean(axis=0)
+                low_centroid = low_conc_positions.mean(axis=0)
+                # Direction from high to low concentration = wind direction
+                drift = low_centroid - high_centroid
+                # If major_axis points opposite to drift, flip it
+                if np.dot(major_axis, drift) < 0:
+                    major_axis = -major_axis
+
             wind_x = major_axis[0]
             wind_y = major_axis[1]
 
-            # Confidence based on elongation ratio
-            elongation = eigenvalues.max() / (eigenvalues.min() + 1e-6)
+            # Guard against NaN wind components
+            if not (math.isfinite(wind_x) and math.isfinite(wind_y)):
+                return None
+
+            # Confidence based on elongation ratio (guarded against
+            # divide-by-zero and non-finite elongation)
+            min_eig = eigenvalues.min()
+            elongation = eigenvalues.max() / (min_eig + 1e-6) if min_eig >= 0 else 0.0
+            if not math.isfinite(elongation):
+                return None
             confidence = min(1.0, elongation / 3.0)  # Elongation > 3 = high confidence
 
             return (wind_x, wind_y, confidence)

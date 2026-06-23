@@ -105,12 +105,40 @@ _PARAMS = [
     ("gaden_map_roll", ""),
     ("gaden_map_pitch", ""),
     ("gaden_map_yaw", ""),
+    # Sim2real: realistic sensor model (opt-in)
+    ("use_realistic_sensor", "false"),
+    ("sensor_response_tau", "8.0"),
+    ("sensor_recovery_tau", "20.0"),
+    ("sensor_noise_stddev", "0.5"),
+    ("sensor_quantization", "0.1"),
+    ("sensor_saturation", "500.0"),
+    ("sensor_baseline_drift_rate", "0.01"),
+    ("sensor_baseline_drift_max", "2.0"),
+    # Sim2real: time-varying wind (opt-in)
+    ("use_time_varying_wind", "false"),
+    ("wind_mean_speed", "0.4"),
+    ("wind_mean_direction_deg", "0.0"),
+    ("wind_direction_stddev_deg", "15.0"),
+    ("wind_gust_rate", "0.05"),
+    ("wind_gust_strength_factor", "0.5"),
+    ("wind_gust_duration", "3.0"),
+    # Anemometer ground-truth wind (GADEN only, opt-in)
+    ("use_anemometer_ground_truth", "false"),
+    ("anemometer_noise_std", "0.1"),
+    ("anemometer_frequency", "10.0"),
+    ("anemometer_smoothing_alpha", "1.0"),
+    ("anemometer_max_wind_speed", "10.0"),
     ("use_particle_filter", "true"),
     ("particle_filter_num_particles", "500"),
     ("particle_filter_motion_sigma", "0.3"),
     ("particle_filter_observation_sigma", "0.5"),
     ("particle_filter_plume_sigma", "2.0"),
     ("particle_filter_source_strength", ""),
+    ("particle_filter_decay_rate", ""),
+    ("particle_filter_plume_sigma", "1.2"),
+    ("particle_filter_wind_x", ""),
+    ("particle_filter_wind_y", ""),
+    ("particle_filter_gas_type", ""),
     ("particle_filter_bounds", ""),
     ("particle_filter_publish_rate", "2.0"),
     ("particle_filter_resample_threshold", "0.5"),
@@ -191,6 +219,11 @@ def generate_launch_description():
         # -- particle filter --------------------------------------------------
         resolved_pf_bounds = _resolve("particle_filter_bounds", "[-6.0, -6.0, 6.0, 6.0]")
         resolved_pf_source_strength = _resolve("particle_filter_source_strength", gas_field.get("source_strength", 120.0))
+        resolved_pf_decay_rate = _resolve("particle_filter_decay_rate", gas_field.get("decay_rate", 0.55))
+        resolved_pf_plume_sigma = _resolve("particle_filter_plume_sigma", gas_field.get("plume_stddev", 1.2))
+        resolved_pf_wind_x = _resolve("particle_filter_wind_x", gas_field.get("wind_x", 0.4))
+        resolved_pf_wind_y = _resolve("particle_filter_wind_y", gas_field.get("wind_y", 0.0))
+        resolved_pf_gas_type = _resolve("particle_filter_gas_type", gas_field.get("gas_type", "H2"))
 
         # -- mission_manager --------------------------------------------------
         mm_initial = mission_mgr.get("initial_pose", {})
@@ -277,6 +310,11 @@ def generate_launch_description():
             SetLaunchConfiguration("use_gaden", str(use_gaden_enabled).lower()),
             SetLaunchConfiguration("particle_filter_bounds", resolved_pf_bounds),
             SetLaunchConfiguration("particle_filter_source_strength", resolved_pf_source_strength),
+            SetLaunchConfiguration("particle_filter_decay_rate", resolved_pf_decay_rate),
+            SetLaunchConfiguration("particle_filter_plume_sigma", resolved_pf_plume_sigma),
+            SetLaunchConfiguration("particle_filter_wind_x", resolved_pf_wind_x),
+            SetLaunchConfiguration("particle_filter_wind_y", resolved_pf_wind_y),
+            SetLaunchConfiguration("particle_filter_gas_type", resolved_pf_gas_type),
         ]
         for key, val in {**resolved_gf, **resolved_mm, **resolved_gaden}.items():
             actions.append(SetLaunchConfiguration(key, val))
@@ -346,6 +384,29 @@ def generate_launch_description():
             "gaden_sensor_gate_poll_period": lc["gaden_sensor_gate_poll_period"],
             "gaden_sensor_gate_stable_ready_count": lc["gaden_sensor_gate_stable_ready_count"],
             "use_slam": lc["use_slam"],
+            # Sim2real: realistic sensor model
+            "use_realistic_sensor": lc["use_realistic_sensor"],
+            "sensor_response_tau": lc["sensor_response_tau"],
+            "sensor_recovery_tau": lc["sensor_recovery_tau"],
+            "sensor_noise_stddev": lc["sensor_noise_stddev"],
+            "sensor_quantization": lc["sensor_quantization"],
+            "sensor_saturation": lc["sensor_saturation"],
+            "sensor_baseline_drift_rate": lc["sensor_baseline_drift_rate"],
+            "sensor_baseline_drift_max": lc["sensor_baseline_drift_max"],
+            # Sim2real: time-varying wind
+            "use_time_varying_wind": lc["use_time_varying_wind"],
+            "wind_mean_speed": lc["wind_mean_speed"],
+            "wind_mean_direction_deg": lc["wind_mean_direction_deg"],
+            "wind_direction_stddev_deg": lc["wind_direction_stddev_deg"],
+            "wind_gust_rate": lc["wind_gust_rate"],
+            "wind_gust_strength_factor": lc["wind_gust_strength_factor"],
+            "wind_gust_duration": lc["wind_gust_duration"],
+            # Anemometer ground-truth wind (GADEN only, opt-in)
+            "use_anemometer_ground_truth": lc["use_anemometer_ground_truth"],
+            "anemometer_noise_std": lc["anemometer_noise_std"],
+            "anemometer_frequency": lc["anemometer_frequency"],
+            "anemometer_smoothing_alpha": lc["anemometer_smoothing_alpha"],
+            "anemometer_max_wind_speed": lc["anemometer_max_wind_speed"],
         }.items(),
     )
 
@@ -391,9 +452,14 @@ def generate_launch_description():
             "particle_filter_observation_sigma": lc["particle_filter_observation_sigma"],
             "particle_filter_plume_sigma": lc["particle_filter_plume_sigma"],
             "particle_filter_source_strength": lc["particle_filter_source_strength"],
+            "particle_filter_decay_rate": lc["particle_filter_decay_rate"],
+            "particle_filter_plume_sigma": lc["particle_filter_plume_sigma"],
+            "particle_filter_wind_x": lc["particle_filter_wind_x"],
+            "particle_filter_wind_y": lc["particle_filter_wind_y"],
             "particle_filter_bounds": lc["particle_filter_bounds"],
             "particle_filter_publish_rate": lc["particle_filter_publish_rate"],
             "particle_filter_resample_threshold": lc["particle_filter_resample_threshold"],
+            "gas_type": lc["particle_filter_gas_type"],
         }.items(),
     )
 

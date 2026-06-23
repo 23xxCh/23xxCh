@@ -1,11 +1,36 @@
 /**
- * Simple Heatmap component - no complex dependencies
+ * Heatmap3D component - 2D canvas renderer for gas concentration heatmap.
+ * Renders concentration grid, particle filter particles, and source estimate.
  */
 import { useEffect, useRef } from "react";
 
 /**
- * Heatmap3D main component - super simple 2D canvas version
+ * Map a normalized concentration value [0, 1] to an RGBA color.
+ * Gradient: blue → cyan → green → yellow → red
  */
+function concentrationColor(value, alpha = 0.7) {
+  const v = Math.max(0, Math.min(1, value));
+  let r, g, b;
+  if (v < 0.25) {
+    // blue → cyan
+    const t = v / 0.25;
+    r = 0; g = Math.floor(t * 255); b = 255;
+  } else if (v < 0.5) {
+    // cyan → green
+    const t = (v - 0.25) / 0.25;
+    r = 0; g = 255; b = Math.floor((1 - t) * 255);
+  } else if (v < 0.75) {
+    // green → yellow
+    const t = (v - 0.5) / 0.25;
+    r = Math.floor(t * 255); g = 255; b = 0;
+  } else {
+    // yellow → red
+    const t = (v - 0.75) / 0.25;
+    r = 255; g = Math.floor((1 - t) * 255); b = 0;
+  }
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 function Heatmap3D({
   grid,
   particles,
@@ -13,7 +38,7 @@ function Heatmap3D({
   opacity = 0.6,
   showAxes = true,
   showGrid = true,
-  worldBounds = { x: [-10, 10], y: [-10, 10] }, // Configurable world bounds
+  worldBounds = { x: [-10, 10], y: [-10, 10] },
 }) {
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
@@ -60,7 +85,7 @@ function Heatmap3D({
       ctx.fillStyle = '#071423';
       ctx.fillRect(0, 0, w, h);
 
-      // Draw grid
+      // Draw grid lines
       ctx.strokeStyle = 'rgba(39, 71, 104, 0.5)';
       ctx.lineWidth = 1;
       const gridSize = 40;
@@ -80,7 +105,49 @@ function Heatmap3D({
       // Get latest data from ref
       const { grid: currentGrid, particles: currentParticles, estimate: currentEstimate } = dataRef.current;
 
-      // Draw particles if available
+      // --- Layer 1: Render concentration grid ---
+      if (currentGrid && currentGrid.data && currentGrid.data.length > 0) {
+        const resolution = currentGrid.resolution || 0.5;
+        const dims = currentGrid.dimensions || [10, 10, 1];
+        const origin = currentGrid.origin || [0, 0, 0];
+        const nx = dims[0];
+        const ny = dims[1];
+        const ox = origin[0];
+        const oy = origin[1];
+
+        // Find max concentration for normalization
+        let maxConc = 0;
+        for (let i = 0; i < currentGrid.data.length; i++) {
+          if (currentGrid.data[i] > maxConc) maxConc = currentGrid.data[i];
+        }
+
+        if (maxConc > 0) {
+          // Cell size in canvas pixels
+          const cellW = (resolution / worldWidth) * w;
+          const cellH = (resolution / worldHeight) * h;
+
+          for (let ix = 0; ix < nx; ix++) {
+            for (let iy = 0; iy < ny; iy++) {
+              // ConcentrationGrid is 3D: data[ix][iy][iz], flattened as ix*ny*nz + iy*nz + iz
+              const nz = dims[2] || 1;
+              const iz = 0; // 2D slice at z=0
+              const val = currentGrid.data[ix * ny * nz + iy * nz + iz];
+              if (val <= 0) continue;
+
+              const normalized = val / maxConc;
+              // World coordinates of cell center
+              const wx = ox + (ix + 0.5) * resolution;
+              const wy = oy + (iy + 0.5) * resolution;
+              const [cx, cy] = worldToCanvas(wx, wy, w, h);
+
+              ctx.fillStyle = concentrationColor(normalized, opacity * normalized);
+              ctx.fillRect(cx - cellW / 2, cy - cellH / 2, cellW, cellH);
+            }
+          }
+        }
+      }
+
+      // --- Layer 2: Render particles ---
       if (currentParticles && currentParticles.positions && currentParticles.positions.length > 0) {
         const maxWeight = Math.max(...(currentParticles.weights || [1]), 0.01);
         currentParticles.positions.forEach((pos, i) => {
@@ -96,7 +163,7 @@ function Heatmap3D({
         });
       }
 
-      // Draw estimate if available
+      // --- Layer 3: Render estimate ---
       if (currentEstimate && currentEstimate.position) {
         const [x, y] = worldToCanvas(currentEstimate.position[0], currentEstimate.position[1], w, h);
 
@@ -113,9 +180,16 @@ function Heatmap3D({
         ctx.beginPath();
         ctx.arc(x, y, 15, 0, Math.PI * 2);
         ctx.stroke();
+
+        // Confidence label
+        if (currentEstimate.confidence != null) {
+          ctx.fillStyle = '#f59e0b';
+          ctx.font = '11px sans-serif';
+          ctx.fillText(`${Math.round(currentEstimate.confidence * 100)}%`, x + 18, y - 8);
+        }
       }
 
-      // Draw animated demo circles
+      // Draw animated demo circles when no data at all
       const t = time / 1000;
       const hasData = currentGrid && currentGrid.data && currentGrid.data.some(v => v > 0);
       const hasParticles = currentParticles && currentParticles.positions && currentParticles.positions.length > 0;
@@ -139,7 +213,7 @@ function Heatmap3D({
         }
       }
 
-      // Draw some status text
+      // Status text
       ctx.fillStyle = 'rgba(148, 163, 184, 0.8)';
       ctx.font = '12px sans-serif';
       ctx.fillText('热力图 - 2D模式', 15, 25);
@@ -155,7 +229,7 @@ function Heatmap3D({
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [worldBounds]);
+  }, [worldBounds, opacity]);
 
   return (
     <div className="heatmap-container" style={{ background: '#071423', position: 'relative', width: '100%', height: '100%' }}>

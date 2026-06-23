@@ -30,6 +30,9 @@ class GasFieldModel:
     Gas-type physics:
     - Diffusion coefficient scales lateral plume spread (wider for H2, narrower for C3H8)
     - Density ratio biases upwind/downwind asymmetry (light gases spread more upwind)
+
+    Wind components are mutable so they can be updated at runtime from
+    a TimeVaryingWindModel without rebuilding the frozen GasFieldParams.
     """
 
     # Reference diffusion coefficient (H2) for scaling
@@ -38,6 +41,10 @@ class GasFieldModel:
     def __init__(self, params: GasFieldParams, rng: random.Random | None = None) -> None:
         self.params = params
         self.rng = rng or random.Random(0)
+
+        # Mutable wind state (initialised from params, updatable via set_wind)
+        self._wind_x = params.wind_x
+        self._wind_y = params.wind_y
 
         # Look up gas properties for physics modifiers
         try:
@@ -51,6 +58,11 @@ class GasFieldModel:
         # heavy gases (> 1.0) are more confined downwind
         self._buoyancy_factor = props.density_ratio
 
+    def set_wind(self, wind_x: float, wind_y: float) -> None:
+        """Update wind components at runtime (e.g. from TimeVaryingWindModel)."""
+        self._wind_x = float(wind_x)
+        self._wind_y = float(wind_y)
+
     def concentration_at(self, pose: Pose2D) -> float:
         dx = pose.x - self.params.source_x
         dy = pose.y - self.params.source_y
@@ -59,9 +71,9 @@ class GasFieldModel:
         # Effective plume width scaled by gas diffusion coefficient
         effective_stddev = self.params.plume_stddev * self._diffusion_scale
 
-        wind_norm = math.hypot(self.params.wind_x, self.params.wind_y)
+        wind_norm = math.hypot(self._wind_x, self._wind_y)
         if wind_norm > 1e-6:
-            wind_dir = (self.params.wind_x / wind_norm, self.params.wind_y / wind_norm)
+            wind_dir = (self._wind_x / wind_norm, self._wind_y / wind_norm)
             projection = dx * wind_dir[0] + dy * wind_dir[1]
             lateral_sq = max(0.0, distance * distance - projection * projection)
             lateral = math.sqrt(lateral_sq)
@@ -70,9 +82,14 @@ class GasFieldModel:
                 # Upwind penalty modulated by buoyancy:
                 # light gases (density < 1) → less penalty (spread more upwind)
                 # heavy gases (density > 1) → more penalty (confined downwind)
-                # Inverse: divide by density_ratio so light gases get higher factor
-                upwind_factor = 0.35 / max(self._buoyancy_factor, 0.1)
-                plume_bias *= min(upwind_factor, 0.8)
+                # Smooth sigmoid-based formula avoids discontinuity at cap boundary:
+                #   upwind_factor = 0.35 / (buoyancy_factor + 0.3)
+                # For H2 (0.069): 0.35/0.369 ≈ 0.95  (high upwind spread)
+                # For CH4 (0.554): 0.35/0.854 ≈ 0.41
+                # For CO  (0.967): 0.35/1.267 ≈ 0.28
+                # For C3H8 (1.52): 0.35/1.82  ≈ 0.19
+                upwind_factor = 0.35 / (self._buoyancy_factor + 0.3)
+                plume_bias *= min(upwind_factor, 0.95)
         else:
             plume_bias = 1.0
 

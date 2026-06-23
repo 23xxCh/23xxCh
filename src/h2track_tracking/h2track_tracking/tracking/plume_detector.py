@@ -83,10 +83,16 @@ class PlumeDetector:
         # Calculate average concentration
         avg_conc = sum(self._history) / len(self._history)
 
-        # Determine if in plume
+        # Determine if in plume — use smoothed average as primary signal,
+        # with raw voting as secondary confirmation.  This prevents single-
+        # sample noise spikes from causing false transitions.
         recent = list(self._history)[-self.config.min_samples:]
         in_plume_count = sum(1 for c in recent if c >= self.config.plume_threshold)
-        in_plume = in_plume_count >= self.config.min_samples // 2 + 1
+        in_plume = avg_conc >= self.config.plume_threshold
+        if not in_plume:
+            # Fallback: raw voting if majority of recent samples exceed
+            # threshold (handles sudden plume onset where average lags)
+            in_plume = in_plume_count >= self.config.min_samples // 2 + 1
 
         # Calculate confidence
         confidence = in_plume_count / len(recent)

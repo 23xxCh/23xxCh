@@ -15,7 +15,6 @@ class TestCostmapConfig:
     def test_default_values(self) -> None:
         """Test default configuration values."""
         config = CostmapConfig()
-        assert config.inflation_radius == 0.5
         assert config.lethal_cost_threshold == 254
         assert config.free_threshold == 1
         assert config.unknown_cost_value == -1
@@ -23,11 +22,10 @@ class TestCostmapConfig:
     def test_custom_values(self) -> None:
         """Test custom configuration values."""
         config = CostmapConfig(
-            inflation_radius=0.3,
             lethal_cost_threshold=200,
             free_threshold=10,
         )
-        assert config.inflation_radius == 0.3
+        assert config.lethal_cost_threshold == 200
         assert config.lethal_cost_threshold == 200
         assert config.free_threshold == 10
 
@@ -35,7 +33,7 @@ class TestCostmapConfig:
         """Test that config is immutable."""
         config = CostmapConfig()
         with pytest.raises(Exception):  # FrozenInstanceError
-            config.inflation_radius = 1.0
+            config.lethal_cost_threshold = 200
 
 
 class TestCostmapChecker:
@@ -86,14 +84,14 @@ class TestCostmapChecker:
 
     def test_init_default_config(self, checker_no_costmap: CostmapChecker) -> None:
         """Test initialization with default config."""
-        assert checker_no_costmap.config.inflation_radius == 0.5
+        assert checker_no_costmap.config.lethal_cost_threshold == 254
         assert checker_no_costmap.has_costmap is False
 
     def test_init_custom_config(self) -> None:
         """Test initialization with custom config."""
-        config = CostmapConfig(inflation_radius=0.3)
+        config = CostmapConfig(lethal_cost_threshold=200)
         checker = CostmapChecker(config)
-        assert checker.config.inflation_radius == 0.3
+        assert checker.config.lethal_cost_threshold == 200
 
     def test_update_costmap(
         self,

@@ -10,6 +10,7 @@
 
   <depend>ament_index_python</depend>
   <depend>geometry_msgs</depend>
+  <depend>h2track_interfaces</depend>
   <depend>nav_msgs</depend>
   <depend>olfaction_msgs</depend>
   <depend>rclpy</depend>

@@ -86,13 +86,23 @@ class SceneRegistry:
         """Find the default scenes directory.
 
         Tries multiple locations in order:
-        1. Source directory (development)
-        2. Install directory (deployed)
+        1. ament_index share directory (deployed)
+        2. Source directory (development)
+        3. Install directory (deployed, fallback)
         """
+        # Try ament_index first (most reliable when sourced)
+        try:
+            from ament_index_python.packages import get_package_share_directory
+            share = Path(get_package_share_directory("h2track_bringup")) / "scenes"
+            if share.exists():
+                return share
+        except Exception:
+            pass
+
         cwd = Path.cwd()
         candidates = [
-            cwd / "src" / "h2track_sim" / "scenes",
-            cwd / "install" / "h2track_sim" / "share" / "h2track_sim" / "scenes",
+            cwd / "src" / "h2track_bringup" / "scenes",
+            cwd / "install" / "h2track_bringup" / "share" / "h2track_bringup" / "scenes",
         ]
         for path in candidates:
             if path.exists():

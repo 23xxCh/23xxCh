@@ -5,9 +5,15 @@ Converted to LifecycleNode following ros2-engineering-skills pattern:
 - on_activate: create publishers, start timer
 - on_deactivate: stop timer
 - on_cleanup: release resources
+
+Sim2real features (opt-in via parameters):
+- Realistic sensor model (response delay, baseline drift, noise, quantization)
+- Time-varying wind (direction random walk + gusts → plume meandering)
 """
 
 from __future__ import annotations
+
+import random as _random
 
 from geometry_msgs.msg import Point
 from nav_msgs.msg import Odometry
@@ -17,12 +23,16 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from std_msgs.msg import Float32
 from visualization_msgs.msg import Marker
 
-from .gas_model import GasFieldModel, GasFieldParams, Pose2D
+from .gas_model import GasFieldModel, GasFieldParams
+from .sensor_model import SensorModel, SensorModelConfig
+from .wind_model import TimeVaryingWindModel, WindModelConfig
+from h2track_utils.types import Pose2D  # canonical definition
 
 
 class GasFieldNode(LifecycleNode):
     def __init__(self) -> None:
         super().__init__("gas_field_node")
+        # --- Gas field parameters ---
         self.declare_parameter("source_x", -3.5)
         self.declare_parameter("source_y", -3.5)
         self.declare_parameter("source_strength", 120.0)
@@ -33,12 +43,35 @@ class GasFieldNode(LifecycleNode):
         self.declare_parameter("noise_stddev", 0.05)
         self.declare_parameter("gas_type", "H2")
         self.declare_parameter("publish_rate_hz", 5.0)
+        self.declare_parameter("seed", -1)  # -1 = use system entropy
+
+        # --- Sim2real: realistic sensor model ---
+        self.declare_parameter("use_realistic_sensor", False)
+        self.declare_parameter("sensor_response_tau", 8.0)
+        self.declare_parameter("sensor_recovery_tau", 20.0)
+        self.declare_parameter("sensor_noise_stddev", 0.5)
+        self.declare_parameter("sensor_quantization", 0.1)
+        self.declare_parameter("sensor_saturation", 500.0)
+        self.declare_parameter("sensor_baseline_drift_rate", 0.01)
+        self.declare_parameter("sensor_baseline_drift_max", 2.0)
+
+        # --- Sim2real: time-varying wind ---
+        self.declare_parameter("use_time_varying_wind", False)
+        self.declare_parameter("wind_mean_speed", 0.4)
+        self.declare_parameter("wind_mean_direction_deg", 0.0)
+        self.declare_parameter("wind_direction_stddev_deg", 15.0)
+        self.declare_parameter("wind_gust_rate", 0.05)
+        self.declare_parameter("wind_gust_strength_factor", 0.5)
+        self.declare_parameter("wind_gust_duration", 3.0)
 
         self._pose = Pose2D(0.0, 0.0)
         self._model: GasFieldModel | None = None
+        self._sensor: SensorModel | None = None
+        self._wind_model: TimeVaryingWindModel | None = None
         self._concentration_pub = None
         self._marker_pub = None
         self._timer = None
+        self._last_stamp: float | None = None
 
     def on_configure(self, state: LifecycleState) -> TransitionCallbackReturn:
         """Create model and subscriptions (no publishers or timers yet)."""
@@ -54,7 +87,46 @@ class GasFieldNode(LifecycleNode):
             min_concentration=0.0,
             gas_type=str(self.get_parameter("gas_type").value),
         )
-        self._model = GasFieldModel(params)
+
+        seed = int(self.get_parameter("seed").value)
+        rng = _random.Random(seed) if seed >= 0 else _random.Random()
+        self._model = GasFieldModel(params, rng=rng)
+
+        # Optional realistic sensor model
+        if self.get_parameter("use_realistic_sensor").value:
+            sensor_config = SensorModelConfig(
+                response_tau=float(self.get_parameter("sensor_response_tau").value),
+                recovery_tau=float(self.get_parameter("sensor_recovery_tau").value),
+                noise_stddev=float(self.get_parameter("sensor_noise_stddev").value),
+                quantization_resolution=float(self.get_parameter("sensor_quantization").value),
+                saturation=float(self.get_parameter("sensor_saturation").value),
+                baseline_drift_rate=float(self.get_parameter("sensor_baseline_drift_rate").value),
+                baseline_drift_max=float(self.get_parameter("sensor_baseline_drift_max").value),
+            )
+            self._sensor = SensorModel(self._model, sensor_config, rng=_random.Random(seed))
+            self.get_logger().info(
+                f"Realistic sensor model enabled: tau={sensor_config.response_tau}s/"
+                f"{sensor_config.recovery_tau}s"
+            )
+
+        # Optional time-varying wind
+        if self.get_parameter("use_time_varying_wind").value:
+            wind_config = WindModelConfig(
+                mean_speed=float(self.get_parameter("wind_mean_speed").value),
+                mean_direction_deg=float(self.get_parameter("wind_mean_direction_deg").value),
+                direction_stddev_deg=float(self.get_parameter("wind_direction_stddev_deg").value),
+                gust_rate=float(self.get_parameter("wind_gust_rate").value),
+                gust_strength_factor=float(self.get_parameter("wind_gust_strength_factor").value),
+                gust_duration=float(self.get_parameter("wind_gust_duration").value),
+                seed=seed,
+            )
+            self._wind_model = TimeVaryingWindModel(wind_config)
+            self.get_logger().info(
+                f"Time-varying wind enabled: mean={wind_config.mean_speed} m/s "
+                f"@ {wind_config.mean_direction_deg}°, "
+                f"σ={wind_config.direction_stddev_deg}°"
+            )
+
         self.create_subscription(Odometry, "/odom", self._odom_callback, 10)
         self.get_logger().info("GasFieldNode configured")
         return TransitionCallbackReturn.SUCCESS
@@ -80,6 +152,8 @@ class GasFieldNode(LifecycleNode):
     def on_cleanup(self, state: LifecycleState) -> TransitionCallbackReturn:
         """Release all resources."""
         self._model = None
+        self._sensor = None
+        self._wind_model = None
         self._concentration_pub = None
         self._marker_pub = None
         self.get_logger().info("GasFieldNode cleaned up")
@@ -91,7 +165,26 @@ class GasFieldNode(LifecycleNode):
     def _publish(self) -> None:
         if self._model is None or self._concentration_pub is None:
             return
-        concentration = self._model.concentration_at(self._pose)
+
+        # Compute dt from clock for accurate sensor dynamics
+        now_sec = self.get_clock().now().nanoseconds * 1e-9
+        if self._last_stamp is not None:
+            dt = max(0.001, now_sec - self._last_stamp)
+        else:
+            dt = 0.1
+        self._last_stamp = now_sec
+
+        # Update time-varying wind and apply to gas model
+        if self._wind_model is not None:
+            wx, wy = self._wind_model.update(dt)
+            self._model.set_wind(wx, wy)
+
+        # Get concentration: realistic sensor (with dynamics) or ideal
+        if self._sensor is not None:
+            concentration = self._sensor.update(self._pose, dt=dt)
+        else:
+            concentration = self._model.concentration_at(self._pose)
+
         self._concentration_pub.publish(Float32(data=float(concentration)))
 
         if self._marker_pub is not None:

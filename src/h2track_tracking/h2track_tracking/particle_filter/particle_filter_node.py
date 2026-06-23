@@ -19,6 +19,11 @@ from rclpy.lifecycle import LifecycleNode, LifecycleState, TransitionCallbackRet
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from std_msgs.msg import Float32
 
+try:
+    from h2track_interfaces.msg import WindEstimate as WindEstimateMsg
+except ImportError:  # h2track_interfaces not available in unit tests
+    WindEstimateMsg = None  # type: ignore[assignment,misc]
+
 from .filter import ParticleFilter
 from .types import ParticleFilterConfig
 
@@ -42,8 +47,12 @@ class ParticleFilterNode(LifecycleNode):
         self.declare_parameter("num_particles", 500)
         self.declare_parameter("motion_sigma", 0.3)
         self.declare_parameter("observation_sigma", 0.5)
-        self.declare_parameter("plume_sigma", 2.0)
-        self.declare_parameter("source_strength", 1.0)
+        self.declare_parameter("plume_sigma", 1.2)
+        self.declare_parameter("source_strength", 120.0)
+        self.declare_parameter("decay_rate", 0.55)
+        self.declare_parameter("wind_x", 0.0)
+        self.declare_parameter("wind_y", 0.0)
+        self.declare_parameter("gas_type", "H2")
         self.declare_parameter("bounds", [-10.0, -10.0, 10.0, 10.0])
         self.declare_parameter("publish_rate", 2.0)
         self.declare_parameter("resample_threshold", 0.5)
@@ -53,6 +62,7 @@ class ParticleFilterNode(LifecycleNode):
         self._bounds: tuple[float, float, float, float] = (-10, -10, 10, 10)
         self._robot_position: tuple[float, float] = (0.0, 0.0)
         self._last_odom_position: tuple[float, float] | None = None
+        self._last_odom_stamp: float | None = None
         self._estimate_pub = None
         self._particle_pub = None
         self._timer = None
@@ -64,7 +74,11 @@ class ParticleFilterNode(LifecycleNode):
         observation_sigma = float(self.get_parameter("observation_sigma").value)
         plume_sigma = float(self.get_parameter("plume_sigma").value)
         source_strength = float(self.get_parameter("source_strength").value)
+        decay_rate = float(self.get_parameter("decay_rate").value)
+        wind_x = float(self.get_parameter("wind_x").value)
+        wind_y = float(self.get_parameter("wind_y").value)
         resample_threshold = float(self.get_parameter("resample_threshold").value)
+        gas_type = str(self.get_parameter("gas_type").value)
 
         # Parse bounds
         bounds_raw = self.get_parameter("bounds").value
@@ -87,6 +101,10 @@ class ParticleFilterNode(LifecycleNode):
             observation_sigma=observation_sigma,
             plume_sigma=plume_sigma,
             source_strength=source_strength,
+            decay_rate=decay_rate,
+            wind_x=wind_x,
+            wind_y=wind_y,
+            gas_type=gas_type,
             resample_threshold=resample_threshold,
         )
         self._filter = ParticleFilter(config)
@@ -96,6 +114,10 @@ class ParticleFilterNode(LifecycleNode):
         sensor_qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
         self.create_subscription(Float32, "/gas_concentration", self._gas_concentration_callback, sensor_qos)
         self.create_subscription(Odometry, "/odom", self._odom_callback, 10)
+        if WindEstimateMsg is not None:
+            self.create_subscription(
+                WindEstimateMsg, "/estimated_wind", self._wind_callback, sensor_qos
+            )
 
         self.get_logger().info(
             f"ParticleFilterNode configured with {num_particles} particles, bounds={self._bounds}"
@@ -147,13 +169,38 @@ class ParticleFilterNode(LifecycleNode):
             self._filter.resample()
 
     def _odom_callback(self, msg: Odometry) -> None:
-        """Handle odometry messages."""
+        """Handle odometry messages.
+
+        Updates robot position and triggers predict with correct dt.
+        Uses the odom timestamp to compute actual elapsed time instead
+        of a hardcoded dt, preventing over-diffusion at high odom rates.
+        """
         if self._filter is None:
             return
         x = float(msg.pose.pose.position.x)
         y = float(msg.pose.pose.position.y)
         self._robot_position = (x, y)
-        self._filter.predict(dt=1.0)
+
+        # Compute dt from odom timestamps
+        stamp_sec = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+        if self._last_odom_stamp is not None:
+            dt = max(0.01, stamp_sec - self._last_odom_stamp)
+            self._filter.predict(dt=dt)
+        else:
+            # First odom message — small default dt
+            self._filter.predict(dt=0.1)
+        self._last_odom_stamp = stamp_sec
+
+    def _wind_callback(self, msg) -> None:
+        """Handle wind estimate messages.
+
+        Updates the filter's wind components at runtime so the
+        observation model tracks the real wind direction instead of
+        relying on the static launch-time parameter.
+        """
+        if self._filter is None:
+            return
+        self._filter.set_wind(float(msg.wind_x), float(msg.wind_y))
 
     def _timer_callback(self) -> None:
         """Periodic callback to publish estimates."""

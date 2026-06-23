@@ -9,9 +9,9 @@ def test_readme_documents_standard_demo_rehearsal_flow():
     text = README.read_text(encoding="utf-8")
 
     assert "## Standard Demo Rehearsal Flow" in text
-    assert "ros2 run h2track_tracking demo_prep" in text
-    assert "ros2 launch h2track_sim demo.launch.py" in text
-    assert "ros2 run h2track_tracking demo_selfcheck --timeout 5.0" in text
+    assert "ros2 run h2track_utils demo_prep" in text
+    assert "ros2 launch h2track_bringup demo.launch.py" in text
+    assert "ros2 run h2track_utils demo_selfcheck --timeout 5.0" in text
     assert "If any step fails, do not start the formal demo." in text
 
 

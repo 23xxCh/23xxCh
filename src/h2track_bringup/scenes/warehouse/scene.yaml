@@ -74,5 +74,14 @@ fusion:
   surge_weight: 0.65
   pf_confidence_threshold: 0.3
 wind_estimation:
-  estimate_wind: true
+  estimate_wind: gradient   # "gradient" | "anemometer" (CFD truth) | "off"
   min_samples: 8
+
+# Anemometer ground-truth wind from GADEN CFD.
+# Enable with use_anemometer_ground_truth:=true at launch time.
+# When enabled, set wind_estimation.estimate_wind: "anemometer" above.
+anemometer:
+  noise_std: 0.1
+  frequency: 10.0
+  smoothing_alpha: 1.0
+  max_wind_speed: 10.0
