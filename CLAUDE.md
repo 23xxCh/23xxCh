@@ -78,6 +78,54 @@ Two modes:
 1. **Simplified** (`use_gaden:=false`): `gas_field_node` publishes synthetic plume data based on `GasFieldModel` in `gas_model.py`
 2. **GADEN** (`use_gaden:=true`): Uses external GADEN workspace for realistic filament-based gas dispersion
 
+### GADEN Scenario Preparation
+
+GADEN scenarios at `/home/user/gaden_ws/install/test_env/share/test_env/scenarios/` require **two offline preprocessing steps** before `gaden_player` can play them back:
+
+1. **`gaden_preprocessing`** — parses STL CAD models + CFD wind files → generates `OccupancyGrid3D.csv`, `occupancy.pgm`, `occupancy.yaml` in `environment_configurations/config1/`.
+2. **`gaden_filament_simulator`** — runs the filament-based gas dispersion simulation → generates `simulations/sim1/result/iteration_*` binary snapshots (played back by `gaden_player`).
+
+Each h2track scene's `scene.yaml` points `gaden.project_path` to `environment_configurations/config1` (the directory containing `config.yaml`). Playback uses `playback_id: scene1` which maps to `scenes/scene1.yaml`. For short simulations, enable looping in `scene1.yaml`:
+
+```yaml
+playback_loop:
+  loop: true
+  from: 0
+  to: 108  # max iteration index (matches result/iteration_* count - 1)
+```
+
+**Automated preparation** — use `scripts/gaden_prepare_scenario.py`:
+
+```bash
+source /opt/ros/humble/setup.bash
+source /home/user/gaden_ws/install/setup.bash
+python3 scripts/gaden_prepare_scenario.py 10x6_empty_room 60
+# Generates OccupancyGrid3D.csv + 108 iterations + enables loop in scene1.yaml
+```
+
+**Manual preparation** (if script unavailable):
+
+```bash
+# 1. Preprocess (generates OccupancyGrid3D.csv, ~5s)
+ros2 run gaden_preprocessing preprocessing --ros-args \
+  -p projectPath:=/home/user/gaden_ws/install/test_env/share/test_env/scenarios/<scenario>/environment_configurations/config1
+
+# 2. Run filament simulation (generates iterations, ~10s for 60s sim)
+ros2 run gaden_filament_simulator filament_simulator --ros-args \
+  -p projectPath:=.../config1 -p simulationID:=sim1 -p sim_time:=60.0
+```
+
+**Scenario status** (as of 2026-06-23):
+
+| GADEN scenario | OccupancyGrid3D.csv | sim1/result iterations | h2track scene |
+|----------------|---------------------|------------------------|---------------|
+| `Exp_C` | ✅ | 566 | baseline |
+| `h2track_warehouse` | ✅ | 566 | warehouse, benchmark |
+| `10x6_maze` | ✅ | 566 | maze |
+| `10x6_snake` | ✅ | 566 | snake |
+| `10x6_empty_room` | ✅ | 109 | (testing only) |
+| `10x6_central_obstacle` | ❌ | ❌ | (not configured) |
+
 ### MOX Sensor Model
 
 Complete port of GADEN's `fake_gas_sensor` Figaro TGS sensor model in `h2track_gas_sim/mox_sensor_model.py`:
@@ -398,6 +446,16 @@ ros2 launch h2track_bringup demo.launch.py use_rviz:=true
 # 3. Verify stack (separate terminal)
 ros2 run h2track_utils demo_selfcheck --timeout 5.0
 ```
+
+### Troubleshooting: Stale Processes
+
+If `spawn_entity.py` hangs on "Waiting for entity xml", Gazebo reports "Address already in use", or `ros2 node list` shows duplicate node names, stale processes from prior launches are interfering with DDS discovery and Gazebo's port. Use the cleanup script:
+
+```bash
+scripts/cleanup_ros_processes.sh
+```
+
+This kills all orphaned `gzserver`/`robot_state_publisher`/`spawn_entity`/`gaden_*`/`nav2`/`pytest` processes, frees port 11345, and restarts the `ros2 daemon` to flush stale DDS graph entries. Run it before re-launching after a crash or Ctrl-C.
 
 ## Key Topics
 
