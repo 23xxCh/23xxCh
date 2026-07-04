@@ -34,11 +34,14 @@ mission_manager:
     - -2.92
   enter_threshold: 0.65
   exit_threshold: 0.4
-  source_threshold: 3.4
+  source_threshold: 20.0
   confirm_samples: 1
   track_exit_samples: 3
   source_radius: 1.0
-  source_hold_steps: 1
+  source_hold_steps: 3
+  dynamic_source_threshold: true
+  source_plateau_window: 15
+  source_plateau_ratio: 0.1
   track_step: 0.4
   sweep_angle_deg: 30.0
 gas_source:

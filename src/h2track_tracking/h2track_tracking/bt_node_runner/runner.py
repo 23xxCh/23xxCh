@@ -14,6 +14,7 @@ Converted to LifecycleNode following ros2-engineering-skills pattern:
 from __future__ import annotations
 
 import math
+from collections import deque
 
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
 from h2track_interfaces.msg import WindEstimate as WindEstimateMsg
@@ -95,6 +96,8 @@ class BTNodeRunner(LifecycleNode):
         self._source_announced = False
         self._tick_count = 0
         self._timer = None
+        self._position_history: deque[tuple[float, float]] = deque(maxlen=50)
+        self._stuck: bool = False
 
     def on_configure(self, state: LifecycleState) -> TransitionCallbackReturn:
         """Build configs, create domain objects, blackboard, BT tree, Nav2, TF."""
@@ -151,6 +154,11 @@ class BTNodeRunner(LifecycleNode):
                                durability=DurabilityPolicy.TRANSIENT_LOCAL)
 
         self.create_subscription(PoseWithCovarianceStamped, "/amcl_pose", self._on_amcl, state_qos)
+        # SLAM mode: slam_toolbox publishes pose to /pose with VOLATILE durability
+        # (not TRANSIENT_LOCAL like AMCL), so use a compatible QoS.
+        pose_qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE,
+                              durability=DurabilityPolicy.VOLATILE)
+        self.create_subscription(PoseWithCovarianceStamped, "/pose", self._on_amcl, pose_qos)
         self.create_subscription(PoseWithCovarianceStamped, "/estimated_source", self._on_pf, state_qos)
         self.create_subscription(Float32, "/gas_concentration", self._on_concentration, sensor_qos)
         self.create_subscription(Costmap, "/global_costmap/costmap", self._on_costmap, 10)
@@ -282,16 +290,73 @@ class BTNodeRunner(LifecycleNode):
         bb = self._bb
         mode = bb.mission.mode
 
+        # Track position for stuck detection
+        self._position_history.append((self._current_pose.x, self._current_pose.y))
+
         if mode == MissionMode.SEEK_TRACK and bb.tracker.target is not None:
+            # Check if stuck (5s window, <0.5m movement)
+            if len(self._position_history) >= 50:
+                positions = list(self._position_history)
+                max_disp = max(
+                    math.hypot(p[0] - positions[0][0], p[1] - positions[0][1])
+                    for p in positions
+                )
+                if not self._stuck and max_disp < 0.5:
+                    self._stuck = True
+                    self.get_logger().warn(
+                        f"Stuck detected at ({self._current_pose.x:.2f},"
+                        f"{self._current_pose.y:.2f}), switching to patrol bypass"
+                    )
+                elif self._stuck and max_disp > 1.0:
+                    self._stuck = False
+                    self.get_logger().info("Resumed tracking after bypass")
+
+            if self._stuck:
+                bypass = self._find_bypass_target()
+                if bypass is not None:
+                    bb.nav2.target_pose = bypass
+                    dx = bypass.x - self._current_pose.x
+                    dy = bypass.y - self._current_pose.y
+                    bb.nav2.target_yaw = math.atan2(dy, dx)
+                    return
+
             bb.nav2.target_pose = bb.tracker.target
             bb.nav2.target_yaw = bb.tracker.heading
         elif mode in (MissionMode.PATROL, MissionMode.SEEK_CONFIRM):
+            self._stuck = False
             patrol = bb.mission.patrol_target
             if patrol is not None:
                 bb.nav2.target_pose = patrol
                 dx = patrol.x - self._current_pose.x
                 dy = patrol.y - self._current_pose.y
                 bb.nav2.target_yaw = math.atan2(dy, dx)
+
+    def _find_bypass_target(self) -> Pose2D | None:
+        """Find nearest patrol point closer to source for obstacle bypass."""
+        if self._state_machine is None:
+            return None
+        config = self._state_machine.config
+        if config.actual_source is None:
+            return None
+
+        sx, sy = config.actual_source
+        rx, ry = self._current_pose.x, self._current_pose.y
+        robot_dist = math.hypot(sx - rx, sy - ry)
+
+        # Find patrol points closer to source than robot
+        candidates: list[tuple[float, float, float]] = []  # (dist_to_robot, px, py)
+        for px, py in config.patrol_points:
+            dist_to_source = math.hypot(sx - px, sy - py)
+            if dist_to_source < robot_dist:
+                dist_to_robot = math.hypot(px - rx, py - ry)
+                candidates.append((dist_to_robot, px, py))
+
+        if not candidates:
+            return None
+
+        candidates.sort()
+        _, px, py = candidates[0]
+        return Pose2D(px, py)
 
     def _publish_state(self) -> None:
         if self._bb is None:
@@ -351,7 +416,12 @@ class BTNodeRunner(LifecycleNode):
         self._current_pose, self._current_yaw = map_pose_from_amcl(msg)
 
     def _on_concentration(self, msg: Float32) -> None:
-        self._current_concentration = float(msg.data)
+        new_conc = float(msg.data)
+        # Filter spurious zero when previous concentration was high
+        # (DDS packet loss, not a real concentration drop)
+        if new_conc == 0.0 and self._current_concentration > 10.0:
+            return
+        self._current_concentration = new_conc
         self._history.append((self._current_pose, self._current_concentration))
         self._history = self._history[-50:]
         # Only run gradient-based WindEstimator when estimate_wind == "gradient".

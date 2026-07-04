@@ -95,6 +95,7 @@ def test_tracking_requires_sustained_collapse_before_returning_to_patrol():
     assert machine.mode is MissionMode.SEEK_TRACK
 
     machine.update(0.8, (0.3, 0.3), False)
+    machine.update(0.5, (0.3, 0.3), False)
     assert machine.mode is MissionMode.PATROL
 
 
@@ -389,6 +390,7 @@ def test_seek_track_timeout_resets_on_reentry():
     # Drop below exit_threshold → PATROL
     machine.update(1.0, (1.0, 1.0), False)
     machine.update(1.0, (1.0, 1.0), False)
+    machine.update(1.0, (1.0, 1.0), False)
     assert machine.mode is MissionMode.PATROL
 
     # Re-enter SEEK_TRACK — timeout counter should be reset
@@ -485,3 +487,89 @@ def test_adaptive_threshold_disabled_by_default():
     for _ in range(50):
         machine.update(20.0, (1.5, 1.5), False)
         assert machine.mode is MissionMode.SEEK_TRACK
+
+
+def test_dynamic_source_threshold_triggers_on_plateau():
+    """Plateau detection triggers SOURCE_FOUND when concentration stabilizes."""
+    machine = MissionStateMachine(
+        MissionConfig(
+            patrol_points=[(1.0, 1.0)],
+            enter_threshold=3.0,
+            exit_threshold=1.5,
+            source_threshold=8.0,
+            confirm_samples=1,
+            source_radius=0.5,
+            source_hold_steps=1,
+            track_timeout_sec=0.0,
+            dynamic_source_threshold=True,
+            source_plateau_window=3,
+            source_plateau_ratio=0.1,
+        )
+    )
+
+    # Enter SEEK_TRACK
+    machine.update(3.5, (0.0, 0.0), False)
+    machine.update(5.0, (0.5, 0.5), False)
+    assert machine.mode is MissionMode.SEEK_TRACK
+
+    # Feed stable high concentration to fill and flush plateau window.
+    # Window=3: need 3 samples of 10.0 to flush out 3.5 and 5.0.
+    for _ in range(3):
+        machine.update(10.0, (1.0, 1.0), False)
+
+    assert machine.mode is MissionMode.SOURCE_FOUND
+
+
+def test_dynamic_source_threshold_prevents_trigger_while_increasing():
+    """Plateau detection prevents SOURCE_FOUND while concentration still rising."""
+    machine = MissionStateMachine(
+        MissionConfig(
+            patrol_points=[(1.0, 1.0)],
+            enter_threshold=3.0,
+            exit_threshold=1.5,
+            source_threshold=8.0,
+            confirm_samples=1,
+            source_radius=0.5,
+            source_hold_steps=1,
+            track_timeout_sec=0.0,
+            dynamic_source_threshold=True,
+            source_plateau_window=3,
+            source_plateau_ratio=0.1,
+        )
+    )
+
+    # Enter SEEK_TRACK
+    machine.update(3.5, (0.0, 0.0), False)
+    machine.update(5.0, (0.5, 0.5), False)
+    assert machine.mode is MissionMode.SEEK_TRACK
+
+    # Feed increasing concentrations above source_threshold — no plateau
+    for i in range(10):
+        machine.update(8.0 + i, (1.0, 1.0), False)
+        assert machine.mode is MissionMode.SEEK_TRACK
+
+
+def test_dynamic_source_threshold_disabled_by_default():
+    """Without dynamic_source_threshold, plateau is not required for SOURCE_FOUND."""
+    machine = MissionStateMachine(
+        MissionConfig(
+            patrol_points=[(1.0, 1.0)],
+            enter_threshold=3.0,
+            exit_threshold=1.5,
+            source_threshold=8.0,
+            confirm_samples=1,
+            source_radius=0.5,
+            source_hold_steps=1,
+            track_timeout_sec=0.0,
+            # dynamic_source_threshold defaults to False
+        )
+    )
+
+    # Enter SEEK_TRACK
+    machine.update(3.5, (0.0, 0.0), False)
+    machine.update(5.0, (0.5, 0.5), False)
+    assert machine.mode is MissionMode.SEEK_TRACK
+
+    # Single high concentration should trigger SOURCE_FOUND (no plateau needed)
+    machine.update(10.0, (1.0, 1.0), False)
+    assert machine.mode is MissionMode.SOURCE_FOUND

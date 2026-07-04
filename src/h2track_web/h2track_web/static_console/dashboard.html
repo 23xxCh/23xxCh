@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>H2Track | 氢气源追踪监控</title>
+<style>
+  :root {
+    --bg: #0a0a0b;
+    --surface: #111114;
+    --surface-elevated: #16161a;
+    --border: #222228;
+    --text-primary: #e4e4e7;
+    --text-secondary: #71717a;
+    --accent: #22c55e;
+    --accent-dim: #166534;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+    --info: #3b82f6;
+    --mono: "JetBrains Mono", "SF Mono", "Cascadia Code", monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.5;
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+
+  /* Grid overlay */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    pointer-events: none;
+    opacity: .03;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* Header */
+  .header {
+    position: sticky; top: 0; z-index: 50;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(12px);
+  }
+  .header-brand {
+    display: flex; align-items: center; gap: 12px;
+    font-size: 14px; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+  .header-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+  }
+  .header-dot.warn { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
+  .header-dot.danger { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+  .header-meta { color: var(--text-secondary); font-size: 11px; }
+
+  /* Grid */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: auto;
+    gap: 1px;
+    background: var(--border);
+    min-height: calc(100dvh - 49px);
+  }
+  @media (max-width: 1024px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+
+  /* Card */
+  .card {
+    background: var(--surface);
+    padding: 20px;
+    display: flex; flex-direction: column;
+    gap: 12px;
+  }
+  .card.span-2 { grid-column: span 2; }
+  .card.span-4 { grid-column: span 4; }
+  .card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .card-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: .15em;
+    color: var(--text-secondary);
+  }
+  .card-value {
+    font-size: 28px; font-weight: 700;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+  .card-value.accent { color: var(--accent); }
+  .card-value.warn { color: var(--warn); }
+  .card-value.info { color: var(--info); }
+
+  /* Mini labels */
+  .mini-label { font-size: 10px; color: var(--text-secondary); letter-spacing: .1em; text-transform: uppercase; }
+
+  /* Status badge */
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 3px;
+    font-size: 10px; font-weight: 600; letter-spacing: .1em;
+    text-transform: uppercase;
+  }
+  .badge.patrol { background: #1e293b; color: #94a3b8; border: 1px solid #334155; }
+  .badge.confirm { background: #422006; color: #f59e0b; border: 1px solid #78350f; }
+  .badge.track { background: #052e16; color: #22c55e; border: 1px solid #166534; }
+  .badge.found { background: #172554; color: #3b82f6; border: 1px solid #1e3a8a; }
+
+  /* Particle grid visual */
+  .particle-viz {
+    width: 100%; height: 200px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    position: relative; overflow: hidden;
+  }
+  .particle-viz canvas { position: absolute; inset: 0; }
+
+  /* Heatmap */
+  .heatmap-container {
+    width: 100%; height: 300px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    position: relative; overflow: hidden;
+  }
+  .heatmap-container canvas { position: absolute; inset: 0; }
+
+  /* Log feed */
+  .log-feed {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    height: 200px;
+    overflow-y: auto;
+    padding: 12px;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .log-line { color: var(--text-secondary); }
+  .log-line .ts { color: #52525b; margin-right: 8px; }
+  .log-line .val { color: var(--text-primary); }
+
+  /* Coordinate display */
+  .coord {
+    display: flex; justify-content: space-between;
+    font-variant-numeric: tabular-nums;
+  }
+  .coord span { color: var(--text-secondary); }
+  .coord strong { font-size: 16px; }
+
+  /* Source found banner */
+  .source-banner {
+    grid-column: span 4;
+    background: #052e16;
+    border: 2px solid var(--accent);
+    padding: 16px 24px;
+    display: flex; align-items: center; gap: 16px;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: .15em;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .source-banner .pulse {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: .5; transform: scale(1.5); }
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-brand">
+    <div class="header-dot" id="status-dot"></div>
+    <span>H2Track</span>
+    <span style="font-weight:400;color:var(--text-secondary);font-size:11px">| 气源追踪监控</span>
+  </div>
+  <div class="header-meta">
+    <span id="conn-status">CONNECTING</span>
+    <span style="margin-left:12px" id="clock">--</span>
+  </div>
+</header>
+
+<div class="grid" id="grid">
+  <!-- Row 1: Key metrics -->
+  <div class="card">
+    <div class="card-label">运行模式</div>
+    <div class="card-value" id="mode-display">--</div>
+    <div id="mode-badge"></div>
+  </div>
+  <div class="card">
+    <div class="card-label">气体浓度</div>
+    <div class="card-value accent" id="conc-display">--</div>
+    <div class="mini-label">ppm</div>
+  </div>
+  <div class="card">
+    <div class="card-label">粒子滤波置信度</div>
+    <div class="card-value info" id="pf-conf">--</div>
+  </div>
+  <div class="card">
+    <div class="card-label">源发现</div>
+    <div class="card-value" id="source-status" style="color:var(--text-secondary)">--</div>
+  </div>
+
+  <!-- Row 2: Position + wind -->
+  <div class="card span-2">
+    <div class="card-label">机器人位置 (odom)</div>
+    <div class="coord"><span>X</span><strong id="pos-x">--</strong></div>
+    <div class="coord"><span>Y</span><strong id="pos-y">--</strong></div>
+    <div class="coord"><span>Yaw</span><strong id="pos-yaw">--</strong></div>
+  </div>
+  <div class="card span-2">
+    <div class="card-label">源位置估计 (粒子滤波)</div>
+    <div class="coord"><span>X</span><strong id="src-x">--</strong></div>
+    <div class="coord"><span>Y</span><strong id="src-y">--</strong></div>
+    <div class="coord"><span>置信度</span><strong id="src-conf">--</strong></div>
+  </div>
+
+  <!-- Row 4: Particle cloud viz -->
+  <div class="card span-4">
+    <div class="card-label">粒子云可视化</div>
+    <div class="particle-viz" id="particle-viz">
+      <canvas id="particle-canvas"></canvas>
+    </div>
+  </div>
+
+  <!-- Row 5: Heatmap -->
+  <div class="card span-4">
+    <div class="card-label">浓度热力图</div>
+    <div class="heatmap-container" id="heatmap">
+      <canvas id="heatmap-canvas"></canvas>
+    </div>
+  </div>
+
+  <!-- Row 6: Log + wind -->
+  <div class="card span-2">
+    <div class="card-label">事件日志</div>
+    <div class="log-feed" id="log-feed"></div>
+  </div>
+  <div class="card span-2">
+    <div class="card-label">风速估计</div>
+    <div class="coord"><span>Wind X</span><strong id="wind-x">--</strong></div>
+    <div class="coord"><span>Wind Y</span><strong id="wind-y">--</strong></div>
+    <div class="coord"><span>置信度</span><strong id="wind-conf">--</strong></div>
+  </div>
+</div>
+
+<script>
+const WS_URL = `ws://${location.host}/ws`;
+const WS_HEATMAP = `ws://${location.host}/ws/heatmap`;
+
+let ws, heatmapWs;
+const logLines = [];
+const MAX_LOG = 50;
+
+function $(id) { return document.getElementById(id); }
+
+function addLog(msg) {
+  const now = new Date().toLocaleTimeString();
+  logLines.push(`<div class="log-line"><span class="ts">${now}</span><span class="val">${msg}</span></div>`);
+  if (logLines.length > MAX_LOG) logLines.shift();
+  $("log-feed").innerHTML = logLines.join("");
+}
+
+function setMode(mode) {
+  $("mode-display").textContent = mode || "--";
+  const badge = $("mode-badge");
+  const cls = {PATROL:"patrol","SEEK_CONFIRM":"confirm","SEEK_TRACK":"track","SOURCE_FOUND":"found"};
+  badge.innerHTML = `<span class="badge ${cls[mode]||""}">${mode||"--"}</span>`;
+  const dot = $("status-dot");
+  dot.className = "header-dot";
+  if (mode === "SOURCE_FOUND") dot.classList.add("");
+  else if (mode === "SEEK_TRACK") dot.classList.add("");
+  else if (mode === "SEEK_CONFIRM") dot.classList.add("warn");
+}
+
+function fmt(n, d) { return n != null ? Number(n).toFixed(d) : "--"; }
+
+// Main metrics WebSocket
+function connectWS() {
+  ws = new WebSocket(WS_URL);
+  $("conn-status").textContent = "CONNECTING";
+  $("conn-status").style.color = "var(--warn)";
+
+  ws.onopen = () => {
+    $("conn-status").textContent = "ONLINE";
+    $("conn-status").style.color = "var(--accent)";
+    addLog("WebSocket connected");
+  };
+
+  ws.onclose = () => {
+    $("conn-status").textContent = "OFFLINE";
+    $("conn-status").style.color = "var(--danger)";
+    addLog("WebSocket disconnected, reconnecting...");
+    setTimeout(connectWS, 3000);
+  };
+
+  ws.onerror = () => { addLog("WebSocket error"); };
+
+  ws.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      if (data.mode !== undefined) setMode(data.mode);
+      if (data.concentration !== undefined) $("conc-display").textContent = fmt(data.concentration, 3);
+      if (data.source_found !== undefined) {
+        $("source-status").textContent = data.source_found ? "TRUE" : "FALSE";
+        $("source-status").style.color = data.source_found ? "var(--accent)" : "var(--text-secondary)";
+      }
+      if (data.robot_x != null) $("pos-x").textContent = fmt(data.robot_x, 3);
+      if (data.robot_y != null) $("pos-y").textContent = fmt(data.robot_y, 3);
+      if (data.robot_yaw != null) $("pos-yaw").textContent = fmt(data.robot_yaw, 2);
+      if (data.wind_x != null) $("wind-x").textContent = fmt(data.wind_x, 3);
+      if (data.wind_y != null) $("wind-y").textContent = fmt(data.wind_y, 3);
+      if (data.wind_conf != null) $("wind-conf").textContent = fmt(data.wind_conf, 2);
+      if (data.pf_conf != null) $("pf-conf").textContent = fmt(data.pf_conf, 2);
+      if (data.source_x != null) $("src-x").textContent = fmt(data.source_x, 3);
+      if (data.source_y != null) $("src-y").textContent = fmt(data.source_y, 3);
+      $("clock").textContent = new Date().toLocaleTimeString();
+    } catch(err) {
+      addLog("Parse error: " + err.message);
+    }
+  };
+}
+
+// Heatmap WebSocket
+function connectHeatmap() {
+  heatmapWs = new WebSocket(WS_HEATMAP);
+  const canvas = $("heatmap-canvas");
+  const ctx = canvas.getContext("2d");
+
+  function resize() {
+    const container = $("heatmap");
+    canvas.width = container.clientWidth;
+    canvas.height = container.clientHeight;
+  }
+  resize();
+  window.addEventListener("resize", resize);
+
+  heatmapWs.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      resize();
+      const w = canvas.width, h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      // Draw grid
+      if (data.grid) {
+        const grid = data.grid;
+        const rows = grid.length, cols = grid[0]?.length || 0;
+        const cw = w / cols, ch = h / rows;
+        let maxVal = 0;
+        for (const row of grid) for (const v of row) if (v > maxVal) maxVal = v;
+        maxVal = maxVal || 1;
+
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const v = grid[r][c] / maxVal;
+            if (v > 0.01) {
+              const alpha = Math.min(v * 0.8, 0.8);
+              ctx.fillStyle = `rgba(34, 197, 94, ${alpha})`;
+              ctx.fillRect(c * cw, r * ch, cw, ch);
+            }
+          }
+        }
+      }
+
+      // Draw source estimate
+      if (data.source_x != null && data.source_y != null && data.grid) {
+        const cols = data.grid[0]?.length || 1;
+        const rows = data.grid.length || 1;
+        const sx = (data.source_x + 6) / 12 * w;
+        const sy = (data.source_y + 6) / 12 * h;
+        ctx.fillStyle = "#3b82f6";
+        ctx.beginPath();
+        ctx.arc(sx, sy, 8, 0, Math.PI*2);
+        ctx.fill();
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    } catch(err) {}
+  };
+
+  heatmapWs.onclose = () => { setTimeout(connectHeatmap, 3000); };
+}
+
+// Particle cloud canvas
+function initParticleCanvas() {
+  const canvas = $("particle-canvas");
+  const ctx = canvas.getContext("2d");
+  function resize() {
+    const container = $("particle-viz");
+    canvas.width = container.clientWidth;
+    canvas.height = container.clientHeight;
+  }
+  resize();
+  window.addEventListener("resize", resize);
+
+  // Draw some placeholder particles
+  const w = canvas.width, h = canvas.height;
+  ctx.fillStyle = "rgba(34,197,94,0.3)";
+  for (let i = 0; i < 100; i++) {
+    ctx.beginPath();
+    ctx.arc(Math.random()*w, Math.random()*h, 2, 0, Math.PI*2);
+    ctx.fill();
+  }
+}
+
+// Init
+connectWS();
+connectHeatmap();
+initParticleCanvas();
+addLog("H2Track Dashboard initialized");
+</script>
+</body>
+</html>

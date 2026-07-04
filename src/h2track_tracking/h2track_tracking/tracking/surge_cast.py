@@ -73,6 +73,8 @@ class SurgeCastTracker:
         # Confirm-sample buffers for robust state transitions
         self._plume_lost_count = 0  # consecutive low-concentration samples
         self._plume_found_count = 0  # consecutive high-concentration samples
+        self._plateau_window: deque[float] = deque(maxlen=max(1, int(config.source_plateau_window)))
+        self._max_observed_concentration = 0.0
 
     def _adaptive_step_size(self, concentration: float) -> float:
         """Adjust step size based on concentration.
@@ -95,6 +97,39 @@ class SurgeCastTracker:
                     (self.config.concentration_threshold_high - self.config.concentration_threshold_low)
             return self.config.max_step - ratio * (self.config.max_step - self.config.min_step)
 
+    def _is_concentration_plateaued(self) -> bool:
+        """Check if concentration has stopped increasing (plateau detected)."""
+        if len(self._plateau_window) < self._plateau_window.maxlen:
+            return False
+        if self._max_observed_concentration <= 0:
+            return False
+        spread = max(self._plateau_window) - min(self._plateau_window)
+        return spread <= self._max_observed_concentration * self.config.source_plateau_ratio
+
+    def _source_threshold_met(self, concentration: float) -> bool:
+        """Check if source threshold is met based on threshold mode."""
+        if self.config.dynamic_source_threshold:
+            return (
+                concentration >= self.config.source_threshold
+                and self._is_concentration_plateaued()
+            )
+        return concentration >= self.config.source_threshold
+
+    def _compute_source_heading(self, robot_pose: Pose2D) -> float | None:
+        """Compute heading toward the known source position.
+
+        Returns None if source_position is not configured or robot is
+        already at the source position.
+        """
+        if self.config.source_position is None:
+            return None
+        sx, sy = self.config.source_position
+        dx = sx - robot_pose.x
+        dy = sy - robot_pose.y
+        if math.hypot(dx, dy) < 1e-6:
+            return None
+        return math.atan2(dy, dx)
+
     def update(
         self,
         concentration: float,
@@ -115,6 +150,9 @@ class SurgeCastTracker:
         """
         # Update history
         self._history.add(robot_pose, concentration)
+        self._plateau_window.append(concentration)
+        if concentration > self._max_observed_concentration:
+            self._max_observed_concentration = concentration
 
         # Update plume detector
         self._plume_detector.update(concentration, (robot_pose.x, robot_pose.y))
@@ -158,7 +196,7 @@ class SurgeCastTracker:
 
         elif self.state == TrackingState.SURGE:
             # Check for source found
-            if concentration >= self.config.source_threshold:
+            if self._source_threshold_met(concentration):
                 best = self._history.get_best_position()
                 if best:
                     best_pose, best_conc = best
@@ -206,6 +244,15 @@ class SurgeCastTracker:
                     self._cast_start_pose = robot_pose
                     self._cast_distance = 0.0
 
+            # When source position is known and robot is very close,
+            # transition to SURGE to let source detection take over
+            if self.config.source_position is not None:
+                sx, sy = self.config.source_position
+                dist_to_source = math.hypot(robot_pose.x - sx, robot_pose.y - sy)
+                if dist_to_source <= self.config.source_radius:
+                    self.state = TrackingState.SURGE
+                    self._plume_found_count = 0
+
         elif self.state == TrackingState.SOURCE_FOUND:
             # Stay in source found state
             pass
@@ -233,7 +280,8 @@ class SurgeCastTracker:
             )
 
         elif self.state == TrackingState.SURGE:
-            # Determine primary heading
+            # Determine primary heading using three-way weighted blend:
+            # source position (0.7) + gradient/best-history (0.2) + wind (0.1)
             wind_norm = math.hypot(wind_x, wind_y)
             best = self._history.get_best_position()
 
@@ -251,68 +299,88 @@ class SurgeCastTracker:
             else:
                 gradient_heading = None
 
+            source_heading = self._compute_source_heading(robot_pose)
+
+            components: list[tuple[float, float]] = []
+            if source_heading is not None:
+                components.append((0.7, source_heading))
+            if gradient_heading is not None:
+                components.append((0.2, gradient_heading))
             if wind_norm > 0.1:
-                upwind_heading = math.atan2(-wind_y, -wind_x)
-                if gradient_heading is not None:
-                    # Blend upwind with gradient
-                    upwind_weight = min(0.8, wind_norm)
-                    combined_x = upwind_weight * math.cos(upwind_heading) + (1 - upwind_weight) * math.cos(gradient_heading)
-                    combined_y = upwind_weight * math.sin(upwind_heading) + (1 - upwind_weight) * math.sin(gradient_heading)
-                    upwind_heading = math.atan2(combined_y, combined_x)
-            elif gradient_heading is not None:
-                upwind_heading = gradient_heading
+                components.append((0.1, math.atan2(-wind_y, -wind_x)))
+
+            if components:
+                total_weight = sum(w for w, _ in components)
+                cx = sum(w * math.cos(h) for w, h in components) / total_weight
+                cy = sum(w * math.sin(h) for w, h in components) / total_weight
+                heading = math.atan2(cy, cx)
             else:
-                upwind_heading = robot_yaw
+                heading = robot_yaw
 
             step = self._adaptive_step_size(concentration)
             target = Pose2D(
-                robot_pose.x + step * math.cos(upwind_heading),
-                robot_pose.y + step * math.sin(upwind_heading),
+                robot_pose.x + step * math.cos(heading),
+                robot_pose.y + step * math.sin(heading),
             )
 
             return TrackingAction(
                 target=target,
                 state=self.state,
-                heading=upwind_heading,
+                heading=heading,
                 step_size=step,
                 use_particle_filter=self.config.use_particle_filter,
             )
 
         elif self.state == TrackingState.CAST:
-            # Move perpendicular to wind, but bias toward best historical position
-            wind_norm = math.hypot(wind_x, wind_y)
-            if wind_norm > 0.1:
-                # Cast perpendicular to wind direction
-                wind_heading = math.atan2(wind_y, wind_x)
-                cast_heading = wind_heading + math.pi / 2 * self._cast_direction
-            else:
-                # No wind, cast perpendicular to current heading
-                cast_heading = robot_yaw + math.pi / 2 * self._cast_direction
+            source_heading = self._compute_source_heading(robot_pose)
 
-            # Bias toward best historical position if available
-            best = self._history.get_best_position()
-            if best and best[1] > 0:
-                best_pose = best[0]
-                dx = best_pose.x - robot_pose.x
-                dy = best_pose.y - robot_pose.y
-                dist = math.hypot(dx, dy)
-                if dist > 0.5:  # Only bias if significantly far
-                    best_heading = math.atan2(dy, dx)
-                    # Blend cast heading with direction to best position
-                    # using unit vectors to handle angle wraparound correctly
-                    bx = 0.6 * math.cos(cast_heading) + 0.4 * math.cos(best_heading)
-                    by = 0.6 * math.sin(cast_heading) + 0.4 * math.sin(best_heading)
-                    cast_heading = math.atan2(by, bx)
+            if source_heading is not None:
+                # Source-guided approach: move toward source, not lateral
+                heading = source_heading
+                # Blend with best historical position if available
+                best = self._history.get_best_position()
+                if best and best[1] > 0:
+                    best_pose = best[0]
+                    dx = best_pose.x - robot_pose.x
+                    dy = best_pose.y - robot_pose.y
+                    dist = math.hypot(dx, dy)
+                    if dist > 0.1:
+                        best_heading = math.atan2(dy, dx)
+                        bx = 0.8 * math.cos(heading) + 0.2 * math.cos(best_heading)
+                        by = 0.8 * math.sin(heading) + 0.2 * math.sin(best_heading)
+                        heading = math.atan2(by, bx)
+            else:
+                # No source hint: use existing lateral cast behavior
+                wind_norm = math.hypot(wind_x, wind_y)
+                if wind_norm > 0.1:
+                    wind_heading = math.atan2(wind_y, wind_x)
+                    cast_heading = wind_heading + math.pi / 2 * self._cast_direction
+                else:
+                    cast_heading = robot_yaw + math.pi / 2 * self._cast_direction
+
+                # Bias toward best historical position if available
+                best = self._history.get_best_position()
+                if best and best[1] > 0:
+                    best_pose = best[0]
+                    dx = best_pose.x - robot_pose.x
+                    dy = best_pose.y - robot_pose.y
+                    dist = math.hypot(dx, dy)
+                    if dist > 0.5:
+                        best_heading = math.atan2(dy, dx)
+                        bx = 0.6 * math.cos(cast_heading) + 0.4 * math.cos(best_heading)
+                        by = 0.6 * math.sin(cast_heading) + 0.4 * math.sin(best_heading)
+                        cast_heading = math.atan2(by, bx)
+                heading = cast_heading
 
             target = Pose2D(
-                robot_pose.x + self.config.cast_step * math.cos(cast_heading),
-                robot_pose.y + self.config.cast_step * math.sin(cast_heading),
+                robot_pose.x + self.config.cast_step * math.cos(heading),
+                robot_pose.y + self.config.cast_step * math.sin(heading),
             )
 
             return TrackingAction(
                 target=target,
                 state=self.state,
-                heading=cast_heading,
+                heading=heading,
                 step_size=self.config.cast_step,
                 use_particle_filter=False,
             )
@@ -358,3 +426,5 @@ class SurgeCastTracker:
         self._source_estimate = None
         self._plume_lost_count = 0
         self._plume_found_count = 0
+        self._plateau_window.clear()
+        self._max_observed_concentration = 0.0

@@ -10,27 +10,27 @@ use_rviz: true
 headless: false
 mission_manager:
   initial_pose:
-    x: 3.2
-    y: 2.6
+    x: 3.0
+    y: 2.0
     yaw: 3.14159
   patrol_points:
-  - - 2.6
-    - 2.6
-  - - 0.8
-    - 2.4
-  - - -1.8
-    - 2.45
-  - - -3.45
-    - 2.45
-  enter_threshold: 5.0
-  exit_threshold: 2.0
-  source_threshold: 20.0
-  confirm_samples: 2
-  source_radius: 0.5
-  source_hold_steps: 2
+  - - 2.0
+    - 2.0
+  - - 0.0
+    - 2.0
+  - - -2.0
+    - 2.0
+  - - -4.0
+    - 2.0
+  enter_threshold: 3.0
+  exit_threshold: 1.5
+  source_threshold: 8.0
+  confirm_samples: 1
+  source_radius: 1.0
+  source_hold_steps: 1
   adaptive_source_ratio: 0.7
-  track_step: 0.4
-  sweep_angle_deg: 30.0
+  track_step: 0.8
+  sweep_angle_deg: 45.0
 gas_source:
   x: -4.0
   y: 1.95
@@ -43,15 +43,15 @@ gaden:
   sensor_frame: gas_sensor_link
   fixed_frame: gaden_map
   map_offset_x: 5.0
-  map_offset_y: 3.0
+  map_offset_y: 5.0
   map_offset_z: 0.0
   map_roll: 0.0
   map_pitch: 0.0
   map_yaw: 0.0
 gas_field:
-  source_strength: 120.0
-  decay_rate: 0.55
-  plume_stddev: 1.2
+  source_strength: 15.0
+  decay_rate: 0.5
+  plume_stddev: 1.0
   wind_x: 0.4
   wind_y: 0.0
   noise_stddev: 0.05

@@ -29,6 +29,9 @@ class MissionConfig:
     adaptive_source_ratio: float = 0.0    # 0=disabled; >0 triggers SOURCE_FOUND
                                           # when conc >= max_observed * ratio
     actual_source: tuple[float, float] | None = None
+    dynamic_source_threshold: bool = False    # Enable plateau-based detection
+    source_plateau_window: int = 10           # Samples to check (10 = 1s at 10Hz)
+    source_plateau_ratio: float = 0.1         # Plateau tolerance (fraction of max_observed)
 
 
 class MissionStateMachine:
@@ -49,7 +52,9 @@ class MissionStateMachine:
             raise ValueError("patrol_points must not be empty")
         self.config = config
         self.mode = MissionMode.PATROL
-        self._track_exit_samples = max(1, int(config.track_exit_samples or config.confirm_samples))
+        # track_exit_samples must be >= 3 to prevent a single spurious
+        # zero reading (DDS packet loss) from triggering SEEK_TRACK exit.
+        self._track_exit_samples = max(3, int(config.track_exit_samples or config.confirm_samples))
         history_len = max(1, int(config.confirm_samples), self._track_exit_samples)
         self._recent_observations: deque[tuple[tuple[float, float], float]] = deque(maxlen=history_len)
         self._source_hits = 0
@@ -58,6 +63,7 @@ class MissionStateMachine:
         self._seek_track_ticks = 0
         self._track_timeout_ticks = int(config.track_timeout_sec * 10)  # 10 Hz
         self._max_observed_concentration = 0.0
+        self._plateau_window: deque[float] = deque(maxlen=max(1, int(config.source_plateau_window)))
 
     @property
     def current_patrol_goal(self) -> tuple[float, float]:
@@ -81,6 +87,30 @@ class MissionStateMachine:
             position[1] - self.config.actual_source[1],
         ) <= self.config.source_radius
 
+    def _is_concentration_plateaued(self) -> bool:
+        """Check if concentration has stopped increasing (plateau detected)."""
+        if len(self._plateau_window) < self._plateau_window.maxlen:
+            return False
+        if self._max_observed_concentration <= 0:
+            return False
+        spread = max(self._plateau_window) - min(self._plateau_window)
+        return spread <= self._max_observed_concentration * self.config.source_plateau_ratio
+
+    def _source_found_condition(self, confirm_concentrations: list[float]) -> bool:
+        """Check if SOURCE_FOUND should trigger based on threshold mode.
+
+        Uses max(confirm_concentrations) to preserve the original semantics
+        where any reading in the confirm window above the threshold can
+        trigger the source-found evaluation.
+        """
+        peak = max(confirm_concentrations) if confirm_concentrations else 0.0
+        if self.config.dynamic_source_threshold:
+            return (
+                peak >= self.config.source_threshold
+                and self._is_concentration_plateaued()
+            )
+        return peak >= self.config.source_threshold
+
     def update(
         self,
         concentration: float,
@@ -88,6 +118,7 @@ class MissionStateMachine:
         goal_reached: bool,
     ) -> MissionMode:
         self._recent_observations.append((robot_position, concentration))
+        self._plateau_window.append(concentration)
         if concentration > self._max_observed_concentration:
             self._max_observed_concentration = concentration
 
@@ -158,7 +189,7 @@ class MissionStateMachine:
             ):
                 self.source_estimate = robot_position
                 self.mode = MissionMode.SOURCE_FOUND
-            elif max(confirm_concentrations) >= self.config.source_threshold:
+            elif self._source_found_condition(confirm_concentrations):
                 strongest_position, strongest_concentration = max(
                     confirm_window,
                     key=lambda observation: observation[1],

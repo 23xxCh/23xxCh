@@ -9,7 +9,7 @@ from __future__ import annotations
 import py_trees
 from py_trees.common import Status
 
-from ...tracking.types import Pose2D, SurgeCastConfig
+from ...tracking.types import Pose2D, SurgeCastConfig, TrackingState
 from ...tracking.surge_cast import SurgeCastTracker
 from ...tracking.fusion import TrackingFusion, FusionConfig
 from ...tracking.costmap_checker import CostmapChecker

@@ -104,6 +104,25 @@ def register_routes(
             return FileResponse(index_path, media_type="text/html")
         return HTMLResponse(content=html_page)
 
+    @app.get("/dashboard", response_class=HTMLResponse)
+    def dashboard() -> Any:
+        """Serve the H2Track monitoring dashboard (brutalist design)."""
+        from pathlib import Path as _Path
+        candidates = [
+            _Path(__file__).resolve().parent.parent / "static_console" / "dashboard.html",
+            _Path("/home/user/h2track-xian/src/h2track_web/h2track_web/static_console/dashboard.html"),
+        ]
+        try:
+            from ament_index_python.packages import get_package_share_directory
+            share = _Path(get_package_share_directory("h2track_web")) / "static_console" / "dashboard.html"
+            candidates.append(share)
+        except Exception:
+            pass
+        for path in candidates:
+            if path.exists():
+                return FileResponse(str(path), media_type="text/html")
+        return HTMLResponse(content="<h1>Dashboard not found</h1>", status_code=404)
+
     @app.get("/api/ui/meta")
     def get_ui_meta() -> Any:
         """Get UI mode metadata (static bundle vs legacy inline)."""

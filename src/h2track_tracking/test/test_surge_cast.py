@@ -904,3 +904,217 @@ def test_cast_heading_blending_handles_angle_wraparound():
     # Heading should be well-defined (not NaN or wildly wrong)
     assert not math.isnan(action.heading)
     assert -math.pi <= action.heading <= math.pi
+
+
+def test_surge_cast_dynamic_threshold_triggers_on_plateau():
+    """Plateau detection triggers SOURCE_FOUND when concentration stabilizes."""
+    config = SurgeCastConfig(
+        wind_x=1.0,
+        wind_y=0.0,
+        plume_found_threshold=3.0,
+        plume_lost_threshold=1.5,
+        source_threshold=8.0,
+        source_radius=1.0,
+        source_hold_steps=1,
+        plume_confirm_samples=1,
+        dynamic_source_threshold=True,
+        source_plateau_window=3,
+        source_plateau_ratio=0.1,
+    )
+    tracker = SurgeCastTracker(config)
+
+    # Enter SURGE (need >=3 samples for plume detector min_samples)
+    for _ in range(5):
+        tracker.update(5.0, Pose2D(0.0, 0.0), 0.0)
+    assert tracker.state == TrackingState.SURGE
+
+    # Feed stable high concentration to fill and flush plateau window.
+    # Window=3: need 3 samples of 10.0 to flush out the prior 5.0 values.
+    for _ in range(3):
+        tracker.update(10.0, Pose2D(0.0, 0.0), 0.0)
+
+    assert tracker.state == TrackingState.SOURCE_FOUND
+
+
+def test_surge_cast_dynamic_threshold_prevents_trigger_while_increasing():
+    """Plateau detection prevents SOURCE_FOUND while concentration still rising."""
+    config = SurgeCastConfig(
+        wind_x=1.0,
+        wind_y=0.0,
+        plume_found_threshold=3.0,
+        plume_lost_threshold=1.5,
+        source_threshold=8.0,
+        source_radius=1.0,
+        source_hold_steps=1,
+        plume_confirm_samples=1,
+        dynamic_source_threshold=True,
+        source_plateau_window=3,
+        source_plateau_ratio=0.1,
+    )
+    tracker = SurgeCastTracker(config)
+
+    # Enter SURGE
+    for _ in range(5):
+        tracker.update(5.0, Pose2D(0.0, 0.0), 0.0)
+    assert tracker.state == TrackingState.SURGE
+
+    # Feed increasing concentrations above source_threshold — no plateau
+    for i in range(10):
+        tracker.update(8.0 + i, Pose2D(0.0, 0.0), 0.0)
+        assert tracker.state == TrackingState.SURGE
+
+
+def test_surge_cast_dynamic_threshold_disabled_by_default():
+    """Without dynamic_source_threshold, plateau is not required for SOURCE_FOUND."""
+    config = SurgeCastConfig(
+        wind_x=1.0,
+        wind_y=0.0,
+        plume_found_threshold=3.0,
+        plume_lost_threshold=1.5,
+        source_threshold=8.0,
+        source_radius=1.0,
+        source_hold_steps=1,
+        plume_confirm_samples=1,
+        # dynamic_source_threshold defaults to False
+    )
+    tracker = SurgeCastTracker(config)
+
+    # Enter SURGE
+    for _ in range(5):
+        tracker.update(5.0, Pose2D(0.0, 0.0), 0.0)
+    assert tracker.state == TrackingState.SURGE
+
+    # Single high concentration should trigger SOURCE_FOUND (no plateau needed)
+    tracker.update(10.0, Pose2D(0.0, 0.0), 0.0)
+    assert tracker.state == TrackingState.SOURCE_FOUND
+
+
+# =============================================================================
+# Source-guided tracking tests
+# =============================================================================
+
+class TestSourceGuidedTracking:
+    """Tests for source-position-guided SURGE and CAST behavior."""
+
+    @pytest.fixture
+    def source_config(self):
+        """Config with known source position at (5, 5)."""
+        return SurgeCastConfig(
+            plume_found_threshold=5.0,
+            plume_lost_threshold=2.0,
+            source_threshold=20.0,
+            surge_step=0.5,
+            cast_step=0.3,
+            cast_distance_limit=3.0,
+            source_radius=1.0,
+            source_hold_steps=2,
+            wind_x=1.0,
+            wind_y=0.0,
+            source_position=(5.0, 5.0),
+        )
+
+    def test_surge_with_source_moves_toward_source(self, source_config):
+        """SURGE heading should point toward source, not just upwind."""
+        tracker = SurgeCastTracker(source_config)
+
+        # Enter SURGE
+        for _ in range(5):
+            tracker.update(10.0, Pose2D(0.0, 0.0), 0.0)
+        assert tracker.state == TrackingState.SURGE
+
+        action = tracker.update(10.0, Pose2D(0.0, 0.0), 0.0)
+        # Source is at (5,5), robot at (0,0) → heading should be ~pi/4 (NE)
+        # Wind is (1,0) → upwind is pi (W), but source weight (0.7) dominates
+        assert abs(action.heading - math.pi / 4) < 0.3
+
+    def test_surge_source_overrides_wrong_wind(self, source_config):
+        """Source heading should override incorrect wind direction."""
+        tracker = SurgeCastTracker(source_config)
+
+        # Enter SURGE
+        for _ in range(5):
+            tracker.update(10.0, Pose2D(0.0, 0.0), 0.0)
+
+        action = tracker.update(10.0, Pose2D(0.0, 0.0), 0.0)
+        # Wind says go west (pi), source says go NE (pi/4)
+        # With source weight 0.7 vs wind weight 0.1, heading should be ~NE
+        assert abs(action.heading - math.pi / 4) < 0.3
+        # Definitely not going west
+        assert abs(action.heading - math.pi) > 1.0
+
+    def test_cast_with_source_moves_toward_source(self, source_config):
+        """CAST should move toward source, not lateral."""
+        tracker = SurgeCastTracker(source_config)
+
+        # Get to SURGE
+        for _ in range(5):
+            tracker.update(10.0, Pose2D(0.0, 0.0), 0.0)
+
+        # Lose plume to enter CAST
+        for _ in range(5):
+            tracker.update(1.0, Pose2D(0.0, 0.0), 0.0)
+        assert tracker.state == TrackingState.CAST
+
+        action = tracker.update(1.0, Pose2D(0.0, 0.0), 0.0)
+        # Source is at (5,5), CAST should move toward it (NE, ~pi/4)
+        assert abs(action.heading - math.pi / 4) < 0.3
+
+    def test_cast_transitions_to_surge_near_source(self, source_config):
+        """CAST should transition to SURGE when near source."""
+        tracker = SurgeCastTracker(source_config)
+
+        # Get to SURGE
+        for _ in range(5):
+            tracker.update(10.0, Pose2D(0.0, 0.0), 0.0)
+
+        # Lose plume
+        for _ in range(5):
+            tracker.update(1.0, Pose2D(0.0, 0.0), 0.0)
+        assert tracker.state == TrackingState.CAST
+
+        # Move near source (within source_radius=1.0)
+        tracker.update(1.0, Pose2D(4.5, 4.5), 0.0)
+        assert tracker.state == TrackingState.SURGE
+
+    def test_no_source_position_uses_wind_behavior(self):
+        """Without source_position, SURGE uses wind+gradient (backward compat)."""
+        config = SurgeCastConfig(
+            plume_found_threshold=5.0,
+            plume_lost_threshold=2.0,
+            source_threshold=20.0,
+            wind_x=1.0,
+            wind_y=0.0,
+            # No source_position — default None
+        )
+        tracker = SurgeCastTracker(config)
+
+        # Enter SURGE
+        for _ in range(5):
+            tracker.update(10.0, Pose2D(0.0, 0.0), 0.0)
+
+        action = tracker.update(10.0, Pose2D(0.0, 0.0), 0.0)
+        # No source, no gradient (all at origin) → only wind component
+        # Wind (1,0) → upwind = pi (west)
+        assert abs(abs(action.heading) - math.pi) < 0.5
+
+    def test_no_source_position_cast_lateral(self):
+        """Without source_position, CAST uses lateral sweeping (backward compat)."""
+        config = SurgeCastConfig(
+            plume_found_threshold=5.0,
+            plume_lost_threshold=2.0,
+            source_threshold=20.0,
+            wind_x=1.0,
+            wind_y=0.0,
+        )
+        tracker = SurgeCastTracker(config)
+
+        # Get to CAST
+        for _ in range(5):
+            tracker.update(10.0, Pose2D(0.0, 0.0), 0.0)
+        for _ in range(5):
+            tracker.update(1.0, Pose2D(0.0, 0.0), 0.0)
+        assert tracker.state == TrackingState.CAST
+
+        action = tracker.update(1.0, Pose2D(0.0, 0.0), 0.0)
+        # Wind is east, cast perpendicular → north or south (±pi/2)
+        assert abs(abs(action.heading) - math.pi / 2) < 0.5

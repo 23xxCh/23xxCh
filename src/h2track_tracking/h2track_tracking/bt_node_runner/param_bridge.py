@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from rclpy.node import Node
 
+from rcl_interfaces.msg import ParameterDescriptor
 from h2track_tracking.mission_logic import MissionConfig
 from h2track_tracking.tracking.types import SurgeCastConfig
 from h2track_tracking.tracking.fusion import FusionConfig
@@ -36,6 +37,9 @@ def declare_parameters(node: Node) -> None:
     node.declare_parameter("source_hold_steps", _mc.source_hold_steps)
     node.declare_parameter("track_timeout_sec", _mc.track_timeout_sec)
     node.declare_parameter("adaptive_source_ratio", _mc.adaptive_source_ratio)
+    node.declare_parameter("dynamic_source_threshold", _mc.dynamic_source_threshold)
+    node.declare_parameter("source_plateau_window", _mc.source_plateau_window)
+    node.declare_parameter("source_plateau_ratio", _mc.source_plateau_ratio)
     node.declare_parameter("source_x", -3.5)
     node.declare_parameter("source_y", -3.5)
     node.declare_parameter("patrol_goal_timeout_sec", 45.0)
@@ -52,7 +56,15 @@ def declare_parameters(node: Node) -> None:
     node.declare_parameter("plume_confirm_samples", _sc.plume_confirm_samples)
     node.declare_parameter("wind_x", _sc.wind_x)
     node.declare_parameter("wind_y", _sc.wind_y)
-    node.declare_parameter("estimate_wind", "gradient")
+    node.declare_parameter(
+        "estimate_wind",
+        "gradient",
+        ParameterDescriptor(dynamic_typing=True, description=(
+            "Wind estimation mode: 'gradient' (infer from concentration gradients), "
+            "'anemometer' (use GADEN ground truth), 'off'. "
+            "Backward compat: true→gradient, false→off."
+        )),
+    )
     node.declare_parameter("wind_estimation_min_samples", 10)
     node.declare_parameter("use_fusion", True)
     node.declare_parameter("fusion_mode", "weighted")
@@ -83,6 +95,9 @@ def build_mission_config(node: Node) -> MissionConfig:
         track_timeout_sec=_pf(node, "track_timeout_sec"),
         adaptive_source_ratio=_pf(node, "adaptive_source_ratio"),
         actual_source=(_pf(node, "source_x"), _pf(node, "source_y")),
+        dynamic_source_threshold=bool(node.get_parameter("dynamic_source_threshold").value),
+        source_plateau_window=_pi(node, "source_plateau_window"),
+        source_plateau_ratio=_pf(node, "source_plateau_ratio"),
     )
 
 
@@ -99,6 +114,10 @@ def build_surge_config(node: Node) -> SurgeCastConfig:
         wind_y=_pf(node, "wind_y"),
         source_radius=_pf(node, "source_radius"),
         source_hold_steps=_pi(node, "source_hold_steps"),
+        dynamic_source_threshold=bool(node.get_parameter("dynamic_source_threshold").value),
+        source_plateau_window=_pi(node, "source_plateau_window"),
+        source_plateau_ratio=_pf(node, "source_plateau_ratio"),
+        source_position=(_pf(node, "source_x"), _pf(node, "source_y")),
     )
 
 

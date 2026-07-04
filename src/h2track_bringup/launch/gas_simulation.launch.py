@@ -220,10 +220,10 @@ def generate_launch_description():
                 "stable_ready_count": lc["gaden_sensor_gate_stable_ready_count"],
                 "sensor_node_name": "gaden_pid_sensor",
                 "topic": lc["gaden_sensor_topic"],
-                # Figaro TGS2620 (MPN=50) — valid sensor for H2 detection.
-                # Previous value 30 was not a valid MPN (GasSensor.msg
-                # defines 50-54 for TGS2620-TGS2612).
-                "sensor_model": 50,
+                # Figaro TGS2620 — MOX sensor for H2 detection.
+                # GADEN fake_gas_sensor.cpp switch uses indices 0-4 (TGS2620=0),
+                # NOT the MPN values (50-54) from GasSensor.msg.
+                "sensor_model": 0,
                 "rate": 5.0,
                 "use_pid_correction_factors": False,
             },

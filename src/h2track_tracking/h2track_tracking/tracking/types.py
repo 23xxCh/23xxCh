@@ -68,6 +68,14 @@ class SurgeCastConfig:
     concentration_threshold_high: float = 5.0  # High concentration threshold
     concentration_threshold_low: float = 1.0   # Low concentration threshold
 
+    # Dynamic source threshold (plateau detection)
+    dynamic_source_threshold: bool = False    # Enable plateau-based detection
+    source_plateau_window: int = 10           # Samples to check (10 = 1s at 10Hz)
+    source_plateau_ratio: float = 0.1         # Plateau tolerance (fraction of max_observed)
+
+    # Source position for source-directed guidance (from scene config gas_source)
+    source_position: tuple[float, float] | None = None
+
     @property
     def upwind_direction(self) -> float:
         """Direction to move upwind (opposite to wind)."""
